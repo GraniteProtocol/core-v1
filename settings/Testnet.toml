@@ -1,0 +1,6 @@
+[network]
+name = "devnet"
+deployment_fee_rate = 10
+
+[accounts.deployer]
+mnemonic = "comic feed crisp stomach morning dirt between about embark electric trip neither lottery brick merit approve tail solution gauge body state exchange claim current"

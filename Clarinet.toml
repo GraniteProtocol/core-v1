@@ -1,0 +1,107 @@
+[project]
+name = 'granite-core'
+description = 'Granite v1 core smart contracts'
+authors = []
+telemetry = true
+cache_dir = './.cache'
+
+[[project.requirements]]
+contract_id = 'SP2J933XB2CP2JQ1A4FGN8JA968BBG3NK3EKZ7Q9F.hk-cursor-v2'
+
+[[project.requirements]]
+contract_id = 'SP2J933XB2CP2JQ1A4FGN8JA968BBG3NK3EKZ7Q9F.hk-ecc-v1'
+
+[[project.requirements]]
+contract_id = 'SP2J933XB2CP2JQ1A4FGN8JA968BBG3NK3EKZ7Q9F.hk-merkle-tree-keccak160-v1'
+
+[[project.requirements]]
+contract_id = 'SP3FBR2AGK5H9QBDH3EEN6DF8EK8JY7RX8QJ5SVTE.sip-010-trait-ft-standard'
+
+[[project.requirements]]
+contract_id = 'SP3Y2ZSH8P7D50B0VBTSX11S7XSG24M1VB9YFQA4K.token-aeusdc'
+
+[[project.requirements]]
+contract_id = 'SP3R4F6C1J3JQWWCVZ3S7FRRYPMYG6ZW6RZK31FXY.pyth-storage-v3'
+
+[[project.requirements]]
+contract_id = 'SP3R4F6C1J3JQWWCVZ3S7FRRYPMYG6ZW6RZK31FXY.pyth-pnau-decoder-v2'
+
+[[project.requirements]]
+contract_id = 'SP3R4F6C1J3JQWWCVZ3S7FRRYPMYG6ZW6RZK31FXY.pyth-oracle-v3'
+
+[[project.requirements]]
+contract_id = 'SP3R4F6C1J3JQWWCVZ3S7FRRYPMYG6ZW6RZK31FXY.wormhole-core-v3'
+
+[contracts.borrower-v1]
+path = 'contracts/borrower-v1.clar'
+clarity_version = 3
+epoch = 3.0
+
+[contracts.constants-v1]
+path = 'contracts/constants-v1.clar'
+clarity_version = 3
+epoch = 3.0
+
+[contracts.governance-v1]
+path = 'contracts/governance-v1.clar'
+clarity_version = 3
+epoch = 3.0
+
+[contracts.linear-kinked-ir-v1]
+path = 'contracts/modules/linear-kinked-ir-v1.clar'
+clarity_version = 3
+epoch = 3.0
+
+[contracts.liquidator-v1]
+path = 'contracts/liquidator-v1.clar'
+clarity_version = 3
+epoch = 3.0
+
+[contracts.liquidity-provider-v1]
+path = 'contracts/liquidity-provider-v1.clar'
+clarity_version = 3
+epoch = 3.0
+
+[contracts.math-v1]
+path = 'contracts/modules/math-v1.clar'
+clarity_version = 3
+epoch = 3.0
+
+[contracts.meta-governance-v1]
+path = 'contracts/meta-governance-v1.clar'
+clarity_version = 3
+epoch = 3.0
+
+[contracts.pyth-adapter-v1]
+path = 'contracts/modules/pyth-adapter-v1.clar'
+clarity_version = 3
+epoch = 3.0
+
+[contracts.staking-v1]
+path = 'contracts/staking-v1.clar'
+clarity_version = 3
+epoch = 3.0
+
+[contracts.staking-reward-v1]
+path = 'contracts/modules/staking-reward-v1.clar'
+clarity_version = 3
+epoch = 3.0
+
+[contracts.state-v1]
+path = 'contracts/state-v1.clar'
+clarity_version = 3
+epoch = 3.0
+
+[contracts.utility]
+path = 'contracts/modules/utility.clar'
+clarity_version = 3
+epoch = 3.0
+
+[repl.analysis]
+passes = []
+
+[repl.analysis.check_checker]
+strict = false
+trusted_sender = false
+trusted_caller = false
+callee_filter = false
