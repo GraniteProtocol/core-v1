@@ -7,6 +7,8 @@
 (define-constant SUCCESS (ok true))
 (define-constant MARKET-TOKEN-DECIMALS (contract-call? .constants-v1 get-market-token-decimals))
 (define-constant SCALING-FACTOR (contract-call? .constants-v1 get-scaling-factor))
+;; Liquidation buffer of 0.005%
+(define-constant LIQUIDATION-BUFFER u5000)
 
 ;; ERROR VALUES
 (define-constant ERR-DIVIDE-BY-ZERO (err u30000))
@@ -303,17 +305,20 @@
       ;; slippage check
       (asserts! (>= collateral-to-give min-collateral-expected) ERR-SLIPPAGE)
       ;; check account health post liquidation
-      (asserts! (<= (get position-health (try! (account-health user none none))) SCALING-FACTOR) ERR-LIQUIDATED-TOO-MUCH)
+      (asserts! (<= (get position-health (try! (account-health user none none))) (+ LIQUIDATION-BUFFER SCALING-FACTOR)) ERR-LIQUIDATED-TOO-MUCH)
       ;; socialize debt if bad debt
       (try! (socialize-bad-debt bad-debt user))
       (print {
+          action: "liquidate-collateral",
           collateral: collateral-token,
           liquidator: contract-caller,
           user: user,
           liquidated-collateral-amount: collateral-to-give,
           repaid-amount: repay-amount,
           repaid-shares: paid-shares,
-          action: "liquidate-collateral"
+          bad-debt: bad-debt,
+          account-health: (try! (account-health user none none)),
+          liquidation-info: liquidation-res
       })
       SUCCESS
     )
