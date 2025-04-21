@@ -17,6 +17,7 @@ import {
   init_pyth,
   set_initial_price,
   set_price,
+  set_price_without_scaling,
   set_pyth_time_delta,
 } from "./pyth";
 
@@ -816,5 +817,143 @@ describe("borrower tests", () => {
         borrower1
       );
     } catch (err) {}
+  });
+
+  it("should correctly borrow when market-decimals > collateral decimals", async () => {
+    mint_token("mock-usdc", 100000000000, depositor);
+    deposit(100000000000, depositor);
+
+    update_supported_collateral(
+      "mock-btc",
+      70000000,
+      80000000,
+      10000000,
+      6,
+      deployer
+    );
+    mint_token("mock-btc", 54994875, borrower1);
+    add_collateral("mock-btc", 54994875, deployer, borrower1);
+    await set_price_without_scaling("mock-btc", 62827924n, deployer);
+    let borrow = simnet.callPublicFn(
+      "borrower-v1",
+      "borrow",
+      [Cl.none(), Cl.uint(2418649660)],
+      borrower1
+    );
+
+    expect(borrow.result).toBeOk(Cl.bool(true));
+
+    let userBalancePostBorrow = simnet.callReadOnlyFn(
+      "mock-usdc",
+      "get-balance",
+      [Cl.principal(borrower1)],
+      borrower1
+    );
+    expect(userBalancePostBorrow.result.value.value).toBe(2418649660n);
+
+    // extra interest
+    mint_token("mock-usdc", 488, borrower1);
+    userBalancePostBorrow = simnet.callReadOnlyFn(
+      "mock-usdc",
+      "get-balance",
+      [Cl.principal(borrower1)],
+      borrower1
+    );
+    expect(userBalancePostBorrow.result.value.value).toBe(488n + 2418649660n);
+    let repay = simnet.callPublicFn(
+      "borrower-v1",
+      "repay",
+      [Cl.uint(100000000000), Cl.none()],
+      borrower1
+    );
+    expect(repay.result).toBeOk(Cl.bool(true));
+
+    userBalancePostBorrow = simnet.callReadOnlyFn(
+      "mock-usdc",
+      "get-balance",
+      [Cl.principal(borrower1)],
+      borrower1
+    );
+    expect(userBalancePostBorrow.result.value.value).toBe(0n);
+
+    // user should have zero debt shares
+    let userDebtShares = simnet.callReadOnlyFn(
+      "state-v1",
+      "get-user-position",
+      [Cl.principal(borrower1)],
+      borrower1
+    );
+    expect(userDebtShares.result.value.data["debt-shares"].value).toEqual(0n);
+
+    remove_collateral("mock-btc", 54994875, deployer, borrower1);
+  });
+
+  it("should correctly borrow when market-decimals < collateral decimals", async () => {
+    mint_token("mock-usdc", 100000000000, depositor);
+    deposit(100000000000, depositor);
+
+    update_supported_collateral(
+      "mock-btc",
+      70000000,
+      80000000,
+      10000000,
+      10,
+      deployer
+    );
+    mint_token("mock-btc", 549948753641, borrower1);
+    add_collateral("mock-btc", 549948753641, deployer, borrower1);
+    await set_price_without_scaling("mock-btc", 62827924n, deployer);
+    let borrow = simnet.callPublicFn(
+      "borrower-v1",
+      "borrow",
+      [Cl.none(), Cl.uint(2418649660)],
+      borrower1
+    );
+
+    expect(borrow.result).toBeOk(Cl.bool(true));
+
+    let userBalancePostBorrow = simnet.callReadOnlyFn(
+      "mock-usdc",
+      "get-balance",
+      [Cl.principal(borrower1)],
+      borrower1
+    );
+    expect(userBalancePostBorrow.result.value.value).toBe(2418649660n);
+
+    // extra interest
+    mint_token("mock-usdc", 488, borrower1);
+    userBalancePostBorrow = simnet.callReadOnlyFn(
+      "mock-usdc",
+      "get-balance",
+      [Cl.principal(borrower1)],
+      borrower1
+    );
+    expect(userBalancePostBorrow.result.value.value).toBe(488n + 2418649660n);
+    let repay = simnet.callPublicFn(
+      "borrower-v1",
+      "repay",
+      [Cl.uint(100000000000), Cl.none()],
+      borrower1
+    );
+    expect(repay.result).toBeOk(Cl.bool(true));
+
+    userBalancePostBorrow = simnet.callReadOnlyFn(
+      "mock-usdc",
+      "get-balance",
+      [Cl.principal(borrower1)],
+      borrower1
+    );
+    expect(userBalancePostBorrow.result.value.value).toBe(0n);
+
+    // user should have zero debt shares
+    let userDebtShares = simnet.callReadOnlyFn(
+      "state-v1",
+      "get-user-position",
+      [Cl.principal(borrower1)],
+      borrower1
+    );
+    expect(userDebtShares.result.value.data["debt-shares"].value).toEqual(0n);
+
+    remove_collateral("mock-btc", 549948753641, deployer, borrower1);
   });
 });

@@ -1,0 +1,35 @@
+---
+id: 0
+name: Mainnet deployment V1
+network: mainnet
+stacks-node: "https://api.hiro.so"
+bitcoin-node: "http://blockstack:blockstacksystem@bitcoin.blockstack.com:8332"
+plan:
+  batches:
+    - id: 0
+      transactions:
+        - contract-publish:
+            contract-name: trait-flash-loan-v1
+            expected-sender: SP22ZRDAD88W26XPVC6CCYQKNVMBHJKJG767BSCJY
+            cost: 343
+            path: contracts/traits/trait-flash-loan-v1.clar
+            anchor-block-only: true
+            clarity-version: 3
+        - contract-publish:
+            contract-name: mock-flash-loan-callback
+            expected-sender: SP22ZRDAD88W26XPVC6CCYQKNVMBHJKJG767BSCJY
+            cost: 803
+            path: contracts/test/mock-flash-loan-callback.clar
+            anchor-block-only: true
+            clarity-version: 3
+      epoch: "3.0"
+    - id: 1
+      transactions:
+        - contract-publish:
+            contract-name: flash-loan-v1
+            expected-sender: SP22ZRDAD88W26XPVC6CCYQKNVMBHJKJG767BSCJY
+            cost: 2620
+            path: contracts/flash-loan-v1.clar
+            anchor-block-only: true
+            clarity-version: 3
+      epoch: "3.0"

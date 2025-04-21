@@ -1,12 +1,14 @@
 ;; SPDX-License-Identifier: BUSL-1.1
 
 ;; TRAITS
-(use-trait token-trait 'SP3FBR2AGK5H9QBDH3EEN6DF8EK8JY7RX8QJ5SVTE.sip-010-trait-ft-standard.sip-010-trait)
+(use-trait token-trait .trait-sip-010.sip-010-trait)
 
 ;; CONSTANTS
 (define-constant SUCCESS (ok true))
 (define-constant MARKET-TOKEN-DECIMALS (contract-call? .constants-v1 get-market-token-decimals))
 (define-constant SCALING-FACTOR (contract-call? .constants-v1 get-scaling-factor))
+;; Liquidation buffer of 0.50%
+(define-constant LIQUIDATION-BUFFER u500000)
 
 ;; ERROR VALUES
 (define-constant ERR-DIVIDE-BY-ZERO (err u30000))
@@ -19,6 +21,7 @@
 (define-constant ERR-SLIPPAGE (err u30007))
 (define-constant ERR-INVALID-ORACLE-PRICE (err u30008))
 (define-constant ERR-MISSING-MARKET-PRICE (err u30009))
+(define-constant ERR-NON-ZERO-REPAY-AMOUNT (err u30010))
 
 ;; PUBLIC FUNCTIONS 
 (define-public (batch-liquidate (pyth-price-feed-data (optional (buff 8192))) (collateral <token-trait>) (batch (list 20 (optional {
@@ -70,7 +73,7 @@
       ;; get user current debt
       (debt-params (contract-call? .state-v1 get-debt-params))
       (current-debt (contract-call? .math-v1 convert-to-debt-assets debt-params (get debt-shares position) true))
-      (market-asset-price (match maybe-market-asset-price price price (unwrap! (contract-call? .pyth-adapter-v1 read-price 'SP3Y2ZSH8P7D50B0VBTSX11S7XSG24M1VB9YFQA4K.token-aeusdc) ERR-MISSING-MARKET-PRICE)))
+      (market-asset-price (match maybe-market-asset-price price price (unwrap! (contract-call? .pyth-adapter-v1 read-price .mock-usdc) ERR-MISSING-MARKET-PRICE)))
       (current-debt-adjusted (contract-call? .math-v1 get-market-asset-value market-asset-price current-debt))
       (position-collaterals (get collaterals position))
       (total-liquid-ltv (match maybe-total-liquid-ltv ltv 
@@ -85,7 +88,7 @@
             ) collateral-prices) u0)
           )  
       )))
-      (position-health (if (> current-debt-adjusted u0) (/ (* total-liquid-ltv SCALING-FACTOR) current-debt-adjusted) u1))
+      (position-health (if (> current-debt-adjusted u0) (/ (* total-liquid-ltv SCALING-FACTOR) current-debt-adjusted) SCALING-FACTOR))
     )
     (ok {
       position-health: position-health,
@@ -138,12 +141,18 @@
       ;; if the total repay amount is <= liquidator repay amount, return total repay amount
       ;; else return liquidator repay amount
       (repay-amount (if (<= repay-allowed liquidator-repay-amount) repay-allowed liquidator-repay-amount))
-      (collateral-to-give (if (or (is-eq repay-amount-without-discount repay-amount) (is-eq u0 repay-amount))
+      (collateral-to-give (if (is-eq u0 repay-amount)
         deposited-collateral-amount
-        (try! (calc-collateral-to-give repay-amount liquidation-discount collateral-price collateral-decimals))
+        (try! (calc-collateral-to-give repay-amount liquidation-discount collateral-price collateral-decimals deposited-collateral-amount))
       ))
     )
-    (ok {repay-amount: repay-amount, collateral-to-give: collateral-to-give})
+    (ok {
+      repay-amount: repay-amount,
+      collateral-to-give: collateral-to-give,
+      repay-amount-without-discount: repay-amount-without-discount,
+      repayment-info: repayment-info,
+      collateral-price: collateral-price 
+    })
 ))
 
 
@@ -151,7 +160,6 @@
 (define-private (get-liquidate-params 
   (user principal)
   (collateral <token-trait>)
-  (liquidator-repay-amount uint)
   (maybe-market-asset-price (optional uint))
   (maybe-total-liquid-ltv (optional uint))
   (maybe-collateral-value (optional uint))
@@ -190,7 +198,7 @@
   (maybe-collateral-price (optional uint))
 ) 
   (let (
-    (liquidation-params (try! (get-liquidate-params user collateral liquidator-repay-amount maybe-market-asset-price maybe-total-liquid-ltv maybe-collateral-value maybe-collateral-price)))
+    (liquidation-params (try! (get-liquidate-params user collateral maybe-market-asset-price maybe-total-liquid-ltv maybe-collateral-value maybe-collateral-price)))
     ;; check position is unhealthy
     (position-data (get position-data liquidation-params))
     (user-borrowed-amount (get borrowed-amount position-data))
@@ -235,7 +243,8 @@
       user-borrowed-amount: user-borrowed-amount,
       position-data: position-data,
       user-balance: user-balance,
-      bad-debt: bad-debt
+      bad-debt: bad-debt,
+      collateral-price: collateral-price
     })
   )
 )
@@ -252,6 +261,7 @@
         (position-data (get position-data liquidation-res))
         (user-balance (get user-balance liquidation-res))
         (bad-debt (get bad-debt liquidation-res))
+        (collateral-price (get collateral-price liquidation-res))
         ;; get open interest
         (open-interest-info (contract-call? .state-v1 get-open-interest))
         (open-interest (+ (get lp-open-interest open-interest-info) (get staked-open-interest open-interest-info) (get protocol-open-interest open-interest-info)))
@@ -282,6 +292,7 @@
           (get collaterals position-data)
         ))
       )
+      (try! (ensure-non-zero-repay-amount liquidator-repay-amount collateral-price))
       ;; update state
       (try! (contract-call? .state-v1 update-liquidate-collateral-state collateral {
         liquidator: contract-caller,
@@ -302,22 +313,29 @@
       (try! (contract-call? .staking-v1 increase-lp-staked-balance staked-lp-tokens))
       ;; slippage check
       (asserts! (>= collateral-to-give min-collateral-expected) ERR-SLIPPAGE)
-      ;; check account health post liquidation
-      (asserts! (<= (get position-health (try! (account-health user none none))) SCALING-FACTOR) ERR-LIQUIDATED-TOO-MUCH)
-      ;; socialize debt if bad debt
-      (try! (socialize-bad-debt bad-debt user))
-      (print {
-          collateral: collateral-token,
-          liquidator: contract-caller,
-          user: user,
-          liquidated-collateral-amount: collateral-to-give,
-          repaid-amount: repay-amount,
-          repaid-shares: paid-shares,
-          action: "liquidate-collateral"
-      })
-      SUCCESS
-    )
-)
+      (let (
+          (account-health-data (try! (account-health user none none)))
+          (position-health (get position-health account-health-data))
+        )
+
+        ;; check account health post liquidation
+        (asserts! (<= position-health (+ LIQUIDATION-BUFFER SCALING-FACTOR)) (err position-health))
+        ;; socialize debt if bad debt
+        (try! (socialize-bad-debt bad-debt user))
+        (print {
+            action: "liquidate-collateral",
+            collateral: collateral-token,
+            liquidator: contract-caller,
+            user: user,
+            liquidated-collateral-amount: collateral-to-give,
+            repaid-amount: repay-amount,
+            repaid-shares: paid-shares,
+            bad-debt: bad-debt,
+            account-health: account-health-data,
+            liquidation-info: liquidation-res
+        })
+        SUCCESS
+)))
 
 (define-private (fold-execute-liquidation (maybe-liquidation-data (optional {
   user: principal,
@@ -353,20 +371,30 @@
           (try! (safe-div (* (+ SCALING-FACTOR liquidation-discount) collateral-liquid-ltv) SCALING-FACTOR))
       ))
       (total-repay-amount (try! (safe-div (* (- debt total-collaterals-liquid-value) SCALING-FACTOR) denominator)))
-      (repay-amount-without-discount (/ (* collateral-value SCALING-FACTOR) (+ liquidation-discount SCALING-FACTOR)))
+      (repay-amount-without-discount (contract-call? .math-v1 divide-round-up (* collateral-value SCALING-FACTOR) (+ liquidation-discount SCALING-FACTOR)))
       (repay-allowed (if (< total-repay-amount repay-amount-without-discount) total-repay-amount repay-amount-without-discount))
     )
-    (ok {repay-allowed: repay-allowed, repay-amount-without-discount: repay-amount-without-discount})
+    (ok {
+        repay-allowed: repay-allowed, 
+        repay-amount-without-discount: repay-amount-without-discount,
+        denominator: denominator,
+        total-repay-amount: total-repay-amount,
+        total-collaterals-liquid-value: total-collaterals-liquid-value,
+        collateral-value: collateral-value,
+        liquidation-discount: liquidation-discount,
+        collateral-liquid-ltv: collateral-liquid-ltv,
+        debt: debt
+      })
 ))
 
-(define-private (calc-collateral-to-give (repay-amount uint) (liquidation-discount uint) (collateral-price uint) (collateral-decimals uint))
+(define-private (calc-collateral-to-give (repay-amount uint) (liquidation-discount uint) (collateral-price uint) (collateral-decimals uint) (deposited-collateral uint))
   (let
     (
       (repay-amount-with-discount (/ (* repay-amount (+ SCALING-FACTOR liquidation-discount)) SCALING-FACTOR))
       (collateral-amount (try! (safe-div (* repay-amount-with-discount SCALING-FACTOR) collateral-price)))
       (decimal-corrected-collateral (contract-call? .math-v1 to-fixed collateral-amount MARKET-TOKEN-DECIMALS collateral-decimals))
     )
-    (ok decimal-corrected-collateral)
+    (ok (if (> decimal-corrected-collateral deposited-collateral) deposited-collateral decimal-corrected-collateral))
 ))
 
 (define-private (safe-div (x uint) (y uint))
@@ -463,6 +491,16 @@
         list user user user user user user user user user user
     ) collateral-prices) u0
 ))
+
+(define-private (ensure-non-zero-repay-amount (amount uint) (collateral-price uint))
+  (if (<= collateral-price u0) 
+    ;; if collateral price is zero, we dont care about repay amount, anything is accepted
+    SUCCESS
+    ;; if not zero, then amount must be > 0
+    (if (<= amount u0) ERR-NON-ZERO-REPAY-AMOUNT SUCCESS)
+  )
+  
+)
 
 (define-private (socialize-bad-debt (bad-debt bool) (user principal))
   (if (not bad-debt) 

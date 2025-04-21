@@ -1,0 +1,28 @@
+---
+id: 0
+name: Mainnet deployment V1
+network: mainnet
+stacks-node: "https://api.hiro.so"
+bitcoin-node: "http://blockstack:blockstacksystem@bitcoin.blockstack.com:8332"
+plan:
+  batches:
+    - id: 0
+      transactions:
+        - contract-publish:
+            contract-name: lp-incentives-v1
+            expected-sender: SP1MHDKAYCBNGM88SP22NM8C4JKH1JPBFB11RP9HY
+            cost: 11591
+            path: contracts/lp-incentives-v1.clar
+            anchor-block-only: true
+            clarity-version: 3
+      epoch: "3.0"
+    - id: 1
+      transactions:
+        - contract-call:
+            contract-id: SP1MHDKAYCBNGM88SP22NM8C4JKH1JPBFB11RP9HY.lp-incentives-v1
+            expected-sender: SP1MHDKAYCBNGM88SP22NM8C4JKH1JPBFB11RP9HY
+            method: initiate-epoch
+            parameters:
+              - "{ epoch-start-time: u50000000000, epoch-end-time: u750000000000, epoch-rewards: u800000000000, snapshot-uploader: 'SP1MHDKAYCBNGM88SP22NM8C4JKH1JPBFB11RP9HY }"
+            cost: 315
+      epoch: "3.0"

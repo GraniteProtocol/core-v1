@@ -236,7 +236,7 @@ describe("staking tests", () => {
     expect(result.result).toBeErr(Cl.uint(60004)); // not finalized yet
 
     // mint empty blocks
-    simnet.mineEmptyBlocks(123 - simnet.blockHeight);
+    simnet.mineEmptyBlocks(124 - simnet.blockHeight);
     expectUserLpBalance(Cl.contractPrincipal(deployer, "staking-v1"), 1000n);
 
     // finalization should be successful
@@ -343,7 +343,7 @@ describe("staking tests", () => {
     );
 
     // mint empty blocks to unlock withdrawal 1
-    simnet.mineEmptyBlocks(123 - simnet.blockHeight);
+    simnet.mineEmptyBlocks(124 - simnet.blockHeight);
 
     expectUserLpBalance(Cl.principal(depositor1), 0n);
     expectUserStakedLpBalance(Cl.principal(depositor1), 500n);
@@ -369,7 +369,7 @@ describe("staking tests", () => {
     );
 
     // mint empty blocks to unlock withdrawal at index 2
-    simnet.mineEmptyBlocks(225 - simnet.blockHeight);
+    simnet.mineEmptyBlocks(226 - simnet.blockHeight);
 
     finalizeUnstake(depositor1, 1);
 
@@ -447,7 +447,7 @@ describe("staking tests", () => {
     );
 
     // mint empty blocks to unlock withdrawal at index 2
-    simnet.mineEmptyBlocks(130 - simnet.blockHeight);
+    simnet.mineEmptyBlocks(131 - simnet.blockHeight);
 
     finalizeUnstake(depositor2, 0);
 
@@ -468,7 +468,7 @@ describe("staking tests", () => {
     );
 
     // mint empty blocks to unlock withdrawal at index 2
-    simnet.mineEmptyBlocks(232 - simnet.blockHeight);
+    simnet.mineEmptyBlocks(233 - simnet.blockHeight);
 
     finalizeUnstake(depositor1, 0);
 
@@ -501,7 +501,7 @@ describe("staking tests", () => {
       500000000000n
     );
 
-    // full repay after 1000 blocks
+    // full repay after 100 blocks
     simnet.mineEmptyBlocks(100);
 
     // staking reward percentage
@@ -529,7 +529,7 @@ describe("staking tests", () => {
     // stake contracts lp balance should have increased
     expectUserLpBalance(
       Cl.contractPrincipal(deployer, "staking-v1"),
-      500054718661n
+      500054709510n
     );
 
     // initiate unstake of depositor 1 at index 0
@@ -539,18 +539,18 @@ describe("staking tests", () => {
 
     // withdrawal should exist
     const withdrawal = getUserWithdrawal(depositor1, 0);
-    expect(withdrawal.data["withdrawal-shares"]).toEqual(Cl.uint(500054718661));
+    expect(withdrawal.data["withdrawal-shares"]).toEqual(Cl.uint(500054709510));
     expect(withdrawal.data["finalization-at"]).toEqual(
       Cl.uint(finalizationPeriod)
     );
 
     // mint empty blocks to unlock withdrawal at index 2
-    simnet.mineEmptyBlocks(10129 - simnet.blockHeight);
+    simnet.mineEmptyBlocks(10130 - simnet.blockHeight);
 
     finalizeUnstake(depositor1, 0);
 
     // depositor1 got full lp tokens of staking contract
-    expectUserLpBalance(Cl.principal(depositor1), 1000054718661n);
+    expectUserLpBalance(Cl.principal(depositor1), 1000054709510n);
     expectUserStakedLpBalance(Cl.principal(depositor1), 0n);
     expectUserLpBalance(Cl.contractPrincipal(deployer, "staking-v1"), 0n);
   });
@@ -676,7 +676,7 @@ describe("staking tests", () => {
       [Cl.principal(depositor1)],
       depositor1
     );
-    expect(depositorBalance.result.value.value).toBe(4410n);
+    expect(depositorBalance.result.value.value).toBe(4409n);
 
     depositorBalance = simnet.callReadOnlyFn(
       "mock-eth",
@@ -692,7 +692,7 @@ describe("staking tests", () => {
       [Cl.principal(borrower1)],
       borrower1
     );
-    expect(userDebtShares.result.value.data["debt-shares"].value).toEqual(797n);
+    expect(userDebtShares.result.value.data["debt-shares"].value).toEqual(796n);
 
     mint_token("mock-usdc", 10000, deployer);
     const depositToReserve = simnet.callPublicFn(
@@ -724,7 +724,7 @@ describe("staking tests", () => {
       [Cl.principal(depositor1)],
       depositor1
     );
-    expect(depositorBalance.result.value.value).toBe(4320n);
+    expect(depositorBalance.result.value.value).toBe(4318n);
 
     depositorBalance = simnet.callReadOnlyFn(
       "mock-btc",
@@ -741,7 +741,7 @@ describe("staking tests", () => {
       deployer
     );
     expect(accounthealthRes.result.value.data["position-health"]).toEqual(
-      Cl.uint(1n)
+      Cl.uint(100000000n)
     );
 
     let liquidatorBalance = simnet.callReadOnlyFn(
@@ -930,7 +930,7 @@ describe("staking tests", () => {
       [Cl.principal(depositor1)],
       depositor1
     );
-    expect(depositorBalance.result.value.value).toBe(4410n);
+    expect(depositorBalance.result.value.value).toBe(4409n);
 
     depositorBalance = simnet.callReadOnlyFn(
       "mock-eth",
@@ -946,7 +946,7 @@ describe("staking tests", () => {
       [Cl.principal(borrower1)],
       borrower1
     );
-    expect(userDebtShares.result.value.data["debt-shares"].value).toEqual(797n);
+    expect(userDebtShares.result.value.data["debt-shares"].value).toEqual(796n);
 
     mint_token("mock-usdc", 100, deployer);
     const depositToReserve = simnet.callPublicFn(
@@ -991,7 +991,7 @@ describe("staking tests", () => {
       [Cl.principal(depositor1)],
       depositor1
     );
-    expect(depositorBalance.result.value.value).toBe(4320n);
+    expect(depositorBalance.result.value.value).toBe(4318n);
 
     depositorBalance = simnet.callReadOnlyFn(
       "mock-btc",
@@ -1008,7 +1008,7 @@ describe("staking tests", () => {
       deployer
     );
     expect(accounthealthRes.result.value.data["position-health"]).toEqual(
-      Cl.uint(1n)
+      Cl.uint(100000000n)
     );
 
     let liquidatorBalance = simnet.callReadOnlyFn(
@@ -1065,7 +1065,7 @@ describe("staking tests", () => {
     stakedTokens = getUserLpBalance(
       Cl.contractPrincipal(deployer, "staking-v1")
     );
-    expect(stakedTokens).toBe(291n);
+    expect(stakedTokens).toBe(293n);
 
     totalAssetsRes = simnet.callReadOnlyFn(
       "state-v1",
@@ -1222,7 +1222,7 @@ describe("staking tests", () => {
       [Cl.principal(depositor1)],
       depositor1
     );
-    expect(depositorBalance.result.value.value).toBe(4410n);
+    expect(depositorBalance.result.value.value).toBe(4409n);
 
     depositorBalance = simnet.callReadOnlyFn(
       "mock-eth",
@@ -1238,7 +1238,7 @@ describe("staking tests", () => {
       [Cl.principal(borrower1)],
       borrower1
     );
-    expect(userDebtShares.result.value.data["debt-shares"].value).toEqual(798n);
+    expect(userDebtShares.result.value.data["debt-shares"].value).toEqual(797n);
 
     mint_token("mock-usdc", 100, deployer);
     const depositToReserve = simnet.callPublicFn(
@@ -1288,7 +1288,7 @@ describe("staking tests", () => {
       [Cl.principal(depositor1)],
       depositor1
     );
-    expect(depositorBalance.result.value.value).toBe(4320n);
+    expect(depositorBalance.result.value.value).toBe(4318n);
 
     depositorBalance = simnet.callReadOnlyFn(
       "mock-btc",
@@ -1305,7 +1305,7 @@ describe("staking tests", () => {
       deployer
     );
     expect(accounthealthRes.result.value.data["position-health"]).toEqual(
-      Cl.uint(1n)
+      Cl.uint(100000000n)
     );
 
     let liquidatorBalance = simnet.callReadOnlyFn(
@@ -1385,7 +1385,7 @@ describe("staking tests", () => {
     expect(totalLpSupply.result).toBeOk(Cl.uint(2001 - Number(socializedDebt)));
 
     // mint empty blocks to unlock withdrawal at index 2
-    simnet.mineEmptyBlocks(140 - simnet.blockHeight);
+    simnet.mineEmptyBlocks(141 - simnet.blockHeight);
 
     finalizeUnstake(depositor1, 0);
 
@@ -1528,7 +1528,7 @@ describe("staking tests", () => {
       [Cl.principal(depositor1)],
       depositor1
     );
-    expect(depositorBalance.result.value.value).toBe(4410n);
+    expect(depositorBalance.result.value.value).toBe(4409n);
 
     depositorBalance = simnet.callReadOnlyFn(
       "mock-eth",
@@ -1544,7 +1544,7 @@ describe("staking tests", () => {
       [Cl.principal(borrower1)],
       borrower1
     );
-    expect(userDebtShares.result.value.data["debt-shares"].value).toEqual(797n);
+    expect(userDebtShares.result.value.data["debt-shares"].value).toEqual(796n);
 
     mint_token("mock-usdc", 100, deployer);
     const depositToReserve = simnet.callPublicFn(
@@ -1597,7 +1597,7 @@ describe("staking tests", () => {
       [Cl.principal(depositor1)],
       depositor1
     );
-    expect(depositorBalance.result.value.value).toBe(4320n);
+    expect(depositorBalance.result.value.value).toBe(4318n);
 
     depositorBalance = simnet.callReadOnlyFn(
       "mock-btc",
@@ -1614,7 +1614,7 @@ describe("staking tests", () => {
       deployer
     );
     expect(accounthealthRes.result.value.data["position-health"]).toEqual(
-      Cl.uint(1n)
+      Cl.uint(100000000n)
     );
 
     let liquidatorBalance = simnet.callReadOnlyFn(

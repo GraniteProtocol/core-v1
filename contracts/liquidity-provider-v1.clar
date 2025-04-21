@@ -10,14 +10,32 @@
 (define-public (deposit (assets uint) (recipient principal))
   (begin
     (try! (accrue-interest))
-    (try! (contract-call? .state-v1 add-assets contract-caller recipient assets (contract-call? .math-v1 convert-to-shares (contract-call? .state-v1 get-lp-params) assets false)))
+    (let ((shares (contract-call? .math-v1 convert-to-shares (contract-call? .state-v1 get-lp-params) assets false)))
+      (try! (contract-call? .state-v1 add-assets contract-caller recipient assets shares))
+      (print { 
+        recipient: recipient,
+        assets: assets,
+        shares: shares,
+        user: contract-caller,
+        lp-params: (contract-call? .state-v1 get-lp-params),
+        action: "deposit",
+      }))
     SUCCESS  
 ))
 
 (define-public (withdraw (assets uint) (recipient principal))
   (begin
     (try! (accrue-interest))
-    (try! (contract-call? .state-v1 remove-assets contract-caller recipient assets (contract-call? .math-v1 convert-to-shares (contract-call? .state-v1 get-lp-params) assets true)))
+    (let ((shares (contract-call? .math-v1 convert-to-shares (contract-call? .state-v1 get-lp-params) assets true)))
+      (try! (contract-call? .state-v1 remove-assets contract-caller recipient assets shares))
+      (print {
+        recipient: recipient,
+        assets: assets,
+        shares: shares,
+        user: contract-caller,
+        lp-params: (contract-call? .state-v1 get-lp-params),
+        action: "withdraw"
+      }))
     SUCCESS  
 ))
 

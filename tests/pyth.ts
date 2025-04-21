@@ -134,6 +134,52 @@ export const set_price = async (
   return publishTime;
 };
 
+export const set_price_without_scaling = async (
+  token: string,
+  price: bigint,
+  deployer: any,
+  expo: number = -8,
+  prevPublishTime?: bigint
+): Promise<bigint> => {
+  const feed = get_token_feed(token);
+  await sleep(800);
+  const publishTime = pyth.timestampNow();
+  let actualPricesUpdates = pyth.buildPriceUpdateBatch([
+    [feed, { price: price, expo, publishTime, prevPublishTime }],
+  ]);
+  let actualPricesUpdatesVaaPayload =
+    pyth.buildAuwvVaaPayload(actualPricesUpdates);
+  let payload = pyth.serializeAuwvVaaPayloadToBuffer(
+    actualPricesUpdatesVaaPayload
+  );
+  let vaaBody = wormhole.buildValidVaaBodySpecs({
+    payload,
+    emitter: pyth.DefaultPricesDataSources[0],
+  });
+  let vaaHeader = wormhole.buildValidVaaHeader(guardianSet, vaaBody, {
+    version: 1,
+    guardianSetId: 1,
+  });
+  let vaa = wormhole.serializeVaaToBuffer(vaaHeader, vaaBody);
+  let pnauHeader = pyth.buildPnauHeader();
+  let pricesUpdatesToSubmit = [feed];
+  let pnau = pyth.serializePnauToBuffer(pnauHeader, {
+    vaa,
+    pricesUpdates: actualPricesUpdates,
+    pricesUpdatesToSubmit,
+  });
+
+  const res = simnet.callPublicFn(
+    "pyth-adapter-v1",
+    "update-pyth",
+    [Cl.some(Cl.buffer(pnau))],
+    deployer
+  );
+  expect(res.result).toHaveClarityType(ClarityType.ResponseOk);
+
+  return publishTime;
+};
+
 const sleep = async (ms: number) => {
   return new Promise((resolve) => {
     setTimeout(resolve, ms);

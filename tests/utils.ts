@@ -186,6 +186,7 @@ export const set_allowed_contracts = (deployer: any) => {
     Cl.contractPrincipal(deployer, "liquidator-v1"),
     Cl.contractPrincipal(deployer, "staking-v1"),
     Cl.contractPrincipal(deployer, "test-gifter"),
+    Cl.contractPrincipal(deployer, "flash-loan-v1"),
   ];
   contracts.forEach((contract) => {
     const response = simnet.callPublicFn(
@@ -300,4 +301,39 @@ export const deposit_and_borrow = (
     borrower
   );
   expect(userBalancePostBorrow.result.value.value).toBe(BigInt(borrow_amount));
+};
+
+export const expectUserUSDCBalance = (
+  user: ClarityValue,
+  amount: bigint,
+  deployer: any
+) => {
+  expect(getUserBalance(user, "mock-usdc", deployer)).toBe(amount);
+};
+
+export const expectUserBTCBalance = (
+  user: ClarityValue,
+  amount: bigint,
+  deployer: any
+) => {
+  expect(getUserBalance(user, "mock-btc", deployer)).toBe(amount);
+};
+
+export const getUserBalance = (
+  user: ClarityValue,
+  token: string,
+  deployer: any
+) => {
+  const result = simnet.callReadOnlyFn(token, "get-balance", [user], deployer);
+
+  return result.result.value.value;
+};
+
+export const expectUserBalance = (
+  user: ClarityValue,
+  amount: bigint,
+  token: string,
+  deployer: any
+) => {
+  expect(getUserBalance(user, token, deployer)).toBe(amount);
 };

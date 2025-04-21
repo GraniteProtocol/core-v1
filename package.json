@@ -21,7 +21,7 @@
     "fast-check": "^3.22.0",
     "typescript": "^5.6.2",
     "vite": "^5.4.8",
-    "vitest": "^1.6.0",
+    "vitest": "^1.6.1",
     "vitest-environment-clarinet": "^2.1.0"
   },
   "optionalDependencies": {

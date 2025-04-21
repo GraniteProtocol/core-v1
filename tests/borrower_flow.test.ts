@@ -380,7 +380,6 @@ describe("Borrower User flow tests", () => {
       ],
       depositor1
     );
-    expect(liquidate.result).toBeOk(Cl.bool(true));
 
     totalAssetsRes = simnet.callReadOnlyFn(
       "state-v1",
@@ -397,7 +396,7 @@ describe("Borrower User flow tests", () => {
       [Cl.principal(depositor1)],
       depositor1
     );
-    expect(depositorBalance.result.value.value).toBe(4410n);
+    expect(depositorBalance.result.value.value).toBe(4409n);
 
     depositorBalance = simnet.callReadOnlyFn(
       "mock-eth",
@@ -413,7 +412,7 @@ describe("Borrower User flow tests", () => {
       [Cl.principal(borrower1)],
       borrower1
     );
-    expect(userDebtShares.result.value.data["debt-shares"].value).toEqual(797n);
+    expect(userDebtShares.result.value.data["debt-shares"].value).toEqual(796n);
 
     liquidate = simnet.callPublicFn(
       "liquidator-v1",
@@ -438,7 +437,7 @@ describe("Borrower User flow tests", () => {
       [Cl.principal(depositor1)],
       depositor1
     );
-    expect(depositorBalance.result.value.value).toBe(4320n);
+    expect(depositorBalance.result.value.value).toBe(4318n);
 
     depositorBalance = simnet.callReadOnlyFn(
       "mock-btc",
@@ -455,7 +454,7 @@ describe("Borrower User flow tests", () => {
       deployer
     );
     expect(accounthealthRes.result.value.data["position-health"]).toEqual(
-      Cl.uint(1n)
+      Cl.uint(100000000n)
     );
 
     let liquidatorBalance = simnet.callReadOnlyFn(

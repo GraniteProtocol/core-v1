@@ -17,6 +17,7 @@
 
 ;; Constants
 (define-constant SUCCESS (ok true))
+(define-constant scaling-factor (pow u10 (contract-call? .constants-v1 get-market-token-decimals)))
 
 ;; lp-token
 (define-constant token-prefix "gusdc")
@@ -190,7 +191,6 @@
 (define-public (slash-total-staked-lp-tokens (lp-tokens uint))
   (let (
       (total-staked-lp-tokens (get-total-staked-lp-tokens))
-      (scaling-factor (contract-call? .constants-v1 get-scaling-factor))
       (unfinalized-withdrawal-info (var-get unfinalized-withdrawals))
       (withdrawal-lp-tokens (get lp-tokens unfinalized-withdrawal-info))
       (withdrawal-lp-token-rate (/ (* withdrawal-lp-tokens scaling-factor) total-staked-lp-tokens))
