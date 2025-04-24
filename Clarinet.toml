@@ -144,8 +144,8 @@ path = 'contracts/pyth/contracts/wormhole/wormhole-traits-v1.clar'
 clarity_version = 3
 epoch = 3.0
 
-[contracts.lp-incentives-v1]
-path = 'contracts/lp-incentives-v1.clar'
+[contracts.lp-incentives-v2]
+path = 'contracts/lp-incentives-v2.clar'
 clarity_version = 3
 epoch = 3.0
 

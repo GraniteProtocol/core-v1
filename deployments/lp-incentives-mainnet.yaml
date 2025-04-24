@@ -9,20 +9,20 @@ plan:
     - id: 0
       transactions:
         - contract-publish:
-            contract-name: lp-incentives-v1
+            contract-name: lp-incentives-v2
             expected-sender: SP1MHDKAYCBNGM88SP22NM8C4JKH1JPBFB11RP9HY
             cost: 11591
-            path: contracts/lp-incentives-v1.clar
+            path: contracts/lp-incentives-v2.clar
             anchor-block-only: true
             clarity-version: 3
       epoch: "3.0"
     - id: 1
       transactions:
         - contract-call:
-            contract-id: SP1MHDKAYCBNGM88SP22NM8C4JKH1JPBFB11RP9HY.lp-incentives-v1
+            contract-id: SP1MHDKAYCBNGM88SP22NM8C4JKH1JPBFB11RP9HY.lp-incentives-v2
             expected-sender: SP1MHDKAYCBNGM88SP22NM8C4JKH1JPBFB11RP9HY
             method: initiate-epoch
             parameters:
-              - "{ epoch-start-time: u50000000000, epoch-end-time: u750000000000, epoch-rewards: u800000000000, snapshot-uploader: 'SP1MHDKAYCBNGM88SP22NM8C4JKH1JPBFB11RP9HY }"
+              - "{ epoch-start-time: u50000000000, epoch-end-time: u750000000000, epoch-rewards: u800000000000 }"
             cost: 315
       epoch: "3.0"

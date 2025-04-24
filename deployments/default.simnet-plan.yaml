@@ -201,9 +201,9 @@ plan:
             path: contracts/liquidity-provider-v1.clar
             clarity-version: 3
         - emulated-contract-publish:
-            contract-name: lp-incentives-v1
+            contract-name: lp-incentives-v2
             emulated-sender: ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM
-            path: contracts/lp-incentives-v1.clar
+            path: contracts/lp-incentives-v2.clar
             clarity-version: 3
         - emulated-contract-publish:
             contract-name: mock-flash-loan-callback

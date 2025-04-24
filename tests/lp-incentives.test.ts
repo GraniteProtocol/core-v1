@@ -1,11 +1,5 @@
 import { beforeEach, describe, expect, it } from "vitest";
-import {
-  Cl,
-  ClarityType,
-  ClarityValue,
-  SomeCV,
-  UIntCV,
-} from "@stacks/transactions";
+import { Cl, ClarityValue, SomeCV, UIntCV } from "@stacks/transactions";
 import {
   deposit,
   set_allowed_contracts,
@@ -19,7 +13,6 @@ import { init_pyth, set_initial_price, set_pyth_time_delta } from "./pyth";
 
 const accounts = simnet.getAccounts();
 const depositor = accounts.get("wallet_1")!;
-const snapshotUploader = accounts.get("wallet_2")!;
 const user1 = accounts.get("wallet_3")!;
 const user2 = accounts.get("wallet_4")!;
 const user3 = accounts.get("wallet_5")!;
@@ -28,14 +21,25 @@ const user5 = accounts.get("wallet_7")!;
 const user6 = accounts.get("wallet_8")!;
 const deployer = accounts.get("deployer")!;
 
-function initiate_epoch(details: any, deployer: any) {
+function initiate_epoch(details: any) {
   const res = simnet.callPublicFn(
-    "lp-incentives-v1",
+    "lp-incentives-v2",
     "initiate-epoch",
     [Cl.tuple(details)],
     deployer
   );
   expect(res.result).toBeOk(Cl.bool(true));
+}
+
+function check_closed_epoch() {
+  const res = simnet.callReadOnlyFn(
+    "lp-incentives-v2",
+    "get-epoch-details",
+    [],
+    deployer
+  );
+
+  expect(res.result.value.data["epoch-completed"]).toStrictEqual(Cl.bool(true));
 }
 
 const getUserLpBalance = (user: ClarityValue) => {
@@ -51,7 +55,7 @@ const getUserLpBalance = (user: ClarityValue) => {
 
 const getUnclaimedUserCount = () => {
   let unclaimedUserCount = simnet.callReadOnlyFn(
-    "lp-incentives-v1",
+    "lp-incentives-v2",
     "get-unclaimed-user-reward-count",
     [],
     user1
@@ -75,24 +79,9 @@ function getTimeForBlock(block: `u${number}`): bigint {
   return clTime.value.value;
 }
 
-function initiate_new_snapshot(details: any, uploader: any) {
-  const res = simnet.callPublicFn(
-    "lp-incentives-v1",
-    "initiate-new-snapshot",
-    [Cl.tuple(details)],
-    uploader
-  );
-
-  expect(res.result.type).toBe(ClarityType.ResponseOk);
-  return res.result.value.value;
-}
-
 type UserAndShares = [string, number];
 
-function createSnapshotPayload(
-  userShares: UserAndShares[],
-  snapshotId: number
-) {
+function createSnapshotPayload(userShares: UserAndShares[]) {
   let arrayResult = [];
 
   // iterate thru the input and add snapshot_id
@@ -102,7 +91,6 @@ function createSnapshotPayload(
         Cl.tuple({
           user: Cl.principal(pair[0]),
           "lp-shares": Cl.uint(pair[1]),
-          "snapshot-id": Cl.uint(snapshotId),
         })
       )
     );
@@ -121,30 +109,25 @@ function createNewSnapshot(
   lpShares: number,
   users: UserAndShares[]
 ) {
-  const snapshotID = initiate_new_snapshot(
-    {
-      "snapshot-time": Cl.uint(snapshotTime),
-      "total-lp-shares": Cl.uint(lpShares),
-    },
-    snapshotUploader
-  );
-
-  let payload = createSnapshotPayload(users, snapshotID);
+  let details = Cl.tuple({
+    "snapshot-time": Cl.uint(snapshotTime),
+    "total-lp-shares": Cl.uint(lpShares),
+  });
+  let payload = createSnapshotPayload(users);
 
   let res = simnet.callPublicFn(
-    "lp-incentives-v1",
+    "lp-incentives-v2",
     "upload-snapshot",
-    [payload],
-    snapshotUploader
+    [details, payload],
+    deployer
   );
 
   expect(res.result).toBeOk(Cl.bool(true));
-  return snapshotID;
 }
 
 function expectUserRewards(user: string, rewards: number) {
   const user1Rewards = simnet.callReadOnlyFn(
-    "lp-incentives-v1",
+    "lp-incentives-v2",
     "get-user-rewards",
     [Cl.principal(user)],
     deployer
@@ -152,16 +135,6 @@ function expectUserRewards(user: string, rewards: number) {
   expect(user1Rewards.result.value.value.data["earned-rewards"]).toStrictEqual(
     Cl.uint(rewards)
   );
-}
-
-function closeEpoch() {
-  const res = simnet.callPublicFn(
-    "lp-incentives-v1",
-    "close-epoch",
-    [],
-    snapshotUploader
-  );
-  expect(res.result).toBeOk(Cl.bool(true));
 }
 
 function claimRewards(sender: string, onBehalfOf?: string) {
@@ -172,7 +145,7 @@ function claimRewards(sender: string, onBehalfOf?: string) {
     arg = Cl.none();
   }
   const res = simnet.callPublicFn(
-    "lp-incentives-v1",
+    "lp-incentives-v2",
     "claim-rewards",
     [arg],
     sender
@@ -182,10 +155,10 @@ function claimRewards(sender: string, onBehalfOf?: string) {
 
 function transferRemainingLpTokens(recepient: string) {
   const res = simnet.callPublicFn(
-    "lp-incentives-v1",
+    "lp-incentives-v2",
     "transfer-remaining-lp-tokens",
     [Cl.principal(recepient)],
-    snapshotUploader
+    deployer
   );
   expect(res.result).toBeOk(Cl.bool(true));
 }
@@ -208,29 +181,28 @@ describe("LP incentives tests", () => {
       "epoch-start-time": Cl.uint(0),
       "epoch-end-time": Cl.uint(0),
       "epoch-rewards": Cl.uint(0),
-      "snapshot-uploader": Cl.principal(snapshotUploader),
     };
 
     let res = simnet.callPublicFn(
-      "lp-incentives-v1",
+      "lp-incentives-v2",
       "initiate-epoch",
       [Cl.tuple(epochDetails)],
       deployer
     );
-    expect(res.result).toBeErr(Cl.uint(100007)); // ERR-INVALID-START-AND-END-TIME
+    expect(res.result).toBeErr(Cl.uint(100005)); // ERR-INVALID-START-AND-END-TIME
 
     epochDetails["epoch-end-time"] = Cl.uint(1);
     res = simnet.callPublicFn(
-      "lp-incentives-v1",
+      "lp-incentives-v2",
       "initiate-epoch",
       [Cl.tuple(epochDetails)],
       deployer
     );
-    expect(res.result).toBeErr(Cl.uint(100009)); // ERR-ZERO-REWARDS
+    expect(res.result).toBeErr(Cl.uint(100007)); // ERR-ZERO-REWARDS
 
     epochDetails["epoch-rewards"] = Cl.uint(100);
     res = simnet.callPublicFn(
-      "lp-incentives-v1",
+      "lp-incentives-v2",
       "initiate-epoch",
       [Cl.tuple(epochDetails)],
       deployer
@@ -239,171 +211,98 @@ describe("LP incentives tests", () => {
 
     // re-initiating epoch should fail
     res = simnet.callPublicFn(
-      "lp-incentives-v1",
+      "lp-incentives-v2",
       "initiate-epoch",
       [Cl.tuple(epochDetails)],
-      snapshotUploader
+      deployer
     );
     expect(res.result).toBeErr(Cl.uint(100001)); // ERR-EPOCH-INITIATED
   });
 
-  it("test initiating snapshot", async () => {
+  it("test upload snapshot basic", async () => {
     let snapshotDetails = {
       "snapshot-time": Cl.uint(100),
       "total-lp-shares": Cl.uint(0),
     };
 
-    let res = simnet.callPublicFn(
-      "lp-incentives-v1",
-      "initiate-new-snapshot",
-      [Cl.tuple(snapshotDetails)],
-      deployer
-    );
-    expect(res.result).toBeErr(Cl.uint(100006)); // ERR-EPOCH-NOT-INITIALIZED
-
-    initiate_epoch(
-      {
-        "epoch-start-time": Cl.uint(0),
-        "epoch-end-time": Cl.uint(100),
-        "epoch-rewards": Cl.uint(100),
-        "snapshot-uploader": Cl.principal(snapshotUploader),
-      },
-      deployer
-    );
-
-    res = simnet.callPublicFn(
-      "lp-incentives-v1",
-      "initiate-new-snapshot",
-      [Cl.tuple(snapshotDetails)],
-      snapshotUploader
-    );
-    expect(res.result).toBeErr(Cl.uint(100008)); // ERR-ZERO-LP-SHARES
-
-    snapshotDetails["total-lp-shares"] = Cl.uint(100);
-    res = simnet.callPublicFn(
-      "lp-incentives-v1",
-      "initiate-new-snapshot",
-      [Cl.tuple(snapshotDetails)],
-      snapshotUploader
-    );
-    expect(res.result).toBeOk(Cl.uint(0));
-
-    // initiating new snapshot with invalid snapshot time
-    snapshotDetails["snapshot-time"] = Cl.uint(99);
-    res = simnet.callPublicFn(
-      "lp-incentives-v1",
-      "initiate-new-snapshot",
-      [Cl.tuple(snapshotDetails)],
-      snapshotUploader
-    );
-    expect(res.result).toBeErr(Cl.uint(100016)); // ERR-INVALID-SNAPSHOT-TIME
-
-    // initiating new snapshot without uploading data
-    snapshotDetails["snapshot-time"] = Cl.uint(101);
-    res = simnet.callPublicFn(
-      "lp-incentives-v1",
-      "initiate-new-snapshot",
-      [Cl.tuple(snapshotDetails)],
-      snapshotUploader
-    );
-    expect(res.result).toBeErr(Cl.uint(100003)); // ERR-SNAPSHOT-INCOMPLETE
-
-    let payload = createSnapshotPayload(
-      [
-        [user1, 600],
-        [user2, 400],
-      ],
-      0
-    );
-
-    res = simnet.callPublicFn(
-      "lp-incentives-v1",
-      "upload-snapshot",
-      [payload],
-      snapshotUploader
-    );
-    expect(res.result).toBeOk(Cl.bool(true));
-
-    // new snapshot can be initiated
-    res = simnet.callPublicFn(
-      "lp-incentives-v1",
-      "initiate-new-snapshot",
-      [Cl.tuple(snapshotDetails)],
-      snapshotUploader
-    );
-    expect(res.result).toBeOk(Cl.uint(1));
-  });
-
-  it("test close epoch incomplete", async () => {
-    let blockTime = getTimeForBlock(`u${simnet.blockHeight - 1}`);
-    initiate_epoch(
-      {
-        "epoch-start-time": Cl.uint(0),
-        "epoch-end-time": Cl.uint(blockTime + 20000n),
-        "epoch-rewards": Cl.uint(100),
-        "snapshot-uploader": Cl.principal(snapshotUploader),
-      },
-      deployer
-    );
-    let res = simnet.callPublicFn(
-      "lp-incentives-v1",
-      "close-epoch",
-      [],
-      snapshotUploader
-    );
-    expect(res.result).toBeErr(Cl.uint(100005)); // ERR-EPOCH-INCOMPLETE
-  });
-
-  it("test close epoch", async () => {
-    let blockTime = getTimeForBlock(`u${simnet.blockHeight - 1}`);
-    initiate_epoch(
-      {
-        "epoch-start-time": Cl.uint(0),
-        "epoch-end-time": Cl.uint(blockTime),
-        "epoch-rewards": Cl.uint(100),
-        "snapshot-uploader": Cl.principal(snapshotUploader),
-      },
-      deployer
-    );
-    let res = simnet.callPublicFn(
-      "lp-incentives-v1",
-      "close-epoch",
-      [],
-      snapshotUploader
-    );
-    expect(res.result).toBeOk(Cl.bool(true));
-
-    // cannot close already closed epoch
-    res = simnet.callPublicFn(
-      "lp-incentives-v1",
-      "close-epoch",
-      [],
-      snapshotUploader
-    );
-    expect(res.result).toBeErr(Cl.uint(100004)); // ERR-EPOCH-CLOSED
-  });
-
-  it("test upload snapshot", async () => {
-    let blockTime = getTimeForBlock(`u${simnet.blockHeight - 1}`);
-    initiate_epoch(
-      {
-        "epoch-start-time": Cl.uint(blockTime - 20000n),
-        "epoch-end-time": Cl.uint(blockTime + 1000n),
-        "epoch-rewards": Cl.uint(100),
-        "snapshot-uploader": Cl.principal(snapshotUploader),
-      },
-      deployer
-    );
-
-    createNewSnapshot(blockTime - 1000n, 1000, [
+    let payload = createSnapshotPayload([
       [user1, 600],
       [user2, 400],
     ]);
 
-    expectUserRewards(user1, 54);
-    expectUserRewards(user2, 36);
+    let res = simnet.callPublicFn(
+      "lp-incentives-v2",
+      "upload-snapshot",
+      [Cl.tuple(snapshotDetails), payload],
+      deployer
+    );
+    expect(res.result).toBeErr(Cl.uint(100012)); // ERR-INVALID-SNAPSHOT-TIME
+
+    initiate_epoch({
+      "epoch-start-time": Cl.uint(0),
+      "epoch-end-time": Cl.uint(100),
+      "epoch-rewards": Cl.uint(100),
+    });
+
+    res = simnet.callPublicFn(
+      "lp-incentives-v2",
+      "upload-snapshot",
+      [Cl.tuple(snapshotDetails), payload],
+      deployer
+    );
+    expect(res.result).toBeErr(Cl.uint(100006)); // ERR-ZERO-LP-SHARES
+
+    snapshotDetails["total-lp-shares"] = Cl.uint(100);
+    res = simnet.callPublicFn(
+      "lp-incentives-v2",
+      "upload-snapshot",
+      [Cl.tuple(snapshotDetails), payload],
+      deployer
+    );
+    expect(res.result).toBeOk(Cl.bool(true));
+
+    // initiating new snapshot with invalid snapshot time
+    snapshotDetails["snapshot-time"] = Cl.uint(99);
+    res = simnet.callPublicFn(
+      "lp-incentives-v2",
+      "upload-snapshot",
+      [Cl.tuple(snapshotDetails), payload],
+      deployer
+    );
+    expect(res.result).toBeErr(Cl.uint(100012)); // ERR-INVALID-SNAPSHOT-TIME
+
+    // initiating new snapshot should not work when epoch is closed
+    snapshotDetails["snapshot-time"] = Cl.uint(101);
+    res = simnet.callPublicFn(
+      "lp-incentives-v2",
+      "upload-snapshot",
+      [Cl.tuple(snapshotDetails), payload],
+      deployer
+    );
+    expect(res.result).toBeErr(Cl.uint(100012)); // ERR-INVALID-SNAPSHOT-TIME
+
+    check_closed_epoch();
+  });
+
+  it("test upload snapshot single", async () => {
+    let blockTime = getTimeForBlock(`u${simnet.blockHeight - 1}`);
+    initiate_epoch({
+      "epoch-start-time": Cl.uint(blockTime),
+      "epoch-end-time": Cl.uint(blockTime + 1000n),
+      "epoch-rewards": Cl.uint(100),
+    });
+
+    createNewSnapshot(blockTime + 1000n, 1000, [
+      [user1, 600],
+      [user2, 400],
+    ]);
+
+    expectUserRewards(user1, 60);
+    expectUserRewards(user2, 40);
     // unclaimed user count should be 2
     expectUnclaimedUserCount(2n);
+    // epoch should be closed
+    check_closed_epoch();
 
     mint_token("mock-usdc", 100, depositor);
     deposit(100, depositor);
@@ -414,94 +313,39 @@ describe("LP incentives tests", () => {
       "state-v1",
       100,
       depositor,
-      Cl.contractPrincipal(deployer, "lp-incentives-v1")
+      Cl.contractPrincipal(deployer, "lp-incentives-v2")
     );
 
     expectUserLpBalance(Cl.principal(depositor), 0n);
     expectUserLpBalance(
-      Cl.contractPrincipal(deployer, "lp-incentives-v1"),
+      Cl.contractPrincipal(deployer, "lp-incentives-v2"),
       100n
     );
 
-    // close epoch
-    simnet.mineEmptyBlocks(10000);
-    closeEpoch();
-
     // claim user 1 rewards themselves
     claimRewards(user1);
-    expectUserLpBalance(Cl.principal(user1), 54n);
+    expectUserLpBalance(Cl.principal(user1), 60n);
     expectUserLpBalance(Cl.principal(user2), 0n);
     expectUnclaimedUserCount(1n);
 
     // claim user2 rewards through user1
     claimRewards(user1, user2);
-    expectUserLpBalance(Cl.principal(user1), 54n);
-    expectUserLpBalance(Cl.principal(user2), 36n);
+    expectUserLpBalance(Cl.principal(user1), 60n);
+    expectUserLpBalance(Cl.principal(user2), 40n);
     expectUnclaimedUserCount(0n);
 
-    // transfer remaing balance to depositor
-    expectUserLpBalance(
-      Cl.contractPrincipal(deployer, "lp-incentives-v1"),
-      10n
-    );
+    // remaing balance should be zero
+    expectUserLpBalance(Cl.contractPrincipal(deployer, "lp-incentives-v2"), 0n);
     expectUserLpBalance(Cl.principal(depositor), 0n);
-    transferRemainingLpTokens(depositor);
-    expectUserLpBalance(Cl.contractPrincipal(deployer, "lp-incentives-v1"), 0n);
-    expectUserLpBalance(Cl.principal(depositor), 10n);
-  });
-
-  it("test close epoch when snapshot is not uploaded", async () => {
-    let blockTime = getTimeForBlock(`u${simnet.blockHeight - 1}`);
-    initiate_epoch(
-      {
-        "epoch-start-time": Cl.uint(blockTime - 20000n),
-        "epoch-end-time": Cl.uint(blockTime + 1000n),
-        "epoch-rewards": Cl.uint(100),
-        "snapshot-uploader": Cl.principal(snapshotUploader),
-      },
-      deployer
-    );
-
-    createNewSnapshot(blockTime - 1000n, 1000, [
-      [user1, 600],
-      [user2, 400],
-    ]);
-
-    expectUserRewards(user1, 54);
-    expectUserRewards(user2, 36);
-    // unclaimed user count should be 2
-    expectUnclaimedUserCount(2n);
-
-    initiate_new_snapshot(
-      {
-        "snapshot-time": Cl.uint(blockTime + 500n),
-        "total-lp-shares": Cl.uint(1000),
-      },
-      snapshotUploader
-    );
-
-    // closing epoch should fail
-    simnet.mineEmptyBlocks(10000);
-    const res = simnet.callPublicFn(
-      "lp-incentives-v1",
-      "close-epoch",
-      [],
-      snapshotUploader
-    );
-    expect(res.result).toBeErr(Cl.uint(100003)); // ERR-SNAPSHOT-INCOMPLETE
   });
 
   it("test upload multi snapshot", async () => {
     let blockTime = getTimeForBlock(`u${simnet.blockHeight - 1}`);
-    initiate_epoch(
-      {
-        "epoch-start-time": Cl.uint(blockTime - 20000n),
-        "epoch-end-time": Cl.uint(blockTime + 20000n),
-        "epoch-rewards": Cl.uint(1000),
-        "snapshot-uploader": Cl.principal(snapshotUploader),
-      },
-      deployer
-    );
+    initiate_epoch({
+      "epoch-start-time": Cl.uint(blockTime - 20000n),
+      "epoch-end-time": Cl.uint(blockTime + 20000n),
+      "epoch-rewards": Cl.uint(1000),
+    });
 
     createNewSnapshot(blockTime - 5000n, 1000, [
       [user1, 600],
@@ -582,18 +426,17 @@ describe("LP incentives tests", () => {
       "state-v1",
       1000,
       depositor,
-      Cl.contractPrincipal(deployer, "lp-incentives-v1")
+      Cl.contractPrincipal(deployer, "lp-incentives-v2")
     );
 
     expectUserLpBalance(Cl.principal(depositor), 0n);
     expectUserLpBalance(
-      Cl.contractPrincipal(deployer, "lp-incentives-v1"),
+      Cl.contractPrincipal(deployer, "lp-incentives-v2"),
       1000n
     );
 
-    // close epoch
-    simnet.mineEmptyBlocks(10000);
-    closeEpoch();
+    // check close epoch
+    check_closed_epoch();
 
     // claim user rewards
     claimRewards(user1);
@@ -614,12 +457,12 @@ describe("LP incentives tests", () => {
 
     // transfer remaing balance to depositor
     expectUserLpBalance(
-      Cl.contractPrincipal(deployer, "lp-incentives-v1"),
+      Cl.contractPrincipal(deployer, "lp-incentives-v2"),
       10n
     );
     expectUserLpBalance(Cl.principal(depositor), 0n);
     transferRemainingLpTokens(depositor);
-    expectUserLpBalance(Cl.contractPrincipal(deployer, "lp-incentives-v1"), 0n);
+    expectUserLpBalance(Cl.contractPrincipal(deployer, "lp-incentives-v2"), 0n);
     expectUserLpBalance(Cl.principal(depositor), 10n);
   });
 });
