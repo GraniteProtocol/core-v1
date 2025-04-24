@@ -14,7 +14,7 @@
 }) none)
 
 
-(define-public (on-granite-flash-loan (amount uint) (fee uint) (data (optional (buff 1024))))
+(define-public (on-granite-flash-loan (amount uint) (fee uint) (data (optional (buff 10240))))
   (let (
       (ldata (unwrap! (var-get liquidator-data) ERR-NO-STORAGE))
       (pyth-price-feed (get pyth-price-feed-data ldata))
