@@ -1694,6 +1694,14 @@ describe("staking tests", () => {
     );
     expect(stakingStatus.result).toStrictEqual(Cl.bool(false));
 
+    stakingStatus = simnet.callReadOnlyFn(
+      "staking-v1",
+      "is-staking-wiped-out",
+      [],
+      deployer
+    );
+    expect(stakingStatus.result).toStrictEqual(Cl.bool(true));
+
     totalLpSupply = simnet.callReadOnlyFn(
       "state-v1",
       "get-total-supply",

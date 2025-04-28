@@ -28,6 +28,7 @@
 (define-map user-withdrawal-index principal uint)
 (define-map user-withdrawals { user: principal, index: uint } { withdrawal-shares: uint, finalization-at: uint })
 (define-data-var total-lp-tokens-staked uint u0)
+(define-data-var staking-wiped-out bool false)
 
 ;; governance
 (define-public (update-withdrawal-finalization-period (new-value uint))
@@ -154,6 +155,10 @@
   (var-get withdrawal-finalization-period)
 )
 
+(define-read-only (is-staking-wiped-out)
+  (var-get staking-wiped-out)
+)
+
 ;; Public functions
 (define-public (stake (lp-tokens uint))
   (let (
@@ -209,13 +214,24 @@
         shares: (get shares unfinalized-withdrawal-info),
       })
     )
-    (print {
-      action: "slash-total-staked-lp-tokens",
-      amount: lp-tokens,
-    })
-    SUCCESS
-  )
-)
+    (if (is-eq lp-tokens total-staked-lp-tokens)
+      (begin 
+        (var-set staking-wiped-out true)
+        (print {
+          action: "staking-wipe-out",
+          amount: lp-tokens,
+        })
+        SUCCESS
+      )
+
+      (begin 
+        (print {
+          action: "slash-total-staked-lp-tokens",
+          amount: lp-tokens,
+        })
+        SUCCESS  
+      )
+)))
 
 (define-public (reconcile-lp-token-balance)
   (let (
@@ -316,9 +332,15 @@
   (contract-call? .state-v1 set-accrued-interest accrued-interest)
 ))
 
+
 (define-private (check-staking-enabled)
-  (if (is-eq (contract-call? .state-v1 is-staking-enabled) true)
-    (ok true)
-    ERR-STAKING-DISABLED
+  (let (
+    (staking-disabled (not (contract-call? .state-v1 is-staking-enabled)))
+    (wiped-out (var-get staking-wiped-out))
+  )
+    (if (or staking-disabled wiped-out)
+      ERR-STAKING-DISABLED
+      (ok true)
+    )
   )
 )
