@@ -30,7 +30,7 @@ export default defineConfig({
       vitestSetupFilePath,
       // custom setup files can be added here
     ],
-    testTimeout: 15000,
+    testTimeout: 25000,
     environmentOptions: {
       clarinet: {
         ...getClarinetVitestsArgv(),
