@@ -4,7 +4,7 @@
 
 (define-data-var result (response bool uint) (ok true))
 
-(define-public (on-granite-flash-loan (amount uint) (fee uint) (data (optional (buff 10240))))
+(define-public (on-granite-flash-loan (amount uint) (fee uint) (data (optional (buff 20480))))
   (let (
       (caller tx-sender)
       (user-balance (contract-call? .mock-usdc get-balance caller))

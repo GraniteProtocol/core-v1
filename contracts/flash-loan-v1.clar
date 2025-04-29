@@ -40,7 +40,7 @@
     SUCCESS
 ))
 
-(define-public (flash-loan (amount uint) (callback <callback-trait>) (data (optional (buff 10240))))
+(define-public (flash-loan (amount uint) (callback <callback-trait>) (data (optional (buff 20480))))
   (let (
       (scaled-fee (contract-call? .math-v1 to-fixed fee scaling-decimals market-decimals ))
       (flash-loan-fee (contract-call? .math-v1 divide-round-up (* amount scaled-fee) scaling-factor))
