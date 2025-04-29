@@ -31,6 +31,16 @@ function initiate_epoch(details: any) {
   expect(res.result).toBeOk(Cl.bool(true));
 }
 
+function close_epoch() {
+  const res = simnet.callPublicFn(
+    "lp-incentives-v2",
+    "close-epoch",
+    [],
+    deployer
+  );
+  expect(res.result).toBeOk(Cl.bool(true));
+}
+
 function check_closed_epoch() {
   const res = simnet.callReadOnlyFn(
     "lp-incentives-v2",
@@ -281,6 +291,7 @@ describe("LP incentives tests", () => {
     );
     expect(res.result).toBeErr(Cl.uint(100012)); // ERR-INVALID-SNAPSHOT-TIME
 
+    close_epoch();
     check_closed_epoch();
   });
 
@@ -302,6 +313,7 @@ describe("LP incentives tests", () => {
     // unclaimed user count should be 2
     expectUnclaimedUserCount(2n);
     // epoch should be closed
+    close_epoch();
     check_closed_epoch();
 
     mint_token("mock-usdc", 100, depositor);
@@ -367,7 +379,6 @@ describe("LP incentives tests", () => {
     expectUserRewards(user3, 41);
     expectUserRewards(user4, 41);
 
-    simnet.mineEmptyBlocks(1000);
     createNewSnapshot(blockTime + 10000n, 2500, [
       [user1, 850],
       [user2, 700],
@@ -382,7 +393,6 @@ describe("LP incentives tests", () => {
     expectUserRewards(user4, 53);
     expectUserRewards(user5, 22);
 
-    simnet.mineEmptyBlocks(1000);
     createNewSnapshot(blockTime + 15000n, 2500, [
       [user1, 850],
       [user2, 700],
@@ -397,7 +407,6 @@ describe("LP incentives tests", () => {
     expectUserRewards(user4, 65);
     expectUserRewards(user5, 44);
 
-    simnet.mineEmptyBlocks(1000);
     createNewSnapshot(blockTime + 20000n, 3500, [
       [user1, 1000],
       [user2, 800],
@@ -436,6 +445,160 @@ describe("LP incentives tests", () => {
     );
 
     // check close epoch
+    close_epoch();
+    check_closed_epoch();
+
+    // claim user rewards
+    claimRewards(user1);
+    claimRewards(user1, user2);
+    claimRewards(user3);
+    claimRewards(user1, user4);
+    claimRewards(user5);
+    claimRewards(user6);
+
+    // check rewards
+    expectUserLpBalance(Cl.principal(user1), 444n);
+    expectUserLpBalance(Cl.principal(user2), 314n);
+    expectUserLpBalance(Cl.principal(user3), 77n);
+    expectUserLpBalance(Cl.principal(user4), 77n);
+    expectUserLpBalance(Cl.principal(user5), 61n);
+    expectUserLpBalance(Cl.principal(user6), 17n);
+    expectUnclaimedUserCount(0n);
+
+    // transfer remaing balance to depositor
+    expectUserLpBalance(
+      Cl.contractPrincipal(deployer, "lp-incentives-v2"),
+      10n
+    );
+    expectUserLpBalance(Cl.principal(depositor), 0n);
+    transferRemainingLpTokens(depositor);
+    expectUserLpBalance(Cl.contractPrincipal(deployer, "lp-incentives-v2"), 0n);
+    expectUserLpBalance(Cl.principal(depositor), 10n);
+  });
+
+  it("test upload multi snapshot with multi batch", async () => {
+    let blockTime = getTimeForBlock(`u${simnet.blockHeight - 1}`);
+    initiate_epoch({
+      "epoch-start-time": Cl.uint(blockTime - 20000n),
+      "epoch-end-time": Cl.uint(blockTime + 20000n),
+      "epoch-rewards": Cl.uint(1000),
+    });
+
+    createNewSnapshot(blockTime - 5000n, 1000, [
+      [user1, 600],
+      [user2, 400],
+    ]);
+
+    expectUserRewards(user1, 225);
+    expectUserRewards(user2, 150);
+
+    // create snapshot batch 1
+    createNewSnapshot(blockTime + 5000n, 1500, [
+      [user1, 600],
+      [user2, 400],
+    ]);
+
+    // create snapshot batch 2
+    createNewSnapshot(blockTime + 5000n, 1500, [
+      [user3, 250],
+      [user4, 250],
+    ]);
+
+    expectUserRewards(user1, 325);
+    expectUserRewards(user2, 216);
+    expectUserRewards(user3, 41);
+    expectUserRewards(user4, 41);
+
+    // create snapshot batch 1
+    createNewSnapshot(blockTime + 10000n, 2500, [
+      [user1, 850],
+      [user2, 700],
+    ]);
+
+    // create snapshot batch 2
+    createNewSnapshot(blockTime + 10000n, 2500, [
+      [user3, 250],
+      [user4, 250],
+    ]);
+
+    // create snapshot batch 3
+    createNewSnapshot(blockTime + 10000n, 2500, [[user5, 450]]);
+
+    expectUserRewards(user1, 367);
+    expectUserRewards(user2, 251);
+    expectUserRewards(user3, 53);
+    expectUserRewards(user4, 53);
+    expectUserRewards(user5, 22);
+
+    // create snapshot batch 1
+    createNewSnapshot(blockTime + 15000n, 2500, [
+      [user1, 850],
+      [user2, 700],
+    ]);
+
+    // create snapshot batch 2
+    createNewSnapshot(blockTime + 15000n, 2500, [[user3, 250]]);
+
+    // create snapshot batch 3
+    createNewSnapshot(blockTime + 15000n, 2500, [
+      [user4, 250],
+      [user5, 450],
+    ]);
+
+    expectUserRewards(user1, 409);
+    expectUserRewards(user2, 286);
+    expectUserRewards(user3, 65);
+    expectUserRewards(user4, 65);
+    expectUserRewards(user5, 44);
+
+    // create snapshot batch 1
+    createNewSnapshot(blockTime + 20000n, 3500, [
+      [user1, 1000],
+      [user2, 800],
+    ]);
+
+    // create snapshot batch 2
+    createNewSnapshot(blockTime + 20000n, 3500, [
+      [user3, 350],
+      [user4, 350],
+    ]);
+
+    // create snapshot batch 3
+    createNewSnapshot(blockTime + 20000n, 3500, [[user5, 500]]);
+
+    // create snapshot batch 4
+    createNewSnapshot(blockTime + 20000n, 3500, [[user6, 500]]);
+
+    expectUserRewards(user1, 444);
+    expectUserRewards(user2, 314);
+    expectUserRewards(user3, 77);
+    expectUserRewards(user4, 77);
+    expectUserRewards(user5, 61);
+    expectUserRewards(user6, 17);
+
+    // unclaimed user count should be 6
+    expectUnclaimedUserCount(6n);
+
+    mint_token("mock-usdc", 1000, depositor);
+    deposit(1000, depositor);
+    expectUserLpBalance(Cl.principal(depositor), 1000n);
+
+    // transfer lp tokens to lp-incentives contract
+    transfer_token(
+      "state-v1",
+      1000,
+      depositor,
+      Cl.contractPrincipal(deployer, "lp-incentives-v2")
+    );
+
+    expectUserLpBalance(Cl.principal(depositor), 0n);
+    expectUserLpBalance(
+      Cl.contractPrincipal(deployer, "lp-incentives-v2"),
+      1000n
+    );
+
+    // check close epoch
+    close_epoch();
     check_closed_epoch();
 
     // claim user rewards

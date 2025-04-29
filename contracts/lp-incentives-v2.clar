@@ -153,9 +153,8 @@
     (epoch-start-time (get epoch-start-time epoch))
     (epoch-end-time (get epoch-end-time epoch))
     (snapshot-time (get snapshot-time details))
-    (percent-of-epoch-data (try! (calculate-percent-of-epoch snapshot-time prev-snapshot-time epoch-start-time epoch-end-time)))
-    (percent-of-epoch (get percent-of-epoch percent-of-epoch-data))
-    (should-close-epoch (get should-close-epoch percent-of-epoch-data))
+    (prev-percent-of-epoch (get percent-of-epoch prev-snapshot))
+    (percent-of-epoch (try! (calculate-percent-of-epoch snapshot-time prev-snapshot-time epoch-start-time epoch-end-time prev-percent-of-epoch)))
   )
   (try! (ensure-snapshot-uploader))
   (try! (ensure-epoch-initialized))
@@ -175,20 +174,31 @@
       details: details,
       percent-of-epoch: percent-of-epoch
     })
-    (if should-close-epoch 
-      (begin 
-        (var-set epoch-details {
-          epoch-start-time: (get epoch-start-time epoch),
-          epoch-end-time: (get epoch-end-time epoch),
-          epoch-rewards: (get epoch-rewards epoch),
-          epoch-initiated: true,
-          epoch-completed: true
-        })
-        (print {action: "epoch-closed"})
-        SUCCESS
-      )
-      SUCCESS
-))))
+    SUCCESS
+)))
+
+(define-public (close-epoch)
+  (let (
+    (prev-snapshot (var-get last-snapshot-details))
+    (prev-snapshot-time (get snapshot-time prev-snapshot))
+    (epoch (var-get epoch-details))
+    (epoch-end-time (get epoch-end-time epoch))
+  )
+    (try! (ensure-snapshot-uploader))
+    (try! (ensure-epoch-initialized))
+    (try! (ensure-epoch-not-closed))
+    (asserts! (>= prev-snapshot-time epoch-end-time) ERR-EPOCH-INCOMPLETE)
+    (var-set epoch-details {
+      epoch-start-time: (get epoch-start-time epoch),
+      epoch-end-time: (get epoch-end-time epoch),
+      epoch-rewards: (get epoch-rewards epoch),
+      epoch-initiated: true,
+      epoch-completed: true
+    })
+    (print {action: "epoch-closed"})
+    SUCCESS
+  )
+)
 
 
 ;; private functions
@@ -223,14 +233,15 @@
     SUCCESS  
 ))
 
-(define-private (calculate-percent-of-epoch (snapshot-time uint) (prev-snapshot-time uint) (epoch-start-time uint) (epoch-end-time uint))
+(define-private (calculate-percent-of-epoch (snapshot-time uint) (prev-snapshot-time uint) (epoch-start-time uint) (epoch-end-time uint) (percent-of-epoch uint))
   (begin 
-    (asserts! (> snapshot-time prev-snapshot-time) ERR-INVALID-SNAPSHOT-TIME)
+    ;; multiple transaction for same snapshot can arrive due to limitation on 50 users per transaction.
+    (asserts! (>= snapshot-time prev-snapshot-time) ERR-INVALID-SNAPSHOT-TIME)
     (asserts! (<= snapshot-time epoch-end-time) ERR-INVALID-SNAPSHOT-TIME)
-    (ok {
-      percent-of-epoch: (/ (* (- snapshot-time prev-snapshot-time) scaling-factor) (- epoch-end-time epoch-start-time)),
-      should-close-epoch: (>= snapshot-time epoch-end-time)
-    })
+    (if (is-eq snapshot-time prev-snapshot-time)
+      (ok percent-of-epoch)
+      (ok (/ (* (- snapshot-time prev-snapshot-time) scaling-factor) (- epoch-end-time epoch-start-time)))
+    )
 ))
 
 (define-private (fold-upload-snapshot (user-data (optional {user: principal, lp-shares: uint})) (res (response uint uint)))
