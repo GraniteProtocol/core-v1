@@ -5,11 +5,10 @@
 
 ;; CONSTANTS
 (define-constant SUCCESS (ok true))
-(define-constant scaling-factor (pow u10 (contract-call? .constants-v1 get-market-token-decimals)))
-(define-constant market-decimals (contract-call? .constants-v1 get-market-token-decimals))
-(define-constant scaling-decimals u8)
 ;; Fee of 0.01% for processing flash loan scaled to 10^8
 (define-constant fee u10000)
+;; Maximum fee percentage
+(define-constant max-fee u100000000)
 
 
 ;; Errors
@@ -42,8 +41,7 @@
 
 (define-public (flash-loan (amount uint) (callback <callback-trait>) (data (optional (buff 20480))))
   (let (
-      (scaled-fee (contract-call? .math-v1 to-fixed fee scaling-decimals market-decimals ))
-      (flash-loan-fee (contract-call? .math-v1 divide-round-up (* amount scaled-fee) scaling-factor))
+      (flash-loan-fee (contract-call? .math-v1 divide-round-up (* amount fee) max-fee))
       (amount-with-fee (+ amount flash-loan-fee))
       (caller contract-caller)
       (callback-contract (contract-of callback))
