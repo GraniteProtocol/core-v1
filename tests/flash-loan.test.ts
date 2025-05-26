@@ -104,6 +104,10 @@ describe("Flash loan tests", () => {
     const expectedFee = 10 * Math.pow(10, 8); // 0.01% of 100k
     mint_token("mock-usdc", expectedFee, user1);
     expectUserUSDCBalance(Cl.principal(user1), BigInt(expectedFee));
+    expectUserUSDCBalance(
+      Cl.contractPrincipal(deployer, "governance-v1"),
+      BigInt(0)
+    );
 
     const res = simnet.callPublicFn(
       "flash-loan-v1",
@@ -114,10 +118,14 @@ describe("Flash loan tests", () => {
 
     expect(res.result).toBeOk(Cl.bool(true));
 
-    const totalBalanceWithFee = amount + expectedFee;
     expectUserUSDCBalance(
       Cl.contractPrincipal(deployer, "state-v1"),
-      BigInt(totalBalanceWithFee)
+      BigInt(amount)
+    );
+
+    expectUserUSDCBalance(
+      Cl.contractPrincipal(deployer, "governance-v1"),
+      BigInt(expectedFee)
     );
 
     expectUserUSDCBalance(Cl.principal(user1), BigInt(0));
@@ -205,6 +213,10 @@ describe("Flash loan tests", () => {
     const expectedFee = 1; // 0.01% of 10k
     mint_token("mock-usdc", expectedFee, user1);
     expectUserUSDCBalance(Cl.principal(user1), BigInt(expectedFee));
+    expectUserUSDCBalance(
+      Cl.contractPrincipal(deployer, "governance-v1"),
+      BigInt(0)
+    );
 
     const res = simnet.callPublicFn(
       "flash-loan-v1",
@@ -214,10 +226,13 @@ describe("Flash loan tests", () => {
     );
 
     expect(res.result).toBeOk(Cl.bool(true));
-    const totalBalanceWithFee = amount + expectedFee;
     expectUserUSDCBalance(
       Cl.contractPrincipal(deployer, "state-v1"),
-      BigInt(totalBalanceWithFee)
+      BigInt(amount)
+    );
+    expectUserUSDCBalance(
+      Cl.contractPrincipal(deployer, "governance-v1"),
+      BigInt(expectedFee)
     );
 
     expectUserUSDCBalance(Cl.principal(user1), BigInt(0));
