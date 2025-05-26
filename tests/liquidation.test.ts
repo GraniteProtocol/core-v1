@@ -1511,7 +1511,13 @@ describe("liquidation tests", () => {
     // state contract should have previous balance + fee + liquidated repay amount
     expectUserUSDCBalance(
       Cl.contractPrincipal(deployer, "state-v1"),
-      BigInt(82000000000 + flashLoanFee + repayAmount),
+      BigInt(82000000000 + repayAmount),
+      deployer
+    );
+
+    expectUserUSDCBalance(
+      Cl.contractPrincipal(deployer, "governance-v1"),
+      BigInt(flashLoanFee),
       deployer
     );
 
