@@ -204,34 +204,19 @@
 ;; private functions
 
 (define-private (ensure-snapshot-uploader)
-  (begin 
-    (asserts! (is-eq contract-caller (var-get snapshot-uploader)) ERR-NOT-SNAPSHOT-UPLOADER)
-    SUCCESS
-))
+  (ok (asserts! (is-eq contract-caller (var-get snapshot-uploader)) ERR-NOT-SNAPSHOT-UPLOADER)))
 
 (define-private (ensure-epoch-uninitialized)
-  (begin
-    (asserts! (not (get epoch-initiated (var-get epoch-details))) ERR-EPOCH-INITIATED)
-    SUCCESS  
-))
+  (ok (asserts! (not (get epoch-initiated (var-get epoch-details))) ERR-EPOCH-INITIATED)))
 
 (define-private (ensure-epoch-initialized)
-  (begin
-    (asserts! (get epoch-initiated (var-get epoch-details)) ERR-EPOCH-NOT-INITIALIZED)
-    SUCCESS  
-))
+  (ok (asserts! (get epoch-initiated (var-get epoch-details)) ERR-EPOCH-NOT-INITIALIZED)))
 
 (define-private (ensure-epoch-closed)
-  (begin
-    (asserts! (get epoch-completed (var-get epoch-details)) ERR-EPOCH-INCOMPLETE)
-    SUCCESS  
-))
+  (ok (asserts! (get epoch-completed (var-get epoch-details)) ERR-EPOCH-INCOMPLETE)))
 
 (define-private (ensure-epoch-not-closed)
-  (begin
-    (asserts! (not (get epoch-completed (var-get epoch-details))) ERR-EPOCH-CLOSED)
-    SUCCESS  
-))
+  (ok (asserts! (not (get epoch-completed (var-get epoch-details))) ERR-EPOCH-CLOSED)))
 
 (define-private (calculate-percent-of-epoch (snapshot-time uint) (prev-snapshot-time uint) (epoch-start-time uint) (epoch-end-time uint) (percent-of-epoch uint))
   (begin 
