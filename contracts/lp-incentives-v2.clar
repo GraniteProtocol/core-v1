@@ -36,7 +36,7 @@
 
 ;; CONSTANTS
 (define-constant SUCCESS (ok true))
-(define-constant scaling-factor (pow u10 (contract-call? .constants-v1 get-market-token-decimals)))
+(define-constant SCALING-FACTOR u100000000)
 
 ;; Errors
 (define-constant ERR-NOT-SNAPSHOT-UPLOADER (err u100000))
@@ -225,7 +225,7 @@
     (asserts! (<= snapshot-time epoch-end-time) ERR-INVALID-SNAPSHOT-TIME)
     (if (is-eq snapshot-time prev-snapshot-time)
       (ok percent-of-epoch)
-      (ok (/ (* (- snapshot-time prev-snapshot-time) scaling-factor) (- epoch-end-time epoch-start-time)))
+      (ok (/ (* (- snapshot-time prev-snapshot-time) SCALING-FACTOR) (- epoch-end-time epoch-start-time)))
     )
 ))
 
@@ -252,8 +252,8 @@
       (snapshot-lp-shares (get total-lp-shares snapshot))
       (total-rewards (get epoch-rewards epoch))
       (percent-of-epoch (get percent-of-epoch snapshot))
-      (percent-of-lp-shares (/ (* lp-shares scaling-factor) snapshot-lp-shares))
-      (snapshot-rewards (/ (* percent-of-epoch percent-of-lp-shares total-rewards) (* scaling-factor scaling-factor)))
+      (percent-of-lp-shares (/ (* lp-shares SCALING-FACTOR) snapshot-lp-shares))
+      (snapshot-rewards (/ (* percent-of-epoch percent-of-lp-shares total-rewards) (* SCALING-FACTOR SCALING-FACTOR)))
     )
 
     (match maybe-user-rewards rewards 
