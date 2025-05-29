@@ -36,7 +36,7 @@
 
 ;; CONSTANTS
 (define-constant SUCCESS (ok true))
-(define-constant scaling-factor (pow u10 (contract-call? .constants-v1 get-market-token-decimals)))
+(define-constant SCALING-FACTOR u100000000)
 
 ;; Errors
 (define-constant ERR-NOT-SNAPSHOT-UPLOADER (err u100000))
@@ -204,34 +204,19 @@
 ;; private functions
 
 (define-private (ensure-snapshot-uploader)
-  (begin 
-    (asserts! (is-eq contract-caller (var-get snapshot-uploader)) ERR-NOT-SNAPSHOT-UPLOADER)
-    SUCCESS
-))
+  (ok (asserts! (is-eq contract-caller (var-get snapshot-uploader)) ERR-NOT-SNAPSHOT-UPLOADER)))
 
 (define-private (ensure-epoch-uninitialized)
-  (begin
-    (asserts! (not (get epoch-initiated (var-get epoch-details))) ERR-EPOCH-INITIATED)
-    SUCCESS  
-))
+  (ok (asserts! (not (get epoch-initiated (var-get epoch-details))) ERR-EPOCH-INITIATED)))
 
 (define-private (ensure-epoch-initialized)
-  (begin
-    (asserts! (get epoch-initiated (var-get epoch-details)) ERR-EPOCH-NOT-INITIALIZED)
-    SUCCESS  
-))
+  (ok (asserts! (get epoch-initiated (var-get epoch-details)) ERR-EPOCH-NOT-INITIALIZED)))
 
 (define-private (ensure-epoch-closed)
-  (begin
-    (asserts! (get epoch-completed (var-get epoch-details)) ERR-EPOCH-INCOMPLETE)
-    SUCCESS  
-))
+  (ok (asserts! (get epoch-completed (var-get epoch-details)) ERR-EPOCH-INCOMPLETE)))
 
 (define-private (ensure-epoch-not-closed)
-  (begin
-    (asserts! (not (get epoch-completed (var-get epoch-details))) ERR-EPOCH-CLOSED)
-    SUCCESS  
-))
+  (ok (asserts! (not (get epoch-completed (var-get epoch-details))) ERR-EPOCH-CLOSED)))
 
 (define-private (calculate-percent-of-epoch (snapshot-time uint) (prev-snapshot-time uint) (epoch-start-time uint) (epoch-end-time uint) (percent-of-epoch uint))
   (begin 
@@ -240,7 +225,7 @@
     (asserts! (<= snapshot-time epoch-end-time) ERR-INVALID-SNAPSHOT-TIME)
     (if (is-eq snapshot-time prev-snapshot-time)
       (ok percent-of-epoch)
-      (ok (/ (* (- snapshot-time prev-snapshot-time) scaling-factor) (- epoch-end-time epoch-start-time)))
+      (ok (/ (* (- snapshot-time prev-snapshot-time) SCALING-FACTOR) (- epoch-end-time epoch-start-time)))
     )
 ))
 
@@ -267,8 +252,8 @@
       (snapshot-lp-shares (get total-lp-shares snapshot))
       (total-rewards (get epoch-rewards epoch))
       (percent-of-epoch (get percent-of-epoch snapshot))
-      (percent-of-lp-shares (/ (* lp-shares scaling-factor) snapshot-lp-shares))
-      (snapshot-rewards (/ (* percent-of-epoch percent-of-lp-shares total-rewards) (* scaling-factor scaling-factor)))
+      (percent-of-lp-shares (/ (* lp-shares SCALING-FACTOR) snapshot-lp-shares))
+      (snapshot-rewards (/ (* percent-of-epoch percent-of-lp-shares total-rewards) (* SCALING-FACTOR SCALING-FACTOR)))
     )
 
     (match maybe-user-rewards rewards 
