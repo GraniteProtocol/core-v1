@@ -5,11 +5,10 @@
 
 ;; CONSTANTS
 (define-constant SUCCESS (ok true))
-(define-constant scaling-factor (pow u10 (contract-call? .constants-v1 get-market-token-decimals)))
-(define-constant market-decimals (contract-call? .constants-v1 get-market-token-decimals))
-(define-constant scaling-decimals u8)
 ;; Fee of 0.01% for processing flash loan scaled to 10^8
 (define-constant fee u10000)
+;; Maximum fee percentage
+(define-constant max-fee u100000000)
 
 
 ;; Errors
@@ -42,9 +41,7 @@
 
 (define-public (flash-loan (amount uint) (callback <callback-trait>) (data (optional (buff 20480))))
   (let (
-      (scaled-fee (contract-call? .math-v1 to-fixed fee scaling-decimals market-decimals ))
-      (flash-loan-fee (contract-call? .math-v1 divide-round-up (* amount scaled-fee) scaling-factor))
-      (amount-with-fee (+ amount flash-loan-fee))
+      (flash-loan-fee (contract-call? .math-v1 divide-round-up (* amount fee) max-fee))
       (caller contract-caller)
       (callback-contract (contract-of callback))
     )
@@ -52,7 +49,8 @@
     ;; transfer funds to user
     (try! (contract-call? .state-v1 transfer-to .mock-usdc caller amount))
     (try! (contract-call? callback on-granite-flash-loan amount flash-loan-fee data))
-    (try! (contract-call? .state-v1 transfer-from .mock-usdc caller amount-with-fee))
+    (try! (contract-call? .state-v1 transfer-from .mock-usdc caller amount))
+    (try! (contract-call? .mock-usdc transfer flash-loan-fee caller .governance-v1 none))
     (print {
       action: "flash-loan",
       amount: amount,
