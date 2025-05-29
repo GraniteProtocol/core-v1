@@ -191,6 +191,7 @@ describe("LP incentives tests", () => {
       "epoch-start-time": Cl.uint(0),
       "epoch-end-time": Cl.uint(0),
       "epoch-rewards": Cl.uint(0),
+      "snapshot-uploader": Cl.principal(deployer),
     };
 
     let res = simnet.callPublicFn(
@@ -252,6 +253,7 @@ describe("LP incentives tests", () => {
       "epoch-start-time": Cl.uint(0),
       "epoch-end-time": Cl.uint(100),
       "epoch-rewards": Cl.uint(100),
+      "snapshot-uploader": Cl.principal(deployer),
     });
 
     res = simnet.callPublicFn(
@@ -301,6 +303,7 @@ describe("LP incentives tests", () => {
       "epoch-start-time": Cl.uint(blockTime),
       "epoch-end-time": Cl.uint(blockTime + 1000n),
       "epoch-rewards": Cl.uint(100),
+      "snapshot-uploader": Cl.principal(deployer),
     });
 
     createNewSnapshot(blockTime + 1000n, 1000, [
@@ -357,6 +360,7 @@ describe("LP incentives tests", () => {
       "epoch-start-time": Cl.uint(blockTime - 20000n),
       "epoch-end-time": Cl.uint(blockTime + 20000n),
       "epoch-rewards": Cl.uint(1000),
+      "snapshot-uploader": Cl.principal(deployer),
     });
 
     createNewSnapshot(blockTime - 5000n, 1000, [
@@ -482,6 +486,7 @@ describe("LP incentives tests", () => {
       "epoch-start-time": Cl.uint(blockTime - 20000n),
       "epoch-end-time": Cl.uint(blockTime + 20000n),
       "epoch-rewards": Cl.uint(1000),
+      "snapshot-uploader": Cl.principal(deployer),
     });
 
     createNewSnapshot(blockTime - 5000n, 1000, [

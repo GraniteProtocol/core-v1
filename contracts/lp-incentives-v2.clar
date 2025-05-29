@@ -80,6 +80,7 @@
   epoch-start-time: uint,
   epoch-end-time: uint,
   epoch-rewards: uint,
+  snapshot-uploader: principal,
 }))
   (begin 
     (try! (ensure-snapshot-uploader))
@@ -98,10 +99,23 @@
       total-lp-shares: u0,
       percent-of-epoch: u0,
     })
+    (var-set snapshot-uploader (get snapshot-uploader details))
     (print {
       action: "epoch-initiated",
       epoch-details: details
     })
+    SUCCESS
+))
+
+(define-public (change-snapshot-uploader (new-uploader principal))
+  (begin 
+    (try! (ensure-snapshot-uploader))
+    (print {
+      action: "snapshot-uploader-changed",
+      old-uploader: (var-get snapshot-uploader),
+      new-uploader: new-uploader
+    })
+    (var-set snapshot-uploader new-uploader)
     SUCCESS
 ))
 
