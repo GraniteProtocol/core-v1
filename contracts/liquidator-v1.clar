@@ -119,7 +119,10 @@
       maybe-total-liquid-ltv
       maybe-collateral-value
       maybe-collateral-price
-  )))) (ok {liquidation-info: (get liquidation-info liquidation-info)})))
+    )))
+    (collateral-price (get collateral-price liquidation-info)))
+    (try! (ensure-non-zero-repay-amount liquidator-repay-amount collateral-price))
+    (ok {liquidation-info: (get liquidation-info liquidation-info)})))
 
 (define-read-only
   (liquidate
