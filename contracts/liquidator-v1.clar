@@ -140,7 +140,6 @@
     (
       (repayment-info (try! (calculate-repayment-info debt total-collaterals-liquid-value collateral-value liquidation-discount collateral-liquid-ltv)))
       (repay-allowed (get repay-allowed repayment-info))
-      (repay-amount-without-discount (get repay-amount-without-discount repayment-info))
       ;; if the total repay amount is <= liquidator repay amount, return total repay amount
       ;; else return liquidator repay amount
       (repay-amount (if (<= repay-allowed liquidator-repay-amount) repay-allowed liquidator-repay-amount))
