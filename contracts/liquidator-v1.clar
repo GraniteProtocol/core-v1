@@ -122,7 +122,7 @@
     )))
     (collateral-price (get collateral-price liquidation-info)))
     (try! (ensure-non-zero-repay-amount liquidator-repay-amount collateral-price))
-    (ok {liquidation-info: (get liquidation-info liquidation-info)})))
+    (ok (get liquidation-info liquidation-info))))
 
 (define-read-only
   (liquidate
@@ -152,7 +152,6 @@
     (ok {
       repay-amount: repay-amount,
       collateral-to-give: collateral-to-give,
-      repay-amount-without-discount: repay-amount-without-discount,
       repayment-info: repayment-info,
       collateral-price: collateral-price 
     })
@@ -497,7 +496,7 @@
 
 (define-private (ensure-non-zero-repay-amount (amount uint) (collateral-price uint))
   (if (<= collateral-price u0) 
-    ;; if collateral price is zero, we dont care about repay amount, anything is accepted
+    ;; if collateral price is zero, we don't care about repay amount, anything is accepted
     SUCCESS
     ;; if not zero, then amount must be > 0
     (if (<= amount u0) ERR-NON-ZERO-REPAY-AMOUNT SUCCESS)
