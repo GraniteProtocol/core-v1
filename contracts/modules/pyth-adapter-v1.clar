@@ -12,6 +12,8 @@
 (define-constant MINIMUM_TIME_DELTA u60)
 ;; Confidence ratio scaling factor  = 100% confidence
 (define-constant CONFIDENCE_SCALING_FACTOR u10000)
+;; Price scaling factor decimals
+(define-constant PRICE_DECIMALS (to-int (contract-call? .constants-v2 get-price-decimals)))
 
 ;; price feeds can be found in https://pyth.network/developers/price-feed-ids
 (define-map price-feeds principal {
@@ -120,7 +122,7 @@
     )
     (asserts! (is-valid timestamp) ERR-PYTH-PRICE-STALE)
     (try! (check-confidence (to-uint price) price-conf max-confidence-ratio))
-    (ok (to-uint (convert-res price expo 8)))
+    (ok (to-uint (convert-res price expo PRICE_DECIMALS)))
 ))
 
 (define-private (check-confidence (price uint) (confidence uint) (max-confidence-ratio uint))

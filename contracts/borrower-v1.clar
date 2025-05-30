@@ -16,8 +16,9 @@
 
 ;; CONSTANTS
 (define-constant SUCCESS (ok true))
-(define-constant SCALING-FACTOR (contract-call? .constants-v1 get-scaling-factor))
-(define-constant MARKET-TOKEN-DECIMALS (contract-call? .constants-v1 get-market-token-decimals))
+(define-constant SCALING-FACTOR (contract-call? .constants-v2 get-scaling-factor))
+(define-constant MARKET-TOKEN-DECIMALS (contract-call? .constants-v2 get-market-token-decimals))
+(define-constant PRICE-SCALING-FACTOR (contract-call? .constants-v2 get-price-scaling-factor))
 
 
 ;; PUBLIC FUNCTIONS
@@ -237,7 +238,7 @@
         (default-to u0 (get amount (contract-call? .state-v1 get-user-collateral user collateral)))
         collateral-price
       )
-      SCALING-FACTOR
+      PRICE-SCALING-FACTOR
     ) 
     (default-to u8 (get decimals (contract-call? .state-v1 get-collateral collateral)))
     MARKET-TOKEN-DECIMALS
