@@ -239,6 +239,7 @@
       (staked-lp-tokens (var-get total-lp-tokens-staked))
       (accounted-lp-tokens (+ staked-lp-tokens (get lp-tokens (var-get unfinalized-withdrawals))))
     )
+    (try! (check-staking-enabled))
     (try! (accrue-interest))
     (asserts! (is-eq (contract-call? .state-v1 get-governance) contract-caller) ERR-NOT-GOVERNANCE)
     (if (>= current-balance accounted-lp-tokens)
