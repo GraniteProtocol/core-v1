@@ -33,3 +33,12 @@ to execute the tests.
 
 ## Licensing
 The primary license for Granite Protocol is the Business Source License 1.1 (`BUSL-1.1`), see [`LICENSE`](./LICENSE).
+
+## Deployed Contracts:
+- borrower-v1.clar: [https://explorer.hiro.so/txid/SP35E2BBMDT2Y1HB0NTK139YBGYV3PAPK3WA8BRNA.borrower-v1?chain=mainnet](https://explorer.hiro.so/txid/SP35E2BBMDT2Y1HB0NTK139YBGYV3PAPK3WA8BRNA.borrower-v1?chain=mainnet)
+- constants-v1.clar: [https://explorer.hiro.so/txid/SP35E2BBMDT2Y1HB0NTK139YBGYV3PAPK3WA8BRNA.constants-v1?chain=mainnet](https://explorer.hiro.so/txid/SP35E2BBMDT2Y1HB0NTK139YBGYV3PAPK3WA8BRNA.constants-v1?chain=mainnet)
+- governance-v1.clar: [https://explorer.hiro.so/txid/SP35E2BBMDT2Y1HB0NTK139YBGYV3PAPK3WA8BRNA.governance-v1?chain=mainnet](https://explorer.hiro.so/txid/SP35E2BBMDT2Y1HB0NTK139YBGYV3PAPK3WA8BRNA.governance-v1?chain=mainnet)
+- liquidator-v1.clar: [https://explorer.hiro.so/txid/SP35E2BBMDT2Y1HB0NTK139YBGYV3PAPK3WA8BRNA.liquidator-v1?chain=mainnet](https://explorer.hiro.so/txid/SP35E2BBMDT2Y1HB0NTK139YBGYV3PAPK3WA8BRNA.liquidator-v1?chain=mainnet)
+- liquidity-provider-v1.clar: [https://explorer.hiro.so/txid/SP35E2BBMDT2Y1HB0NTK139YBGYV3PAPK3WA8BRNA.liquidity-provider-v1?chain=mainnet](https://explorer.hiro.so/txid/SP35E2BBMDT2Y1HB0NTK139YBGYV3PAPK3WA8BRNA.liquidity-provider-v1?chain=mainnet)
+- meta-governance-v1.clar: [https://explorer.hiro.so/txid/SP35E2BBMDT2Y1HB0NTK139YBGYV3PAPK3WA8BRNA.meta-governance-v1?chain=mainnet](https://explorer.hiro.so/txid/SP35E2BBMDT2Y1HB0NTK139YBGYV3PAPK3WA8BRNA.meta-governance-v1?chain=mainnet)
+- state-v1.clar: [https://explorer.hiro.so/txid/SP35E2BBMDT2Y1HB0NTK139YBGYV3PAPK3WA8BRNA.state-v1?chain=mainnet](https://explorer.hiro.so/txid/SP35E2BBMDT2Y1HB0NTK139YBGYV3PAPK3WA8BRNA.state-v1?chain=mainnet)
