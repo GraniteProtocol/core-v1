@@ -5,8 +5,11 @@
 
 ;; CONSTANTS
 (define-constant SUCCESS (ok true))
-(define-constant MARKET-TOKEN-DECIMALS (contract-call? .constants-v1 get-market-token-decimals))
-(define-constant SCALING-FACTOR (contract-call? .constants-v1 get-scaling-factor))
+(define-constant MARKET-TOKEN-DECIMALS (contract-call? .constants-v2 get-market-token-decimals))
+(define-constant SCALING-FACTOR (contract-call? .constants-v2 get-scaling-factor))
+(define-constant PRICE-SCALING-FACTOR (contract-call? .constants-v2 get-price-scaling-factor))
+;; Must have the same precision as SCALING-FACTOR
+(define-constant MINIMUM_HEALTH_RATIO u100000000)
 ;; Liquidation buffer of 0.50%
 (define-constant LIQUIDATION-BUFFER u500000)
 
@@ -88,7 +91,7 @@
             ) collateral-prices) u0)
           )  
       )))
-      (position-health (if (> current-debt-adjusted u0) (/ (* total-liquid-ltv SCALING-FACTOR) current-debt-adjusted) SCALING-FACTOR))
+      (position-health (if (> current-debt-adjusted u0) (/ (* total-liquid-ltv SCALING-FACTOR) current-debt-adjusted) MINIMUM_HEALTH_RATIO))
     )
     (ok {
       position-health: position-health,
@@ -320,7 +323,7 @@
         )
 
         ;; check account health post liquidation
-        (asserts! (<= position-health (+ LIQUIDATION-BUFFER SCALING-FACTOR)) (err position-health))
+        (asserts! (<= position-health (+ LIQUIDATION-BUFFER MINIMUM_HEALTH_RATIO)) (err position-health))
         ;; socialize debt if bad debt
         (try! (socialize-bad-debt bad-debt user))
         (print {
@@ -422,7 +425,7 @@
 
 (define-private (check-account-unhealthy (user principal) (maybe-market-asset-price (optional uint)) (maybe-total-liquid-ltv (optional uint)))
   (let ((health-data (try! (account-health user maybe-market-asset-price maybe-total-liquid-ltv))))
-    (if (< (get position-health health-data) SCALING-FACTOR)
+    (if (< (get position-health health-data) MINIMUM_HEALTH_RATIO)
       (ok (some health-data))
       (ok none)
     )
@@ -435,7 +438,7 @@
         (default-to u0 (get amount (contract-call? .state-v1 get-user-collateral user collateral)))
         collateral-price
       )
-      SCALING-FACTOR
+      PRICE-SCALING-FACTOR
     ) 
     (default-to u8 (get decimals (contract-call? .state-v1 get-collateral collateral)))
     MARKET-TOKEN-DECIMALS

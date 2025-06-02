@@ -24,6 +24,11 @@ path = 'contracts/constants-v1.clar'
 clarity_version = 3
 epoch = 3.0
 
+[contracts.constants-v2]
+path = 'contracts/constants-v2.clar'
+clarity_version = 3
+epoch = 3.0
+
 [contracts.faucet]
 path = 'contracts/test/faucet.clar'
 clarity_version = 3
