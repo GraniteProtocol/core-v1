@@ -100,6 +100,10 @@
 ;; 1 & 2 Account Multisig will require all of them to execute or deny proposal
 (define-constant THRESHOLD u66)
 
+;; Time lock period before executing approved proposal
+;; approximately 24 hours
+(define-constant TIME_LOCKED_PERIOD u17280)
+
 ;; Success response
 (define-constant SUCCESS (ok true))
 
@@ -108,7 +112,7 @@
 (define-constant ERR-NOT-GUARDIAN (err u40001))
 (define-constant ERR-UNKNOWN-PROPOSAL (err u40002))
 (define-constant ERR-SUBMITTED-VOTE (err u40003))
-(define-constant ERR-PROPOSAL-COMPLETED (err u40004))
+(define-constant ERR-PROPOSAL-CLOSED (err u40004))
 (define-constant ERR-CONTRACT-ALREADY-INITIALIZED (err u40005))
 (define-constant ERR-CONTRACT-NOT-INITIALIZED (err u40006))
 (define-constant ERR-NOT-CONTRACT-DEPLOYER (err u40007))
@@ -119,6 +123,10 @@
 (define-constant ERR-PROPOSAL-CANNOT-CLOSE (err u40012))
 (define-constant ERR-PROPOSAL-EXPIRED (err u40013))
 (define-constant ERR-MINIMUM-PYTH-PRICE-DELTA (err u40014))
+(define-constant ERR-PROPOSAL-NOT-CLOSED (err u40015))
+(define-constant ERR-PROPOSAL-ALREADY-EXECUTED (err u40016))
+(define-constant ERR-PROPOSAL-TIME-LOCKED (err u40017))
+(define-constant ERR-PROPOSAL-NOT-TIME-LOCKED (err u40018))
 
 ;; DATA VARS
 
@@ -133,8 +141,10 @@
   action: uint,
   approve-count: uint,
   deny-count: uint,
-  completed: bool,
+  closed: bool,
   expires-at: uint,
+  executed: bool,
+  execute-at: (optional uint)
 })
 
 ;; approved multisigs for given proposal
@@ -230,6 +240,9 @@
 ;; pyth time delta update value storage
 (define-map update-time-delta-params (buff 32) uint)
 
+;; time-locked actions
+(define-map time-locked uint bool)
+
 ;; PRIVATE FUNCTIONS
 (define-private (create-proposal (proposal-id (buff 32)) (action uint) (expires-in uint))
   (begin
@@ -241,8 +254,10 @@
       action: action,
       approve-count: u1,
       deny-count: u0,
-      completed: false,
-      expires-at: (+ stacks-block-height expires-in)
+      expires-at: (+ stacks-block-height expires-in),
+      closed: false,
+      executed: false,
+      execute-at: none,
     })
     (map-set proposal-approved-members {proposal-id: proposal-id, member: contract-caller} true)
     (print {
@@ -446,25 +461,51 @@
       (proposal (unwrap! (map-get? governance-proposal proposal-id) ERR-UNKNOWN-PROPOSAL))
       (threshold (try! (approve-threshold-met proposal-id)))
       (action (get action proposal))
+      (execute-at (get-proposal-execution-time proposal-id))
     )
     (if threshold
-      (begin
-        (try! (execute-proposal proposal-id action))
-        (map-set governance-proposal proposal-id {
-          action: (get action proposal),
-          approve-count: (get approve-count proposal),
-          deny-count: (get deny-count proposal),
-          expires-at: (get expires-at proposal),
-          completed: true
-        })
-        (print {
-          action: "proposal-executed",
-          proposal-id: proposal-id
-        })
-        SUCCESS
+      (if (<= execute-at stacks-block-height)
+        ;; proposal can be executed immediately
+        (begin 
+          (try! (execute-proposal proposal-id action))
+          (map-set governance-proposal proposal-id {
+            action: (get action proposal),
+            approve-count: (get approve-count proposal),
+            deny-count: (get deny-count proposal),
+            expires-at: (get expires-at proposal),
+            closed: true,
+            executed: true,
+            execute-at: (some stacks-block-height)
+          })
+          (print {
+            action: "proposal-executed",
+            proposal-id: proposal-id
+          })
+          SUCCESS
+        )
+
+        ;; proposal will excuted after time-lock
+        (begin 
+          (map-set governance-proposal proposal-id {
+            action: (get action proposal),
+            approve-count: (get approve-count proposal),
+            deny-count: (get deny-count proposal),
+            expires-at: (get expires-at proposal),
+            closed: true,
+            executed: false,
+            execute-at: (some execute-at)
+          })
+          (print {
+            action: "proposal-execution-time-locked",
+            proposal-id: proposal-id,
+            execute-at: execute-at
+          })
+          SUCCESS
+        )
       )
       SUCCESS
     )
+
 ))
 
 (define-private (deny-proposal-if-deny-threshold-met (proposal-id (buff 32)))
@@ -480,7 +521,9 @@
           approve-count: (get approve-count proposal),
           deny-count: (get deny-count proposal),
           expires-at: (get expires-at proposal),
-          completed: true
+          closed: true,
+          executed: false,
+          execute-at: none
         })
         (print {
           action: "proposal-denied",
@@ -513,6 +556,18 @@
     )
     (contract-call? .state-v1 set-accrued-interest accrued-interest)
 ))
+
+(define-private (get-proposal-execution-time (proposal-id (buff 32)))
+  (let (
+    (proposal (unwrap-panic (map-get? governance-proposal proposal-id)))
+    (action (get action proposal))
+    (is-time-locked (default-to false (map-get? time-locked action)))
+    (current-execute-at (get execute-at proposal))
+    (execute-at (if is-time-locked (+ stacks-block-height TIME_LOCKED_PERIOD) stacks-block-height))
+  )
+    (if (is-some current-execute-at) (unwrap-panic current-execute-at) execute-at)
+  )
+)
 
 ;; READ ONLY FUNCTIONS
 (define-read-only (is-governance-member (member principal))
@@ -912,7 +967,7 @@
 (define-public (approve (proposal-id (buff 32)))
   (let ((proposal (unwrap! (map-get? governance-proposal proposal-id) ERR-UNKNOWN-PROPOSAL)))
     (try! (is-governance-member contract-caller))
-    (asserts! (not (get completed proposal)) ERR-PROPOSAL-COMPLETED)
+    (asserts! (not (get closed proposal)) ERR-PROPOSAL-CLOSED)
     (asserts! (< stacks-block-height (get expires-at proposal)) ERR-PROPOSAL-EXPIRED)
     (asserts! (not (has-submitted-vote proposal-id)) ERR-SUBMITTED-VOTE)
     (map-set proposal-approved-members {proposal-id: proposal-id, member: contract-caller} true)
@@ -921,7 +976,9 @@
       approve-count: (+ (get approve-count proposal) u1),
       deny-count: (get deny-count proposal),
       expires-at: (get expires-at proposal),
-      completed: (get completed proposal)
+      closed: (get closed proposal),
+      executed: (get executed proposal),
+      execute-at: (get execute-at proposal)
     })
 
     (print {
@@ -937,7 +994,7 @@
 (define-public (deny (proposal-id (buff 32)))
   (let ((proposal (unwrap! (map-get? governance-proposal proposal-id) ERR-UNKNOWN-PROPOSAL)))
     (try! (is-governance-member contract-caller))
-    (asserts! (not (get completed proposal)) ERR-PROPOSAL-COMPLETED)
+    (asserts! (not (get closed proposal)) ERR-PROPOSAL-CLOSED)
     (asserts! (< stacks-block-height (get expires-at proposal)) ERR-PROPOSAL-EXPIRED)
     (asserts! (not (has-submitted-vote proposal-id)) ERR-SUBMITTED-VOTE)
     (map-set proposal-denied-members {proposal-id: proposal-id, member: contract-caller} true)
@@ -946,7 +1003,9 @@
       approve-count: (get approve-count proposal),
       deny-count: (+ (get deny-count proposal) u1),
       expires-at: (get expires-at proposal),
-      completed: (get completed proposal)
+      closed: (get closed proposal),
+      executed: (get executed proposal),
+      execute-at: (get execute-at proposal)
     })
 
     (print {
@@ -973,7 +1032,7 @@
       (has-threshold-met (or deny-threshold approve-threshold))
     )
     (try! (is-governance-member contract-caller))
-    (asserts! (not (get completed proposal)) ERR-PROPOSAL-COMPLETED)
+    (asserts! (not (get closed proposal)) ERR-PROPOSAL-CLOSED)
     (if (>= stacks-block-height (get expires-at proposal))
       (begin 
         (print {
@@ -992,12 +1051,25 @@
       approve-count: (get approve-count proposal),
       deny-count: (get deny-count proposal),
       expires-at: (get expires-at proposal),
-      completed: true
+      closed: true,
+      executed: false,
+      execute-at: none
     })
     (print {
       action: "proposal-closed",
       proposal-id: proposal-id
     })
+    SUCCESS
+))
+
+(define-public (execute (proposal-id (buff 32)))
+  (let ((proposal (unwrap! (map-get? governance-proposal proposal-id) ERR-UNKNOWN-PROPOSAL)))
+    (try! (is-governance-member contract-caller))
+    (asserts! (get closed proposal) ERR-PROPOSAL-NOT-CLOSED)
+    (asserts! (not (get executed proposal)) ERR-PROPOSAL-ALREADY-EXECUTED)
+    (asserts! (<= (unwrap! (get execute-at proposal) ERR-PROPOSAL-NOT-TIME-LOCKED) stacks-block-height) ERR-PROPOSAL-TIME-LOCKED)
+    ;; try to execute the proposal if threshold is met
+    (try! (execute-if-approve-threshold-met proposal-id))
     SUCCESS
 ))
 
@@ -1037,3 +1109,14 @@
     (try! (contract-call? .state-v1 pause-market))
     SUCCESS
 ))
+
+(map-set time-locked ACTION_UPDATE_GOVERNANCE true)
+(map-set time-locked ACTION_FREEZE_UPGRADES true)
+(map-set time-locked ACTION_UPDATE_COLLATERAL_SETTINGS true)
+(map-set time-locked ACTION_WITHDRAW_FROM_RESERVE true)
+(map-set time-locked ACTION_ADD_GUARDIAN true)
+(map-set time-locked ACTION_UPDATE_INTEREST_RATE_PARAMS true)
+(map-set time-locked ACTION_UPDATE_PROTOCOL_RESERVE_PERCENTAGE true)
+(map-set time-locked ACTION_REMOVE_COLLATERAL true)
+(map-set time-locked ACTION_UPDATE_REWARD_RATE_PARAMS true)
+(map-set time-locked ACTION_UPDATE_WITHDRAWAL_FINALIZATION_PERIOD true)

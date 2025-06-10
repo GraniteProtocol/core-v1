@@ -88,6 +88,11 @@ plan:
             path: contracts/constants-v2.clar
             clarity-version: 3
         - emulated-contract-publish:
+            contract-name: meta-governance-v1
+            emulated-sender: ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM
+            path: contracts/meta-governance-v1.clar
+            clarity-version: 3
+        - emulated-contract-publish:
             contract-name: math-v1
             emulated-sender: ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM
             path: contracts/modules/math-v1.clar
@@ -96,6 +101,11 @@ plan:
             contract-name: state-v1
             emulated-sender: ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM
             path: contracts/state-v1.clar
+            clarity-version: 3
+        - emulated-contract-publish:
+            contract-name: daily-caps-v1
+            emulated-sender: ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM
+            path: contracts/modules/daily-caps-v1.clar
             clarity-version: 3
         - emulated-contract-publish:
             contract-name: linear-kinked-ir-v1
@@ -182,19 +192,14 @@ plan:
             emulated-sender: ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM
             path: contracts/flash-loan-v1.clar
             clarity-version: 3
-        - emulated-contract-publish:
-            contract-name: meta-governance-v1
-            emulated-sender: ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM
-            path: contracts/meta-governance-v1.clar
-            clarity-version: 3
+      epoch: "3.0"
+    - id: 2
+      transactions:
         - emulated-contract-publish:
             contract-name: governance-v1
             emulated-sender: ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM
             path: contracts/governance-v1.clar
             clarity-version: 3
-      epoch: "3.0"
-    - id: 2
-      transactions:
         - emulated-contract-publish:
             contract-name: liquidator-v1
             emulated-sender: ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM

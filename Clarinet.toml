@@ -64,6 +64,12 @@ path = 'contracts/meta-governance-v1.clar'
 clarity_version = 3
 epoch = 3.0
 
+
+[contracts.daily-caps-v1]
+path = 'contracts/modules/daily-caps-v1.clar'
+clarity_version = 3
+epoch = 3.0
+
 [contracts.mock-btc]
 path = 'contracts/test/mock-btc.clar'
 clarity_version = 3

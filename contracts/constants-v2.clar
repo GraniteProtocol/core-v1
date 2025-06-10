@@ -1,3 +1,5 @@
+;; SPDX-License-Identifier: BUSL-1.1
+
 ;; Contract to hold the constants
 
 (define-constant SCALING-FACTOR (contract-call? .constants-v1 get-scaling-factor))
