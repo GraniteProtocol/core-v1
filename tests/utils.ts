@@ -49,11 +49,13 @@ export const update_supported_collateral_governance = (
   expect(response.result.type).toBe(ClarityType.ResponseOk);
   const proposal_id = response.result.value.buffer;
   simnet.mineEmptyBlocks(17280);
-  const res = simnet.callPublicFn("governance-v1",
+  const res = simnet.callPublicFn(
+    "governance-v1",
     "execute",
     [Cl.buffer(proposal_id)],
-    governance_account);
-  expect(res.result).toBeOk(Cl.bool(true))
+    governance_account
+  );
+  expect(res.result).toBeOk(Cl.bool(true));
 };
 
 export const mint_token = (token: string, amount: number, to: any) => {

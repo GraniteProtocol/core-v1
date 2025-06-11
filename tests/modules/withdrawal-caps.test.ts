@@ -1,24 +1,52 @@
 import { Cl, ClarityType } from "@stacks/transactions";
 import { beforeEach, describe, expect, it } from "vitest";
-import { init_pyth, set_initial_price, set_pyth_time_delta } from "../pyth";
-import { add_collateral, deposit, initialize_governance, initialize_ir, initialize_staking_reward, mint_token, set_allowed_contracts, set_asset_cap, update_supported_collateral } from "../utils";
+import {
+  init_pyth,
+  set_initial_price,
+  set_price,
+  set_pyth_time_delta,
+} from "../pyth";
+import {
+  add_collateral,
+  deposit,
+  initialize_governance,
+  initialize_ir,
+  initialize_staking_reward,
+  mint_token,
+  set_allowed_contracts,
+  set_asset_cap,
+  state_set_governance_contract,
+  update_supported_collateral,
+} from "../utils";
 
 const accounts = simnet.getAccounts();
 const deployer = accounts.get("deployer")!;
 const depositor = accounts.get("wallet_1")!;
 const borrower = accounts.get("wallet_2")!;
 
-const ACTION_SET_LP_CAP = 0;
-const ACTION_SET_DEBT_CAP = 1;
-const ACTION_SET_COLLATERAL_CAP = 2;
-const ACTION_SET_TIME_WINDOW = 3;
+const ACTION_SET_LP_CAP = 30;
+const ACTION_SET_DEBT_CAP = 31;
+const ACTION_SET_COLLATERAL_CAP = 32;
+const ACTION_SET_TIME_WINDOW = 33;
 
 const SCALING_FACTOR = 100000000;
+
+function execute_proposal(response: any) {
+  const proposal_id = response.result.value.buffer;
+  simnet.mineEmptyBlocks(17280);
+  const res = simnet.callPublicFn(
+    "governance-v1",
+    "execute",
+    [Cl.buffer(proposal_id)],
+    deployer
+  );
+  expect(res.result).toBeOk(Cl.bool(true));
+}
 
 describe("daily caps tests", () => {
   beforeEach(async () => {
     init_pyth(deployer);
-    set_pyth_time_delta(100000, deployer);
+    set_pyth_time_delta(100000000, deployer);
     set_allowed_contracts(deployer);
     set_asset_cap(deployer, 2n ** 128n - 1n);
     initialize_ir(deployer);
@@ -43,11 +71,12 @@ describe("daily caps tests", () => {
     await set_initial_price("mock-usdc", 1n, deployer);
     await set_initial_price("mock-btc", 10n, deployer);
     await set_initial_price("mock-eth", 1n, deployer);
+    state_set_governance_contract(deployer);
   });
 
   it("public functions should be gated", () => {
     let res = simnet.callPublicFn(
-      "daily-caps-v1",
+      "withdrawal-caps-v1",
       "check-daily-debt-cap",
       [Cl.uint(0)],
       deployer
@@ -55,7 +84,7 @@ describe("daily caps tests", () => {
     expect(res.result).toBeErr(Cl.uint(90000)); // ERR-RESTRICTED
 
     res = simnet.callPublicFn(
-      "daily-caps-v1",
+      "withdrawal-caps-v1",
       "check-daily-collateral-cap",
       [Cl.contractPrincipal(deployer, "mock-btc"), Cl.uint(0)],
       deployer
@@ -65,19 +94,27 @@ describe("daily caps tests", () => {
 
   it("lp cap should block withdrawing above the limit", () => {
     const res = simnet.callPublicFn(
-      "daily-caps-v1",
-      "initiate-proposal-to-update-param",
+      "governance-v1",
+      "initiate-proposal-to-update-withdrawal-caps-param",
       [
         Cl.uint(ACTION_SET_LP_CAP),
-        Cl.uint(0.8 * SCALING_FACTOR),
-        Cl.none(),
+        Cl.tuple({
+          collateral: Cl.none(),
+          factor: Cl.uint(0.8 * SCALING_FACTOR),
+        }),
         Cl.uint(1),
       ],
       deployer
     );
     expect(res.result.type).toBe(ClarityType.ResponseOk);
+    execute_proposal(res);
 
-    const lp_cap_factor = simnet.callReadOnlyFn("daily-caps-v1", "get-lp-cap-factor", [], deployer).result;
+    const lp_cap_factor = simnet.callReadOnlyFn(
+      "withdrawal-caps-v1",
+      "get-lp-cap-factor",
+      [],
+      deployer
+    ).result;
     expect(lp_cap_factor).toEqual(Cl.uint(0.8 * SCALING_FACTOR));
 
     // Deposit 500 USDC
@@ -85,7 +122,12 @@ describe("daily caps tests", () => {
     mint_token("mock-usdc", amount, depositor);
     deposit(amount, depositor);
 
-    let lp_bucket = simnet.callReadOnlyFn("daily-caps-v1", "get-lp-bucket", [], deployer).result;
+    let lp_bucket = simnet.callReadOnlyFn(
+      "withdrawal-caps-v1",
+      "get-lp-bucket",
+      [],
+      deployer
+    ).result;
     expect(lp_bucket).toBeUint(0);
 
     // Withdraw 410 USDC, it should be bloked
@@ -106,26 +148,38 @@ describe("daily caps tests", () => {
     expect(resp).toBeOk(Cl.bool(true));
   });
 
-  it("debt cap should allow & block borrowing & update itself correctly", () => {
-    const res = simnet.callPublicFn(
-      "daily-caps-v1",
-      "initiate-proposal-to-update-param",
+  it("debt cap should allow & block borrowing & update itself correctly", async () => {
+    let res = simnet.callPublicFn(
+      "governance-v1",
+      "initiate-proposal-to-update-withdrawal-caps-param",
       [
         Cl.uint(ACTION_SET_DEBT_CAP),
-        Cl.uint(0.8 * SCALING_FACTOR),
-        Cl.none(),
+        Cl.tuple({
+          collateral: Cl.none(),
+          factor: Cl.uint(0.8 * SCALING_FACTOR),
+        }),
         Cl.uint(1),
       ],
       deployer
     );
     expect(res.result.type).toBe(ClarityType.ResponseOk);
+    execute_proposal(res);
+
+    await set_price("mock-usdc", 1n, deployer);
+    await set_price("mock-btc", 10n, deployer);
+    await set_price("mock-eth", 1n, deployer);
 
     // Deposit 500 USDC
     let amount = 500_000_000_00;
     mint_token("mock-usdc", amount, depositor);
     deposit(amount, depositor);
 
-    let debt_bucket = simnet.callReadOnlyFn("daily-caps-v1", "get-debt-bucket", [], deployer).result;
+    let debt_bucket = simnet.callReadOnlyFn(
+      "withdrawal-caps-v1",
+      "get-debt-bucket",
+      [],
+      deployer
+    ).result;
     expect(debt_bucket).toBeUint(0);
 
     // Add collateral
@@ -133,46 +187,56 @@ describe("daily caps tests", () => {
     add_collateral("mock-btc", 800_000_000_0, deployer, borrower);
 
     // Borrow 410 USDC. It should be bloked
-    let resp = simnet.callPublicFn(
+    res = simnet.callPublicFn(
       "borrower-v1",
       "borrow",
       [Cl.none(), Cl.uint(410_000_000_00)],
       borrower
-    ).result;
-    expect(resp).toBeErr(Cl.uint(90003));
+    );
+    expect(res.result).toBeErr(Cl.uint(90003));
 
     // Borrow 150 USDC
-    resp = simnet.callPublicFn(
+    res = simnet.callPublicFn(
       "borrower-v1",
       "borrow",
       [Cl.none(), Cl.uint(150_000_000_00)],
       borrower
-    ).result;
-    expect(resp).toBeOk(Cl.bool(true));
+    );
+    expect(res.result).toBeOk(Cl.bool(true));
 
-    debt_bucket = simnet.callReadOnlyFn("daily-caps-v1", "get-debt-bucket", [], deployer).result;
+    debt_bucket = simnet.callReadOnlyFn(
+      "withdrawal-caps-v1",
+      "get-debt-bucket",
+      [],
+      deployer
+    ).result;
     expect(debt_bucket).toBeUint(25000000000n);
 
     // Borrow 200 USDC
-    resp = simnet.callPublicFn(
+    res = simnet.callPublicFn(
       "borrower-v1",
       "borrow",
       [Cl.none(), Cl.uint(200_000_000_00)],
       borrower
-    ).result;
-    expect(resp).toBeOk(Cl.bool(true));
+    );
+    expect(res.result).toBeOk(Cl.bool(true));
 
-    debt_bucket = simnet.callReadOnlyFn("daily-caps-v1", "get-debt-bucket", [], deployer).result
+    debt_bucket = simnet.callReadOnlyFn(
+      "withdrawal-caps-v1",
+      "get-debt-bucket",
+      [],
+      deployer
+    ).result;
     expect(debt_bucket).toBeUint(5003240740n);
 
-    // Borrow 51 USDC. It should be blocked bc debt bucker is aroun ~50 USDC 
-    resp = simnet.callPublicFn(
+    // Borrow 51 USDC. It should be blocked bc debt bucker is aroun ~50 USDC
+    res = simnet.callPublicFn(
       "borrower-v1",
       "borrow",
       [Cl.none(), Cl.uint(51_000_000_00)],
       borrower
-    ).result;
-    expect(resp).toBeErr(Cl.uint(90003));
+    );
+    expect(res.result).toBeErr(Cl.uint(90003));
 
     // Mine some blocks enlarge debt bucket
     for (let x = 0; x < 100; x++) {
@@ -180,36 +244,53 @@ describe("daily caps tests", () => {
     }
 
     // Borrow 51 USDC. This time it should work
-    resp = simnet.callPublicFn(
+    res = simnet.callPublicFn(
       "borrower-v1",
       "borrow",
       [Cl.none(), Cl.uint(51_000_000_00)],
       borrower
+    );
+
+    expect(res.result).toBeOk(Cl.bool(true));
+
+    debt_bucket = simnet.callReadOnlyFn(
+      "withdrawal-caps-v1",
+      "get-debt-bucket",
+      [],
+      deployer
     ).result;
-
-    expect(resp).toBeOk(Cl.bool(true));
-
-    debt_bucket = simnet.callReadOnlyFn("daily-caps-v1", "get-debt-bucket", [], deployer).result
     expect(debt_bucket).toBeUint(44907406n);
   });
 
-  it("collateral cap should allow / block removing collateral & update itself correctly", () => {
+  it("collateral cap should allow / block removing collateral & update itself correctly", async () => {
     const btcCV = Cl.contractPrincipal(deployer, "mock-btc");
 
     const res = simnet.callPublicFn(
-      "daily-caps-v1",
-      "initiate-proposal-to-update-param",
+      "governance-v1",
+      "initiate-proposal-to-update-withdrawal-caps-param",
       [
         Cl.uint(ACTION_SET_COLLATERAL_CAP),
-        Cl.uint(0.8 * SCALING_FACTOR),
-        Cl.some(btcCV),
+        Cl.tuple({
+          collateral: Cl.some(btcCV),
+          factor: Cl.uint(0.8 * SCALING_FACTOR),
+        }),
         Cl.uint(1),
       ],
       deployer
     );
     expect(res.result.type).toBe(ClarityType.ResponseOk);
+    execute_proposal(res);
 
-    const collateral_cap_factor = simnet.callReadOnlyFn("daily-caps-v1", "get-collateral-cap-factor", [btcCV], deployer).result;
+    await set_price("mock-usdc", 1n, deployer);
+    await set_price("mock-btc", 10n, deployer);
+    await set_price("mock-eth", 1n, deployer);
+
+    const collateral_cap_factor = simnet.callReadOnlyFn(
+      "withdrawal-caps-v1",
+      "get-collateral-cap-factor",
+      [btcCV],
+      deployer
+    ).result;
     expect(collateral_cap_factor).toEqual(Cl.uint(0.8 * SCALING_FACTOR));
 
     // Add collateral
@@ -217,7 +298,12 @@ describe("daily caps tests", () => {
     mint_token("mock-btc", amount, depositor);
     add_collateral("mock-btc", amount, deployer, depositor);
 
-    let collateral_bucket = simnet.callReadOnlyFn("daily-caps-v1", "get-collateral-bucket", [btcCV], deployer).result;
+    let collateral_bucket = simnet.callReadOnlyFn(
+      "withdrawal-caps-v1",
+      "get-collateral-bucket",
+      [btcCV],
+      deployer
+    ).result;
     expect(collateral_bucket).toBeUint(0);
 
     // Remove 70 btc. It should be bloked
@@ -238,7 +324,12 @@ describe("daily caps tests", () => {
     ).result;
     expect(resp).toBeOk(Cl.bool(true));
 
-    collateral_bucket = simnet.callReadOnlyFn("daily-caps-v1", "get-collateral-bucket", [btcCV], deployer).result;
+    collateral_bucket = simnet.callReadOnlyFn(
+      "withdrawal-caps-v1",
+      "get-collateral-bucket",
+      [btcCV],
+      deployer
+    ).result;
     expect(collateral_bucket).toBeUint(1400000000n); // 14 btc
 
     // Remove 10 btc (while 14 btc can be removed)
@@ -250,7 +341,12 @@ describe("daily caps tests", () => {
     ).result;
     expect(resp).toBeOk(Cl.bool(true));
 
-    collateral_bucket = simnet.callReadOnlyFn("daily-caps-v1", "get-collateral-bucket", [btcCV], deployer).result;
+    collateral_bucket = simnet.callReadOnlyFn(
+      "withdrawal-caps-v1",
+      "get-collateral-bucket",
+      [btcCV],
+      deployer
+    ).result;
     expect(collateral_bucket).toBeUint(400277777n); // ~4 btc
 
     // Remove 4.1 btc (while 4 btc can be removed) Should be blocked
@@ -276,18 +372,25 @@ describe("daily caps tests", () => {
     ).result;
     expect(resp).toBeOk(Cl.bool(true));
 
-    collateral_bucket = simnet.callReadOnlyFn("daily-caps-v1", "get-collateral-bucket", [btcCV], deployer).result;
+    collateral_bucket = simnet.callReadOnlyFn(
+      "withdrawal-caps-v1",
+      "get-collateral-bucket",
+      [btcCV],
+      deployer
+    ).result;
     expect(collateral_bucket).toBeUint(9166665n); // ~0.091 btc
   });
-  
+
   it("non governance members should fail to propose a change", () => {
     const response = simnet.callPublicFn(
-      "daily-caps-v1",
-      "initiate-proposal-to-update-param",
+      "governance-v1",
+      "initiate-proposal-to-update-withdrawal-caps-param",
       [
         Cl.uint(ACTION_SET_DEBT_CAP),
-        Cl.uint(0.01 * SCALING_FACTOR),
-        Cl.none(),
+        Cl.tuple({
+          collateral: Cl.none(),
+          factor: Cl.uint(0.01 * SCALING_FACTOR),
+        }),
         Cl.uint(1),
       ],
       borrower
@@ -297,28 +400,31 @@ describe("daily caps tests", () => {
 
   it("correctly update the lp cap", () => {
     let value = simnet.callReadOnlyFn(
-      "daily-caps-v1",
+      "withdrawal-caps-v1",
       "get-lp-cap-factor",
       [],
       deployer
     );
     expect(value.result.value).toBe(0n);
-  
+
     const response = simnet.callPublicFn(
-      "daily-caps-v1",
-      "initiate-proposal-to-update-param",
+      "governance-v1",
+      "initiate-proposal-to-update-withdrawal-caps-param",
       [
         Cl.uint(ACTION_SET_LP_CAP),
-        Cl.uint(0.05 * SCALING_FACTOR),
-        Cl.none(),
+        Cl.tuple({
+          collateral: Cl.none(),
+          factor: Cl.uint(0.05 * SCALING_FACTOR),
+        }),
         Cl.uint(100),
       ],
       deployer
     );
     expect(response.result.type).toBe(ClarityType.ResponseOk);
+    execute_proposal(response);
 
     value = simnet.callReadOnlyFn(
-      "daily-caps-v1",
+      "withdrawal-caps-v1",
       "get-lp-cap-factor",
       [],
       deployer
@@ -328,28 +434,31 @@ describe("daily caps tests", () => {
 
   it("correctly update the debt cap", () => {
     let value = simnet.callReadOnlyFn(
-      "daily-caps-v1",
+      "withdrawal-caps-v1",
       "get-debt-cap-factor",
       [],
       deployer
     );
     expect(value.result.value).toBe(0n);
-  
+
     const response = simnet.callPublicFn(
-      "daily-caps-v1",
-      "initiate-proposal-to-update-param",
+      "governance-v1",
+      "initiate-proposal-to-update-withdrawal-caps-param",
       [
         Cl.uint(ACTION_SET_DEBT_CAP),
-        Cl.uint(0.05 * SCALING_FACTOR),
-        Cl.none(),
+        Cl.tuple({
+          collateral: Cl.none(),
+          factor: Cl.uint(0.05 * SCALING_FACTOR),
+        }),
         Cl.uint(100),
       ],
       deployer
     );
     expect(response.result.type).toBe(ClarityType.ResponseOk);
+    execute_proposal(response);
 
     value = simnet.callReadOnlyFn(
-      "daily-caps-v1",
+      "withdrawal-caps-v1",
       "get-debt-cap-factor",
       [],
       deployer
@@ -359,7 +468,7 @@ describe("daily caps tests", () => {
 
   it("correctly update the time window", () => {
     let value = simnet.callReadOnlyFn(
-      "daily-caps-v1",
+      "withdrawal-caps-v1",
       "get-time-window",
       [],
       deployer
@@ -367,20 +476,23 @@ describe("daily caps tests", () => {
     expect(value.result.value).toBe(86400n);
 
     const response = simnet.callPublicFn(
-      "daily-caps-v1",
-      "initiate-proposal-to-update-param",
+      "governance-v1",
+      "initiate-proposal-to-update-withdrawal-caps-param",
       [
         Cl.uint(ACTION_SET_TIME_WINDOW),
-        Cl.uint(100),
-        Cl.none(),
-        Cl.uint(100),
+        Cl.tuple({
+          collateral: Cl.none(),
+          factor: Cl.uint(100),
+        }),
+        Cl.uint(1),
       ],
       deployer
     );
     expect(response.result.type).toBe(ClarityType.ResponseOk);
+    execute_proposal(response);
 
     value = simnet.callReadOnlyFn(
-      "daily-caps-v1",
+      "withdrawal-caps-v1",
       "get-time-window",
       [],
       deployer
@@ -392,28 +504,31 @@ describe("daily caps tests", () => {
     const mockBtc = Cl.contractPrincipal(deployer, "mock-btc");
 
     let value = simnet.callReadOnlyFn(
-      "daily-caps-v1",
+      "withdrawal-caps-v1",
       "get-collateral-cap-factor",
       [Cl.contractPrincipal(deployer, "mock-btc")],
       deployer
     );
     expect(value.result.value).toBe(0n);
-  
+
     const response = simnet.callPublicFn(
-      "daily-caps-v1",
-      "initiate-proposal-to-update-param",
+      "governance-v1",
+      "initiate-proposal-to-update-withdrawal-caps-param",
       [
         Cl.uint(ACTION_SET_COLLATERAL_CAP),
-        Cl.uint(0.05 * SCALING_FACTOR),
-        Cl.some(mockBtc),
-        Cl.uint(100),
+        Cl.tuple({
+          collateral: Cl.some(mockBtc),
+          factor: Cl.uint(0.05 * SCALING_FACTOR),
+        }),
+        Cl.uint(1),
       ],
       deployer
     );
     expect(response.result.type).toBe(ClarityType.ResponseOk);
+    execute_proposal(response);
 
     value = simnet.callReadOnlyFn(
-      "daily-caps-v1",
+      "withdrawal-caps-v1",
       "get-collateral-cap-factor",
       [mockBtc],
       deployer
@@ -424,38 +539,57 @@ describe("daily caps tests", () => {
   // overflow
   it("lp cap should not overflow", () => {
     const res = simnet.callPublicFn(
-      "daily-caps-v1",
-      "initiate-proposal-to-update-param",
+      "governance-v1",
+      "initiate-proposal-to-update-withdrawal-caps-param",
       [
         Cl.uint(ACTION_SET_LP_CAP),
-        Cl.uint(0.1 * SCALING_FACTOR),
-        Cl.none(),
+        Cl.tuple({
+          collateral: Cl.none(),
+          factor: Cl.uint(0.1 * SCALING_FACTOR),
+        }),
         Cl.uint(1),
       ],
       deployer
     );
     expect(res.result.type).toBe(ClarityType.ResponseOk);
-    const factor = simnet.callReadOnlyFn("daily-caps-v1", "get-lp-cap-factor", [], deployer).result;
+    execute_proposal(res);
+
+    const factor = simnet.callReadOnlyFn(
+      "withdrawal-caps-v1",
+      "get-lp-cap-factor",
+      [],
+      deployer
+    ).result;
     expect(factor).toBeUint(0.1 * SCALING_FACTOR);
-  
+
     // Initial liquidity 1bn USDC
     const amount = 1_000_000_000_000_000;
     mint_token("mock-usdc", amount, depositor);
     deposit(amount, depositor);
 
-    let bucket = simnet.callReadOnlyFn("daily-caps-v1", "get-lp-bucket", [], deployer).result;
+    let bucket = simnet.callReadOnlyFn(
+      "withdrawal-caps-v1",
+      "get-lp-bucket",
+      [],
+      deployer
+    ).result;
     expect(bucket).toBeUint(0n);
 
     // Withdraw 10% of the USDC balance
     let withdraw = simnet.callPublicFn(
-          "liquidity-provider-v1",
-          "withdraw",
-          [Cl.uint(amount / 10), Cl.principal(depositor)],
-          depositor
-        );
+      "liquidity-provider-v1",
+      "withdraw",
+      [Cl.uint(amount / 10), Cl.principal(depositor)],
+      depositor
+    );
     expect(withdraw.result).toBeOk(Cl.bool(true));
 
-    bucket = simnet.callReadOnlyFn("daily-caps-v1", "get-lp-bucket", [], deployer).result;
+    bucket = simnet.callReadOnlyFn(
+      "withdrawal-caps-v1",
+      "get-lp-bucket",
+      [],
+      deployer
+    ).result;
     expect(bucket).toBeUint(0n);
 
     // Mine a large number of blocks
@@ -463,26 +597,36 @@ describe("daily caps tests", () => {
       simnet.mineBlock([]);
     }
 
-    const balance = simnet.callReadOnlyFn("mock-usdc", "get-balance", [Cl.contractPrincipal(deployer, 'state-v1')], deployer);
-    expect(balance.result.value.value).toBe(BigInt(amount * 9/10));
+    const balance = simnet.callReadOnlyFn(
+      "mock-usdc",
+      "get-balance",
+      [Cl.contractPrincipal(deployer, "state-v1")],
+      deployer
+    );
+    expect(balance.result.value.value).toBe(BigInt((amount * 9) / 10));
 
     // Withdraw full cap again
     withdraw = simnet.callPublicFn(
-          "liquidity-provider-v1",
-          "withdraw",
-          [Cl.uint(amount * 9/10 / 10), Cl.principal(depositor)],
-          depositor
-        );
+      "liquidity-provider-v1",
+      "withdraw",
+      [Cl.uint((amount * 9) / 10 / 10), Cl.principal(depositor)],
+      depositor
+    );
     expect(withdraw.result).toBeOk(Cl.bool(true));
 
-    bucket = simnet.callReadOnlyFn("daily-caps-v1", "get-lp-bucket", [], deployer).result;
+    bucket = simnet.callReadOnlyFn(
+      "withdrawal-caps-v1",
+      "get-lp-bucket",
+      [],
+      deployer
+    ).result;
     expect(bucket).toBeUint(0);
   });
 
   it("should handle maximum Clarity uint values without overflow", () => {
     const balance = 2n ** 65n;
     const amount = balance / 10n;
-      
+
     let response = simnet.callPublicFn(
       "mock-usdc",
       "mint",
@@ -498,31 +642,39 @@ describe("daily caps tests", () => {
     );
     expect(response.result).toBeOk(Cl.bool(true));
     response = simnet.callPublicFn(
-      "daily-caps-v1",
-      "initiate-proposal-to-update-param",
-      [Cl.uint(ACTION_SET_LP_CAP), Cl.uint(0.99 * SCALING_FACTOR), Cl.none(), Cl.uint(1)],
+      "governance-v1",
+      "initiate-proposal-to-update-withdrawal-caps-param",
+      [
+        Cl.uint(ACTION_SET_LP_CAP),
+        Cl.tuple({
+          collateral: Cl.none(),
+          factor: Cl.uint(0.99 * SCALING_FACTOR),
+        }),
+        Cl.uint(1),
+      ],
       deployer
     );
     expect(response.result.type).toBe(ClarityType.ResponseOk);
-      
+    execute_proposal(response);
+
     let bucket = simnet.callReadOnlyFn(
-      "daily-caps-v1",
+      "withdrawal-caps-v1",
       "get-lp-bucket",
       [],
       deployer
     );
     expect(bucket.result).toBeUint(0);
-      
+
     let withdraw = simnet.callPublicFn(
       "liquidity-provider-v1",
       "withdraw",
-      [Cl.uint(amount * 99n/100n), Cl.principal(depositor)],
+      [Cl.uint((amount * 99n) / 100n), Cl.principal(depositor)],
       depositor
     );
     expect(withdraw.result).toBeOk(Cl.bool(true));
 
     bucket = simnet.callReadOnlyFn(
-      "daily-caps-v1",
+      "withdrawal-caps-v1",
       "get-lp-bucket",
       [],
       deployer

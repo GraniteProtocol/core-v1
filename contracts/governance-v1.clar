@@ -95,6 +95,18 @@
 ;; Action to update pyth time delta
 (define-constant ACTION_UPDATE_TIME_DELTA u29)
 
+;; Action to set lp cap
+(define-constant ACTION_SET_LP_CAP u30)
+
+;; Action to set debt cap
+(define-constant ACTION_SET_DEBT_CAP u31)
+
+;; action to set collateral cap
+(define-constant ACTION_SET_COLLATERAL_CAP u32)
+
+;; action to set time window
+(define-constant ACTION_SET_TIME_WINDOW u33)
+
 ;; Threshold to either execute or remove proposal
 ;; 66% and above
 ;; 1 & 2 Account Multisig will require all of them to execute or deny proposal
@@ -242,6 +254,13 @@
 
 ;; time-locked actions
 (define-map time-locked uint bool)
+
+;; cap update data
+(define-map cap-data (buff 32) {
+    collateral: (optional principal),
+    factor: uint
+  }
+)
 
 ;; PRIVATE FUNCTIONS
 (define-private (create-proposal (proposal-id (buff 32)) (action uint) (expires-in uint))
@@ -411,6 +430,34 @@
     (contract-call? .pyth-adapter-v1 update-time-delta time-delta)
 ))
 
+(define-private (execute-set-lp-cap (proposal-id (buff 32)))
+  (let ((data (unwrap-panic (map-get? cap-data proposal-id))))
+    (contract-call? .withdrawal-caps-v1 set-lp-cap (get factor data))
+  )
+)
+
+(define-private (execute-set-debt-cap (proposal-id (buff 32)))
+  (let ((data (unwrap-panic (map-get? cap-data proposal-id))))
+    (contract-call? .withdrawal-caps-v1 set-debt-cap (get factor data))
+  )
+)
+
+(define-private (execute-set-collateral-cap (proposal-id (buff 32)))
+  (let (
+      (data (unwrap-panic (map-get? cap-data proposal-id)))
+      (collateral (unwrap-panic (get collateral data)))
+      (factor (get factor data))
+    )
+    (contract-call? .withdrawal-caps-v1 set-collateral-cap collateral factor)
+  )
+)
+
+(define-private (execute-set-time-window (proposal-id (buff 32)))
+  (let ((data (unwrap-panic (map-get? cap-data proposal-id))))
+    (contract-call? .withdrawal-caps-v1 set-time-window (get factor data))
+  )
+)
+
 (define-private (approve-threshold-met (proposal-id (buff 32)))
   (let (
       (proposal (unwrap! (map-get? governance-proposal proposal-id) ERR-UNKNOWN-PROPOSAL))
@@ -453,6 +500,10 @@
     (asserts! (not (is-eq action ACTION_UPDATE_WITHDRAWAL_FINALIZATION_PERIOD)) (execute-update-withdrawal-finalization-period proposal-id))
     (asserts! (not (is-eq action ACTION_SET_STAKING_FLAG)) (execute-set-staking-flag proposal-id))
     (asserts! (not (is-eq action ACTION_UPDATE_TIME_DELTA)) (execute-update-time-delta proposal-id))
+    (asserts! (not (is-eq action ACTION_SET_LP_CAP)) (execute-set-lp-cap proposal-id))
+    (asserts! (not (is-eq action ACTION_SET_DEBT_CAP)) (execute-set-debt-cap proposal-id))
+    (asserts! (not (is-eq action ACTION_SET_COLLATERAL_CAP)) (execute-set-collateral-cap proposal-id))
+    (asserts! (not (is-eq action ACTION_SET_TIME_WINDOW)) (execute-set-time-window proposal-id))
     ERR-INVALID-ACTION
 ))
 
@@ -963,6 +1014,28 @@
     (ok proposal-id)
 ))
 
+(define-public (initiate-proposal-to-update-withdrawal-caps-param (action uint) (data { collateral: (optional principal), factor: uint }) (expires-in uint))
+  (let (
+      (proposal-nonce (var-get next-proposal-nonce))
+      (proposal-id (keccak256 (unwrap! (to-consensus-buff? {
+        sender: contract-caller,
+        nonce: proposal-nonce,
+        action: action,
+        data: data,
+        expires-in: expires-in
+      }) ERR-FAILED-TO-GENERATE-PROPOSAL-ID)))
+    )
+    (asserts! (and (>= action ACTION_SET_LP_CAP) (<= action ACTION_SET_TIME_WINDOW)) ERR-INVALID-ACTION)
+    (try! (create-proposal proposal-id action expires-in))
+    (asserts! (if (is-eq action ACTION_SET_COLLATERAL_CAP)
+      (is-some (get collateral data))
+      true
+    ) ERR-INVALID-ACTION)
+    (map-set cap-data proposal-id data)
+    (try! (execute-if-approve-threshold-met proposal-id))
+    (ok proposal-id)
+))
+
 
 (define-public (approve (proposal-id (buff 32)))
   (let ((proposal (unwrap! (map-get? governance-proposal proposal-id) ERR-UNKNOWN-PROPOSAL)))
@@ -1120,3 +1193,7 @@
 (map-set time-locked ACTION_REMOVE_COLLATERAL true)
 (map-set time-locked ACTION_UPDATE_REWARD_RATE_PARAMS true)
 (map-set time-locked ACTION_UPDATE_WITHDRAWAL_FINALIZATION_PERIOD true)
+(map-set time-locked ACTION_SET_LP_CAP true)
+(map-set time-locked ACTION_SET_DEBT_CAP true)
+(map-set time-locked ACTION_SET_COLLATERAL_CAP true)
+(map-set time-locked ACTION_SET_TIME_WINDOW true)

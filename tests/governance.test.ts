@@ -15,7 +15,12 @@ import {
   update_supported_collateral,
   update_supported_collateral_governance,
 } from "./utils";
-import { init_pyth, set_initial_price, set_price, set_pyth_time_delta } from "./pyth";
+import {
+  init_pyth,
+  set_initial_price,
+  set_price,
+  set_pyth_time_delta,
+} from "./pyth";
 import { increaseLpTokensOfStakingContract } from "./staking.test";
 
 const accounts = simnet.getAccounts();
@@ -26,21 +31,25 @@ const deployer = accounts.get("deployer")!;
 function execute_proposal(response: any) {
   const proposal_id = response.result.value.buffer;
   simnet.mineEmptyBlocks(17280);
-  const res = simnet.callPublicFn("governance-v1",
+  const res = simnet.callPublicFn(
+    "governance-v1",
     "execute",
     [Cl.buffer(proposal_id)],
-    governance_account);
-  expect(res.result).toBeOk(Cl.bool(true))
+    governance_account
+  );
+  expect(res.result).toBeOk(Cl.bool(true));
 }
 
 function execute_proposal_failed(response: any, error: any) {
   const proposal_id = response.result.value.buffer;
   simnet.mineEmptyBlocks(17280);
-  const res = simnet.callPublicFn("governance-v1",
+  const res = simnet.callPublicFn(
+    "governance-v1",
     "execute",
     [Cl.buffer(proposal_id)],
-    governance_account);
-  expect(res.result).toBeErr(Cl.uint(error))
+    governance_account
+  );
+  expect(res.result).toBeErr(Cl.uint(error));
 }
 
 describe("governance tests", () => {
@@ -124,8 +133,13 @@ describe("governance tests", () => {
       governance_account
     );
     expect(response.result.type).toBe(ClarityType.ResponseOk);
-    response = simnet.callReadOnlyFn("state-v1", "is-liquidation-enabled", [], governance_account);
-    expect(response.result).toStrictEqual(Cl.bool(false))
+    response = simnet.callReadOnlyFn(
+      "state-v1",
+      "is-liquidation-enabled",
+      [],
+      governance_account
+    );
+    expect(response.result).toStrictEqual(Cl.bool(false));
 
     response = simnet.callPublicFn(
       "governance-v1",
@@ -134,9 +148,13 @@ describe("governance tests", () => {
       governance_account
     );
     expect(response.result.type).toBe(ClarityType.ResponseOk);
-    response = simnet.callReadOnlyFn("state-v1", "is-add-collateral-enabled", [], governance_account);
-    expect(response.result).toStrictEqual(Cl.bool(false))
-
+    response = simnet.callReadOnlyFn(
+      "state-v1",
+      "is-add-collateral-enabled",
+      [],
+      governance_account
+    );
+    expect(response.result).toStrictEqual(Cl.bool(false));
 
     response = simnet.callPublicFn(
       "borrower-v1",
@@ -352,7 +370,7 @@ describe("governance tests", () => {
     );
     expect(response.result.type).toBe(ClarityType.ResponseOk);
 
-    execute_proposal_failed(response, 104) // invalid params
+    execute_proposal_failed(response, 104); // invalid params
   });
 
   it("should be able to disable withdrawals", async () => {
@@ -473,7 +491,7 @@ describe("governance tests", () => {
       governance_account
     );
     expect(response.result.type).toBe(ClarityType.ResponseOk);
-    execute_proposal_failed(response, 105)
+    execute_proposal_failed(response, 105);
     // 600 = ERR-INSUFFICIENT-BALANCE
 
     balance = simnet.callReadOnlyFn(
