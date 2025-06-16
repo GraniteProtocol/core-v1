@@ -1180,6 +1180,7 @@
   (begin
     (try! (is-guardian contract-caller))
     (try! (contract-call? .state-v1 pause-market))
+    (try! (contract-call? .state-v1 set-staking-flag false))
     SUCCESS
 ))
 
@@ -1197,3 +1198,10 @@
 (map-set time-locked ACTION_SET_DEBT_CAP true)
 (map-set time-locked ACTION_SET_COLLATERAL_CAP true)
 (map-set time-locked ACTION_SET_TIME_WINDOW true)
+(map-set time-locked ACTION_SET_WITHDRAW_ASSET_FLAG true)
+(map-set time-locked ACTION_SET_REMOVE_COLLATERAL_FLAG true)
+(map-set time-locked ACTION_SET_REPAY_FLAG true)
+(map-set time-locked ACTION_SET_MARKET_PAUSE_FLAG true)
+(map-set time-locked ACTION_SET_ALLOWED_CONTRACT true)
+(map-set time-locked ACTION_REMOVE_ALLOWED_CONTRACT true)
+(map-set time-locked ACTION_SET_STAKING_FLAG true)

@@ -181,6 +181,7 @@ describe("governance tests", () => {
       governance_account
     );
     expect(response.result.type).toBe(ClarityType.ResponseOk);
+    execute_proposal(response);
 
     response = simnet.callPublicFn(
       "borrower-v1",
@@ -197,6 +198,7 @@ describe("governance tests", () => {
       governance_account
     );
     expect(response.result.type).toBe(ClarityType.ResponseOk);
+    execute_proposal(response);
 
     remove_collateral("mock-btc", 1000, deployer, governance_account);
   });
@@ -396,6 +398,7 @@ describe("governance tests", () => {
       governance_account
     );
     expect(response.result.type).toBe(ClarityType.ResponseOk);
+    execute_proposal(response);
 
     response = simnet.callPublicFn(
       "liquidity-provider-v1",
@@ -420,6 +423,7 @@ describe("governance tests", () => {
       governance_account
     );
     expect(response.result.type).toBe(ClarityType.ResponseOk);
+    execute_proposal(response);
 
     response = simnet.callPublicFn(
       "liquidity-provider-v1",
@@ -649,6 +653,7 @@ describe("governance tests", () => {
       governance_account
     );
     expect(response.result.type).toBe(ClarityType.ResponseOk);
+    execute_proposal(response);
 
     response = simnet.callReadOnlyFn(
       "state-v1",
@@ -1282,6 +1287,7 @@ describe("governance tests", () => {
       governance_account
     );
     expect(response.result.type).toBe(ClarityType.ResponseOk);
+    execute_proposal(response);
 
     response = simnet.callReadOnlyFn(
       "state-v1",
