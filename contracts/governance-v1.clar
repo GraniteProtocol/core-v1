@@ -116,6 +116,10 @@
 ;; approximately 24 hours
 (define-constant TIME_LOCKED_PERIOD u17280)
 
+;; Time lock expiration multipler
+;; approved time lock proposal expires after expiration block
+(define-constant TIME_LOCK_EXECUTE_EXPIRATION_MULTIPLIER u2)
+
 ;; Success response
 (define-constant SUCCESS (ok true))
 
@@ -526,7 +530,7 @@
             expires-at: (get expires-at proposal),
             closed: true,
             executed: true,
-            execute-at: (some stacks-block-height)
+            execute-at: (some stacks-block-height),
           })
           (print {
             action: "proposal-executed",
@@ -541,10 +545,11 @@
             action: (get action proposal),
             approve-count: (get approve-count proposal),
             deny-count: (get deny-count proposal),
-            expires-at: (get expires-at proposal),
-            closed: true,
+            ;; bump expires at for time locked proposals
+            expires-at: (* TIME_LOCK_EXECUTE_EXPIRATION_MULTIPLIER execute-at),
+            closed: false,
             executed: false,
-            execute-at: (some execute-at)
+            execute-at: (some execute-at),
           })
           (print {
             action: "proposal-execution-time-locked",
@@ -574,7 +579,7 @@
           expires-at: (get expires-at proposal),
           closed: true,
           executed: false,
-          execute-at: none
+          execute-at: none,
         })
         (print {
           action: "proposal-denied",
@@ -1138,9 +1143,10 @@
 (define-public (execute (proposal-id (buff 32)))
   (let ((proposal (unwrap! (map-get? governance-proposal proposal-id) ERR-UNKNOWN-PROPOSAL)))
     (try! (is-governance-member contract-caller))
-    (asserts! (get closed proposal) ERR-PROPOSAL-NOT-CLOSED)
+    (asserts! (not (get closed proposal)) ERR-PROPOSAL-CLOSED)
     (asserts! (not (get executed proposal)) ERR-PROPOSAL-ALREADY-EXECUTED)
     (asserts! (<= (unwrap! (get execute-at proposal) ERR-PROPOSAL-NOT-TIME-LOCKED) stacks-block-height) ERR-PROPOSAL-TIME-LOCKED)
+    (asserts! (< stacks-block-height (get expires-at proposal)) ERR-PROPOSAL-EXPIRED)
     ;; try to execute the proposal if threshold is met
     (try! (execute-if-approve-threshold-met proposal-id))
     SUCCESS
