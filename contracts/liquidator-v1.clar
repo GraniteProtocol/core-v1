@@ -171,16 +171,11 @@
 )
   (let (
     (position-data (unwrap! (try! (check-account-unhealthy user maybe-market-asset-price maybe-total-liquid-ltv)) ERR-USER-POSITION-HEALTHY))
-    (current-debt-adjusted (get current-debt-adjusted position-data))
-    (total-liquid-ltv (get total-liquid-ltv position-data))
     (collateral-token (contract-of collateral))
     (collateral-price (match maybe-collateral-price price price (unwrap! (contract-call? .pyth-adapter-v1 read-price collateral-token) ERR-INVALID-ORACLE-PRICE)))
     (collateral-value (match maybe-collateral-value value value (get-collateral-value collateral-token user collateral-price)))
     (collateral-info (unwrap! (contract-call? .state-v1 get-collateral collateral-token) ERR-COLLATERAL-NOT-SUPPORTED))
-    (liquidation-discount (get liquidation-premium collateral-info))
-    (collateral-liquid-ltv (get liquidation-ltv collateral-info))
     (user-balance (unwrap! (get amount (contract-call? .state-v1 get-user-collateral user collateral-token))  ERR-INSUFFICIENT-BALANCE))
-    (collateral-decimals (get decimals collateral-info))
   )
     (ok {
       position-data: position-data,
