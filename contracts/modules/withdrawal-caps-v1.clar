@@ -194,6 +194,7 @@
 (define-public (set-lp-cap (new-cap uint))
   (begin
     (asserts! (is-governance) ERR-NOT-AUTHORIZED)
+    (asserts! (<= new-cap SCALING-FACTOR) ERR-INVALID-CAP-FACTOR)
     (print {
       action: "set-lp-cap",
       old-value: (var-get lp-cap-factor),
@@ -207,6 +208,7 @@
 (define-public (set-debt-cap (new-cap uint))
   (begin
     (asserts! (is-governance) ERR-NOT-AUTHORIZED)
+    (asserts! (<= new-cap SCALING-FACTOR) ERR-INVALID-CAP-FACTOR)
     (print {
       action: "set-debt-cap",
       old-value: (var-get lp-cap-factor),
@@ -220,6 +222,7 @@
 (define-public (set-collateral-cap (collateral principal) (new-cap uint))
   (begin
     (asserts! (is-governance) ERR-NOT-AUTHORIZED)
+    (asserts! (<= new-cap SCALING-FACTOR) ERR-INVALID-CAP-FACTOR)
     (print {
       action: "set-collateral-cap",
       collateral: collateral,
