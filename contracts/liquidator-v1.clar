@@ -481,7 +481,6 @@
 
 (define-private (is-bad-debt (current-debt uint) (collateral-value-and-reward {collateral-value: uint, collateral-reward: uint}))
   ;; if collateral_value < debt + reward, it is a bad debt
-  ;; if so, ensure if the liquidator is a bad debt liquidator else do not allow liquidation
   (let (
       (collateral-value (get collateral-value collateral-value-and-reward))
       (collateral-reward (get collateral-reward collateral-value-and-reward))
