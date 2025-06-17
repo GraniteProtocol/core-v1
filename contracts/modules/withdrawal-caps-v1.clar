@@ -8,7 +8,7 @@
 (define-constant LP-CONTRACT (as-contract .liquidity-provider-v1))
 (define-constant BORROWER-CONTRACT (as-contract .borrower-v1))
 (define-constant SUCCESS (ok true))
-(define-constant SCALING-FACTOR (contract-call? .constants-v2 get-scaling-factor))
+(define-constant SCALING-FACTOR u100000000)
 
 ;; ERRORS
 (define-constant ERR-RESTRICTED (err u90000))
