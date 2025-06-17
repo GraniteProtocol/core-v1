@@ -43,7 +43,7 @@ function execute_proposal(response: any) {
   expect(res.result).toBeOk(Cl.bool(true));
 }
 
-describe("daily caps tests", () => {
+describe("withdrawal caps tests", () => {
   beforeEach(async () => {
     init_pyth(deployer);
     set_pyth_time_delta(100000000, deployer);
@@ -77,7 +77,7 @@ describe("daily caps tests", () => {
   it("public functions should be gated", () => {
     let res = simnet.callPublicFn(
       "withdrawal-caps-v1",
-      "check-daily-debt-cap",
+      "check-withdrawal-debt-cap",
       [Cl.uint(0)],
       deployer
     );
@@ -85,7 +85,7 @@ describe("daily caps tests", () => {
 
     res = simnet.callPublicFn(
       "withdrawal-caps-v1",
-      "check-daily-collateral-cap",
+      "check-withdrawal-collateral-cap",
       [Cl.contractPrincipal(deployer, "mock-btc"), Cl.uint(0)],
       deployer
     );

@@ -25,7 +25,7 @@
 
 (define-public (withdraw (assets uint) (recipient principal))
   (begin
-    (try! (contract-call? .withdrawal-caps-v1 check-daily-lp-cap assets))
+    (try! (contract-call? .withdrawal-caps-v1 check-withdrawal-lp-cap assets))
     (try! (accrue-interest))
     (let ((shares (contract-call? .math-v1 convert-to-shares (contract-call? .state-v1 get-lp-params) assets true)))
       (try! (contract-call? .state-v1 remove-assets contract-caller recipient assets shares))
@@ -48,7 +48,7 @@
         (asset-params (contract-call? .state-v1 get-lp-params))
         (assets (contract-call? .math-v1 convert-to-assets asset-params shares false))
       )
-      (try! (contract-call? .withdrawal-caps-v1 check-daily-lp-cap assets))
+      (try! (contract-call? .withdrawal-caps-v1 check-withdrawal-lp-cap assets))
       (try! (contract-call? .state-v1 remove-assets contract-caller recipient assets shares))
       SUCCESS
     )
