@@ -11,13 +11,13 @@
 (define-constant SCALING-FACTOR u100000000)
 
 ;; ERRORS
-(define-constant ERR-RESTRICTED (err u90000))
-(define-constant ERR-FAILED-TO-GET-BALANCE (err u90001))
-(define-constant ERR-WITHDRAWAL-LP-CAP-EXCEEDED (err u90002))
-(define-constant ERR-WITHDRAWAL-DEBT-CAP-EXCEEDED (err u90003))
-(define-constant ERR-WITHDRAWAL-COLLATERAL-CAP-EXCEEDED (err u90004))
-(define-constant ERR-INVALID-CAP-FACTOR (err u90005))
-(define-constant ERR-NOT-AUTHORIZED (err u90006))
+(define-constant ERR-RESTRICTED (err u120000))
+(define-constant ERR-FAILED-TO-GET-BALANCE (err u120001))
+(define-constant ERR-WITHDRAWAL-LP-CAP-EXCEEDED (err u120002))
+(define-constant ERR-WITHDRAWAL-DEBT-CAP-EXCEEDED (err u120003))
+(define-constant ERR-WITHDRAWAL-COLLATERAL-CAP-EXCEEDED (err u120004))
+(define-constant ERR-INVALID-CAP-FACTOR (err u120005))
+(define-constant ERR-NOT-AUTHORIZED (err u120006))
 
 ;; VARIABLES
 (define-data-var time-window uint u86400)
