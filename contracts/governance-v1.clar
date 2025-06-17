@@ -524,15 +524,11 @@
         ;; proposal can be executed immediately
         (begin 
           (try! (execute-proposal proposal-id action))
-          (map-set governance-proposal proposal-id {
-            action: (get action proposal),
-            approve-count: (get approve-count proposal),
-            deny-count: (get deny-count proposal),
-            expires-at: (get expires-at proposal),
+          (map-set governance-proposal proposal-id (merge proposal {
             closed: true,
             executed: true,
             execute-at: (some stacks-block-height),
-          })
+          }))
           (print {
             action: "proposal-executed",
             proposal-id: proposal-id
@@ -541,17 +537,14 @@
         )
 
         ;; proposal will excuted after time-lock
-        (begin 
-          (map-set governance-proposal proposal-id {
-            action: (get action proposal),
-            approve-count: (get approve-count proposal),
-            deny-count: (get deny-count proposal),
+        (begin
+          (map-set governance-proposal proposal-id (merge proposal {
             ;; bump expires at for time locked proposals
             expires-at: (+ TIME_LOCK_EXECUTE_EXPIRATION_PERIOD execute-at),
             closed: false,
             executed: false,
             execute-at: (some execute-at),
-          })
+          }))
           (print {
             action: "proposal-execution-time-locked",
             proposal-id: proposal-id,
@@ -573,15 +566,11 @@
     )
     (if threshold
       (begin
-        (map-set governance-proposal proposal-id {
-          action: (get action proposal),
-          approve-count: (get approve-count proposal),
-          deny-count: (get deny-count proposal),
-          expires-at: (get expires-at proposal),
+        (map-set governance-proposal proposal-id (merge proposal {
           closed: true,
           executed: false,
           execute-at: none,
-        })
+        }))
         (print {
           action: "proposal-denied",
           proposal-id: proposal-id
@@ -1050,15 +1039,7 @@
     (asserts! (< stacks-block-height (get expires-at proposal)) ERR-PROPOSAL-EXPIRED)
     (asserts! (not (has-submitted-vote proposal-id)) ERR-SUBMITTED-VOTE)
     (map-set proposal-approved-members {proposal-id: proposal-id, member: contract-caller} true)
-    (map-set governance-proposal proposal-id {
-      action: (get action proposal),
-      approve-count: (+ (get approve-count proposal) u1),
-      deny-count: (get deny-count proposal),
-      expires-at: (get expires-at proposal),
-      closed: (get closed proposal),
-      executed: (get executed proposal),
-      execute-at: (get execute-at proposal)
-    })
+    (map-set governance-proposal proposal-id (merge proposal { approve-count: (+ (get approve-count proposal) u1) }))
 
     (print {
       action: "proposal-voted-approved",
@@ -1077,15 +1058,7 @@
     (asserts! (< stacks-block-height (get expires-at proposal)) ERR-PROPOSAL-EXPIRED)
     (asserts! (not (has-submitted-vote proposal-id)) ERR-SUBMITTED-VOTE)
     (map-set proposal-denied-members {proposal-id: proposal-id, member: contract-caller} true)
-    (map-set governance-proposal proposal-id {
-      action: (get action proposal),
-      approve-count: (get approve-count proposal),
-      deny-count: (+ (get deny-count proposal) u1),
-      expires-at: (get expires-at proposal),
-      closed: (get closed proposal),
-      executed: (get executed proposal),
-      execute-at: (get execute-at proposal)
-    })
+    (map-set governance-proposal proposal-id (merge proposal { deny-count: (+ (get deny-count proposal) u1) }))
 
     (print {
       action: "proposal-voted-denied",
