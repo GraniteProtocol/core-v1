@@ -33,7 +33,7 @@ const SCALING_FACTOR = 100000000;
 
 function execute_proposal(response: any) {
   const proposal_id = response.result.value.buffer;
-  simnet.mineEmptyBlocks(17280);
+  simnet.mineEmptyBlocks(21600);
   const res = simnet.callPublicFn(
     "governance-v1",
     "execute",

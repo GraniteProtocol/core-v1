@@ -48,7 +48,7 @@ export const update_supported_collateral_governance = (
   );
   expect(response.result.type).toBe(ClarityType.ResponseOk);
   const proposal_id = response.result.value.buffer;
-  simnet.mineEmptyBlocks(17280);
+  simnet.mineEmptyBlocks(21600);
   const res = simnet.callPublicFn(
     "governance-v1",
     "execute",

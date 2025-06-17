@@ -113,12 +113,13 @@
 (define-constant THRESHOLD u66)
 
 ;; Time lock period before executing approved proposal
-;; approximately 24 hours
-(define-constant TIME_LOCKED_PERIOD u17280)
+;; approximately 24 hours assuming 4 second block time
+(define-constant TIME_LOCKED_PERIOD u21600)
 
-;; Time lock expiration multipler
+;; Time lock expiration period
 ;; approved time lock proposal expires after expiration block
-(define-constant TIME_LOCK_EXECUTE_EXPIRATION_MULTIPLIER u2)
+;; approximately 1 week assuming 4 second block time
+(define-constant TIME_LOCK_EXECUTE_EXPIRATION_PERIOD u151200)
 
 ;; Success response
 (define-constant SUCCESS (ok true))
@@ -546,7 +547,7 @@
             approve-count: (get approve-count proposal),
             deny-count: (get deny-count proposal),
             ;; bump expires at for time locked proposals
-            expires-at: (* TIME_LOCK_EXECUTE_EXPIRATION_MULTIPLIER execute-at),
+            expires-at: (+ TIME_LOCK_EXECUTE_EXPIRATION_PERIOD execute-at),
             closed: false,
             executed: false,
             execute-at: (some execute-at),

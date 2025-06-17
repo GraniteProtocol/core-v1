@@ -30,7 +30,7 @@ const deployer = accounts.get("deployer")!;
 
 function execute_proposal(response: any) {
   const proposal_id = response.result.value.buffer;
-  simnet.mineEmptyBlocks(17280);
+  simnet.mineEmptyBlocks(21600);
   const res = simnet.callPublicFn(
     "governance-v1",
     "execute",
@@ -42,7 +42,7 @@ function execute_proposal(response: any) {
 
 function execute_proposal_failed(response: any, error: any) {
   const proposal_id = response.result.value.buffer;
-  simnet.mineEmptyBlocks(17280);
+  simnet.mineEmptyBlocks(21600);
   const res = simnet.callPublicFn(
     "governance-v1",
     "execute",
@@ -1782,8 +1782,8 @@ describe("governance tests", () => {
     expect(response.result.value.data["executed"]).toEqual(Cl.bool(false));
 
     let block_number = simnet.blockHeight;
-    let execute_at = block_number + 17280;
-    let expires_at = execute_at * 2;
+    let execute_at = block_number + 21600;
+    let expires_at = execute_at + 151200;
     expect(response.result.value.data["execute-at"]).toEqual(
       Cl.some(Cl.uint(execute_at))
     );
