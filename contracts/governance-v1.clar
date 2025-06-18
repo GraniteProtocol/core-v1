@@ -144,6 +144,7 @@
 (define-constant ERR-PROPOSAL-ALREADY-EXECUTED (err u40016))
 (define-constant ERR-PROPOSAL-TIME-LOCKED (err u40017))
 (define-constant ERR-PROPOSAL-NOT-TIME-LOCKED (err u40018))
+(define-constant ERR-CANNOT-VOTE (err u40019))
 
 ;; DATA VARS
 
@@ -1038,6 +1039,7 @@
     (asserts! (not (get closed proposal)) ERR-PROPOSAL-CLOSED)
     (asserts! (< stacks-block-height (get expires-at proposal)) ERR-PROPOSAL-EXPIRED)
     (asserts! (not (has-submitted-vote proposal-id)) ERR-SUBMITTED-VOTE)
+    (asserts! (is-none (get execute-at proposal)) ERR-CANNOT-VOTE)
     (map-set proposal-approved-members {proposal-id: proposal-id, member: contract-caller} true)
     (map-set governance-proposal proposal-id (merge proposal { approve-count: (+ (get approve-count proposal) u1) }))
 
@@ -1057,6 +1059,7 @@
     (asserts! (not (get closed proposal)) ERR-PROPOSAL-CLOSED)
     (asserts! (< stacks-block-height (get expires-at proposal)) ERR-PROPOSAL-EXPIRED)
     (asserts! (not (has-submitted-vote proposal-id)) ERR-SUBMITTED-VOTE)
+    (asserts! (is-none (get execute-at proposal)) ERR-CANNOT-VOTE)
     (map-set proposal-denied-members {proposal-id: proposal-id, member: contract-caller} true)
     (map-set governance-proposal proposal-id (merge proposal { deny-count: (+ (get deny-count proposal) u1) }))
 
@@ -1098,15 +1101,11 @@
         (asserts! (not has-threshold-met) ERR-PROPOSAL-CANNOT-CLOSE)
       )
     )
-    (map-set governance-proposal proposal-id {
-      action: (get action proposal),
-      approve-count: (get approve-count proposal),
-      deny-count: (get deny-count proposal),
-      expires-at: (get expires-at proposal),
+    (map-set governance-proposal proposal-id (merge proposal { 
       closed: true,
       executed: false,
       execute-at: none
-    })
+    }))
     (print {
       action: "proposal-closed",
       proposal-id: proposal-id
