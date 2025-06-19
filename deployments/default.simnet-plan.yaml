@@ -153,6 +153,11 @@ plan:
             path: contracts/staking-v1.clar
             clarity-version: 3
         - emulated-contract-publish:
+            contract-name: withdrawal-caps-v1
+            emulated-sender: ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM
+            path: contracts/modules/withdrawal-caps-v1.clar
+            clarity-version: 3
+        - emulated-contract-publish:
             contract-name: borrower-v1
             emulated-sender: ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM
             path: contracts/borrower-v1.clar
@@ -187,14 +192,14 @@ plan:
             emulated-sender: ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM
             path: contracts/meta-governance-v1.clar
             clarity-version: 3
+      epoch: "3.0"
+    - id: 2
+      transactions:
         - emulated-contract-publish:
             contract-name: governance-v1
             emulated-sender: ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM
             path: contracts/governance-v1.clar
             clarity-version: 3
-      epoch: "3.0"
-    - id: 2
-      transactions:
         - emulated-contract-publish:
             contract-name: liquidator-v1
             emulated-sender: ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM

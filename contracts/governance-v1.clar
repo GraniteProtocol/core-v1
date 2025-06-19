@@ -95,10 +95,31 @@
 ;; Action to update pyth time delta
 (define-constant ACTION_UPDATE_TIME_DELTA u29)
 
+;; Action to set lp cap
+(define-constant ACTION_SET_LP_CAP u30)
+
+;; Action to set debt cap
+(define-constant ACTION_SET_DEBT_CAP u31)
+
+;; action to set collateral cap
+(define-constant ACTION_SET_COLLATERAL_CAP u32)
+
+;; action to set time window
+(define-constant ACTION_SET_TIME_WINDOW u33)
+
 ;; Threshold to either execute or remove proposal
 ;; 66% and above
 ;; 1 & 2 Account Multisig will require all of them to execute or deny proposal
 (define-constant THRESHOLD u66)
+
+;; Time lock period before executing approved proposal
+;; approximately 24 hours assuming 4 second block time
+(define-constant TIME_LOCKED_PERIOD u21600)
+
+;; Time lock expiration period
+;; approved time lock proposal expires after expiration block
+;; approximately 1 week assuming 4 second block time
+(define-constant TIME_LOCK_EXECUTE_EXPIRATION_PERIOD u151200)
 
 ;; Success response
 (define-constant SUCCESS (ok true))
@@ -108,7 +129,7 @@
 (define-constant ERR-NOT-GUARDIAN (err u40001))
 (define-constant ERR-UNKNOWN-PROPOSAL (err u40002))
 (define-constant ERR-SUBMITTED-VOTE (err u40003))
-(define-constant ERR-PROPOSAL-COMPLETED (err u40004))
+(define-constant ERR-PROPOSAL-CLOSED (err u40004))
 (define-constant ERR-CONTRACT-ALREADY-INITIALIZED (err u40005))
 (define-constant ERR-CONTRACT-NOT-INITIALIZED (err u40006))
 (define-constant ERR-NOT-CONTRACT-DEPLOYER (err u40007))
@@ -119,6 +140,11 @@
 (define-constant ERR-PROPOSAL-CANNOT-CLOSE (err u40012))
 (define-constant ERR-PROPOSAL-EXPIRED (err u40013))
 (define-constant ERR-MINIMUM-PYTH-PRICE-DELTA (err u40014))
+(define-constant ERR-PROPOSAL-NOT-CLOSED (err u40015))
+(define-constant ERR-PROPOSAL-ALREADY-EXECUTED (err u40016))
+(define-constant ERR-PROPOSAL-TIME-LOCKED (err u40017))
+(define-constant ERR-PROPOSAL-NOT-TIME-LOCKED (err u40018))
+(define-constant ERR-CANNOT-VOTE (err u40019))
 
 ;; DATA VARS
 
@@ -133,8 +159,10 @@
   action: uint,
   approve-count: uint,
   deny-count: uint,
-  completed: bool,
+  closed: bool,
   expires-at: uint,
+  executed: bool,
+  execute-at: (optional uint)
 })
 
 ;; approved multisigs for given proposal
@@ -230,6 +258,16 @@
 ;; pyth time delta update value storage
 (define-map update-time-delta-params (buff 32) uint)
 
+;; time-locked actions
+(define-map time-locked uint bool)
+
+;; cap update data
+(define-map cap-data (buff 32) {
+    collateral: (optional principal),
+    factor: uint
+  }
+)
+
 ;; PRIVATE FUNCTIONS
 (define-private (create-proposal (proposal-id (buff 32)) (action uint) (expires-in uint))
   (begin
@@ -241,8 +279,10 @@
       action: action,
       approve-count: u1,
       deny-count: u0,
-      completed: false,
-      expires-at: (+ stacks-block-height expires-in)
+      expires-at: (+ stacks-block-height expires-in),
+      closed: false,
+      executed: false,
+      execute-at: none,
     })
     (map-set proposal-approved-members {proposal-id: proposal-id, member: contract-caller} true)
     (print {
@@ -396,6 +436,34 @@
     (contract-call? .pyth-adapter-v1 update-time-delta time-delta)
 ))
 
+(define-private (execute-set-lp-cap (proposal-id (buff 32)))
+  (let ((data (unwrap-panic (map-get? cap-data proposal-id))))
+    (contract-call? .withdrawal-caps-v1 set-lp-cap (get factor data))
+  )
+)
+
+(define-private (execute-set-debt-cap (proposal-id (buff 32)))
+  (let ((data (unwrap-panic (map-get? cap-data proposal-id))))
+    (contract-call? .withdrawal-caps-v1 set-debt-cap (get factor data))
+  )
+)
+
+(define-private (execute-set-collateral-cap (proposal-id (buff 32)))
+  (let (
+      (data (unwrap-panic (map-get? cap-data proposal-id)))
+      (collateral (unwrap-panic (get collateral data)))
+      (factor (get factor data))
+    )
+    (contract-call? .withdrawal-caps-v1 set-collateral-cap collateral factor)
+  )
+)
+
+(define-private (execute-set-time-window (proposal-id (buff 32)))
+  (let ((data (unwrap-panic (map-get? cap-data proposal-id))))
+    (contract-call? .withdrawal-caps-v1 set-time-window (get factor data))
+  )
+)
+
 (define-private (approve-threshold-met (proposal-id (buff 32)))
   (let (
       (proposal (unwrap! (map-get? governance-proposal proposal-id) ERR-UNKNOWN-PROPOSAL))
@@ -438,6 +506,10 @@
     (asserts! (not (is-eq action ACTION_UPDATE_WITHDRAWAL_FINALIZATION_PERIOD)) (execute-update-withdrawal-finalization-period proposal-id))
     (asserts! (not (is-eq action ACTION_SET_STAKING_FLAG)) (execute-set-staking-flag proposal-id))
     (asserts! (not (is-eq action ACTION_UPDATE_TIME_DELTA)) (execute-update-time-delta proposal-id))
+    (asserts! (not (is-eq action ACTION_SET_LP_CAP)) (execute-set-lp-cap proposal-id))
+    (asserts! (not (is-eq action ACTION_SET_DEBT_CAP)) (execute-set-debt-cap proposal-id))
+    (asserts! (not (is-eq action ACTION_SET_COLLATERAL_CAP)) (execute-set-collateral-cap proposal-id))
+    (asserts! (not (is-eq action ACTION_SET_TIME_WINDOW)) (execute-set-time-window proposal-id))
     ERR-INVALID-ACTION
 ))
 
@@ -446,25 +518,45 @@
       (proposal (unwrap! (map-get? governance-proposal proposal-id) ERR-UNKNOWN-PROPOSAL))
       (threshold (try! (approve-threshold-met proposal-id)))
       (action (get action proposal))
+      (execute-at (get-proposal-execution-time proposal-id))
     )
     (if threshold
-      (begin
-        (try! (execute-proposal proposal-id action))
-        (map-set governance-proposal proposal-id {
-          action: (get action proposal),
-          approve-count: (get approve-count proposal),
-          deny-count: (get deny-count proposal),
-          expires-at: (get expires-at proposal),
-          completed: true
-        })
-        (print {
-          action: "proposal-executed",
-          proposal-id: proposal-id
-        })
-        SUCCESS
+      (if (<= execute-at stacks-block-height)
+        ;; proposal can be executed immediately
+        (begin 
+          (try! (execute-proposal proposal-id action))
+          (map-set governance-proposal proposal-id (merge proposal {
+            closed: true,
+            executed: true,
+            execute-at: (some stacks-block-height),
+          }))
+          (print {
+            action: "proposal-executed",
+            proposal-id: proposal-id
+          })
+          SUCCESS
+        )
+
+        ;; proposal will excuted after time-lock
+        (begin
+          (map-set governance-proposal proposal-id (merge proposal {
+            ;; bump expires at for time locked proposals
+            expires-at: (+ TIME_LOCK_EXECUTE_EXPIRATION_PERIOD execute-at),
+            closed: false,
+            executed: false,
+            execute-at: (some execute-at),
+          }))
+          (print {
+            action: "proposal-execution-time-locked",
+            proposal-id: proposal-id,
+            execute-at: execute-at
+          })
+          SUCCESS
+        )
       )
       SUCCESS
     )
+
 ))
 
 (define-private (deny-proposal-if-deny-threshold-met (proposal-id (buff 32)))
@@ -475,13 +567,11 @@
     )
     (if threshold
       (begin
-        (map-set governance-proposal proposal-id {
-          action: (get action proposal),
-          approve-count: (get approve-count proposal),
-          deny-count: (get deny-count proposal),
-          expires-at: (get expires-at proposal),
-          completed: true
-        })
+        (map-set governance-proposal proposal-id (merge proposal {
+          closed: true,
+          executed: false,
+          execute-at: none,
+        }))
         (print {
           action: "proposal-denied",
           proposal-id: proposal-id
@@ -513,6 +603,18 @@
     )
     (contract-call? .state-v1 set-accrued-interest accrued-interest)
 ))
+
+(define-private (get-proposal-execution-time (proposal-id (buff 32)))
+  (let (
+    (proposal (unwrap-panic (map-get? governance-proposal proposal-id)))
+    (action (get action proposal))
+    (is-time-locked (default-to false (map-get? time-locked action)))
+    (current-execute-at (get execute-at proposal))
+    (execute-at (if is-time-locked (+ stacks-block-height TIME_LOCKED_PERIOD) stacks-block-height))
+  )
+    (if (is-some current-execute-at) (unwrap-panic current-execute-at) execute-at)
+  )
+)
 
 ;; READ ONLY FUNCTIONS
 (define-read-only (is-governance-member (member principal))
@@ -908,21 +1010,38 @@
     (ok proposal-id)
 ))
 
+(define-public (initiate-proposal-to-update-withdrawal-caps-param (action uint) (data { collateral: (optional principal), factor: uint }) (expires-in uint))
+  (let (
+      (proposal-nonce (var-get next-proposal-nonce))
+      (proposal-id (keccak256 (unwrap! (to-consensus-buff? {
+        sender: contract-caller,
+        nonce: proposal-nonce,
+        action: action,
+        data: data,
+        expires-in: expires-in
+      }) ERR-FAILED-TO-GENERATE-PROPOSAL-ID)))
+    )
+    (asserts! (and (>= action ACTION_SET_LP_CAP) (<= action ACTION_SET_TIME_WINDOW)) ERR-INVALID-ACTION)
+    (try! (create-proposal proposal-id action expires-in))
+    (asserts! (if (is-eq action ACTION_SET_COLLATERAL_CAP)
+      (is-some (get collateral data))
+      true
+    ) ERR-INVALID-ACTION)
+    (map-set cap-data proposal-id data)
+    (try! (execute-if-approve-threshold-met proposal-id))
+    (ok proposal-id)
+))
+
 
 (define-public (approve (proposal-id (buff 32)))
   (let ((proposal (unwrap! (map-get? governance-proposal proposal-id) ERR-UNKNOWN-PROPOSAL)))
     (try! (is-governance-member contract-caller))
-    (asserts! (not (get completed proposal)) ERR-PROPOSAL-COMPLETED)
+    (asserts! (not (get closed proposal)) ERR-PROPOSAL-CLOSED)
     (asserts! (< stacks-block-height (get expires-at proposal)) ERR-PROPOSAL-EXPIRED)
     (asserts! (not (has-submitted-vote proposal-id)) ERR-SUBMITTED-VOTE)
+    (asserts! (is-none (get execute-at proposal)) ERR-CANNOT-VOTE)
     (map-set proposal-approved-members {proposal-id: proposal-id, member: contract-caller} true)
-    (map-set governance-proposal proposal-id {
-      action: (get action proposal),
-      approve-count: (+ (get approve-count proposal) u1),
-      deny-count: (get deny-count proposal),
-      expires-at: (get expires-at proposal),
-      completed: (get completed proposal)
-    })
+    (map-set governance-proposal proposal-id (merge proposal { approve-count: (+ (get approve-count proposal) u1) }))
 
     (print {
       action: "proposal-voted-approved",
@@ -937,17 +1056,12 @@
 (define-public (deny (proposal-id (buff 32)))
   (let ((proposal (unwrap! (map-get? governance-proposal proposal-id) ERR-UNKNOWN-PROPOSAL)))
     (try! (is-governance-member contract-caller))
-    (asserts! (not (get completed proposal)) ERR-PROPOSAL-COMPLETED)
+    (asserts! (not (get closed proposal)) ERR-PROPOSAL-CLOSED)
     (asserts! (< stacks-block-height (get expires-at proposal)) ERR-PROPOSAL-EXPIRED)
     (asserts! (not (has-submitted-vote proposal-id)) ERR-SUBMITTED-VOTE)
+    (asserts! (is-none (get execute-at proposal)) ERR-CANNOT-VOTE)
     (map-set proposal-denied-members {proposal-id: proposal-id, member: contract-caller} true)
-    (map-set governance-proposal proposal-id {
-      action: (get action proposal),
-      approve-count: (get approve-count proposal),
-      deny-count: (+ (get deny-count proposal) u1),
-      expires-at: (get expires-at proposal),
-      completed: (get completed proposal)
-    })
+    (map-set governance-proposal proposal-id (merge proposal { deny-count: (+ (get deny-count proposal) u1) }))
 
     (print {
       action: "proposal-voted-denied",
@@ -973,7 +1087,7 @@
       (has-threshold-met (or deny-threshold approve-threshold))
     )
     (try! (is-governance-member contract-caller))
-    (asserts! (not (get completed proposal)) ERR-PROPOSAL-COMPLETED)
+    (asserts! (not (get closed proposal)) ERR-PROPOSAL-CLOSED)
     (if (>= stacks-block-height (get expires-at proposal))
       (begin 
         (print {
@@ -987,17 +1101,27 @@
         (asserts! (not has-threshold-met) ERR-PROPOSAL-CANNOT-CLOSE)
       )
     )
-    (map-set governance-proposal proposal-id {
-      action: (get action proposal),
-      approve-count: (get approve-count proposal),
-      deny-count: (get deny-count proposal),
-      expires-at: (get expires-at proposal),
-      completed: true
-    })
+    (map-set governance-proposal proposal-id (merge proposal { 
+      closed: true,
+      executed: false,
+      execute-at: none
+    }))
     (print {
       action: "proposal-closed",
       proposal-id: proposal-id
     })
+    SUCCESS
+))
+
+(define-public (execute (proposal-id (buff 32)))
+  (let ((proposal (unwrap! (map-get? governance-proposal proposal-id) ERR-UNKNOWN-PROPOSAL)))
+    (try! (is-governance-member contract-caller))
+    (asserts! (not (get closed proposal)) ERR-PROPOSAL-CLOSED)
+    (asserts! (not (get executed proposal)) ERR-PROPOSAL-ALREADY-EXECUTED)
+    (asserts! (<= (unwrap! (get execute-at proposal) ERR-PROPOSAL-NOT-TIME-LOCKED) stacks-block-height) ERR-PROPOSAL-TIME-LOCKED)
+    (asserts! (< stacks-block-height (get expires-at proposal)) ERR-PROPOSAL-EXPIRED)
+    ;; try to execute the proposal if threshold is met
+    (try! (execute-if-approve-threshold-met proposal-id))
     SUCCESS
 ))
 
@@ -1035,5 +1159,28 @@
   (begin
     (try! (is-guardian contract-caller))
     (try! (contract-call? .state-v1 pause-market))
+    (try! (contract-call? .state-v1 set-staking-flag false))
     SUCCESS
 ))
+
+(map-set time-locked ACTION_UPDATE_GOVERNANCE true)
+(map-set time-locked ACTION_FREEZE_UPGRADES true)
+(map-set time-locked ACTION_UPDATE_COLLATERAL_SETTINGS true)
+(map-set time-locked ACTION_WITHDRAW_FROM_RESERVE true)
+(map-set time-locked ACTION_ADD_GUARDIAN true)
+(map-set time-locked ACTION_UPDATE_INTEREST_RATE_PARAMS true)
+(map-set time-locked ACTION_UPDATE_PROTOCOL_RESERVE_PERCENTAGE true)
+(map-set time-locked ACTION_REMOVE_COLLATERAL true)
+(map-set time-locked ACTION_UPDATE_REWARD_RATE_PARAMS true)
+(map-set time-locked ACTION_UPDATE_WITHDRAWAL_FINALIZATION_PERIOD true)
+(map-set time-locked ACTION_SET_LP_CAP true)
+(map-set time-locked ACTION_SET_DEBT_CAP true)
+(map-set time-locked ACTION_SET_COLLATERAL_CAP true)
+(map-set time-locked ACTION_SET_TIME_WINDOW true)
+(map-set time-locked ACTION_SET_WITHDRAW_ASSET_FLAG true)
+(map-set time-locked ACTION_SET_REMOVE_COLLATERAL_FLAG true)
+(map-set time-locked ACTION_SET_REPAY_FLAG true)
+(map-set time-locked ACTION_SET_MARKET_PAUSE_FLAG true)
+(map-set time-locked ACTION_SET_ALLOWED_CONTRACT true)
+(map-set time-locked ACTION_REMOVE_ALLOWED_CONTRACT true)
+(map-set time-locked ACTION_SET_STAKING_FLAG true)
