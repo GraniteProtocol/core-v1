@@ -33,7 +33,7 @@ const SCALING_FACTOR = 100000000;
 
 function execute_proposal(response: any) {
   const proposal_id = response.result.value.buffer;
-  simnet.mineEmptyBlocks(17280);
+  simnet.mineEmptyBlocks(21600);
   const res = simnet.callPublicFn(
     "governance-v1",
     "execute",
@@ -43,7 +43,7 @@ function execute_proposal(response: any) {
   expect(res.result).toBeOk(Cl.bool(true));
 }
 
-describe("daily caps tests", () => {
+describe("withdrawal caps tests", () => {
   beforeEach(async () => {
     init_pyth(deployer);
     set_pyth_time_delta(100000000, deployer);
@@ -77,19 +77,19 @@ describe("daily caps tests", () => {
   it("public functions should be gated", () => {
     let res = simnet.callPublicFn(
       "withdrawal-caps-v1",
-      "check-daily-debt-cap",
+      "check-withdrawal-debt-cap",
       [Cl.uint(0)],
       deployer
     );
-    expect(res.result).toBeErr(Cl.uint(90000)); // ERR-RESTRICTED
+    expect(res.result).toBeErr(Cl.uint(120000)); // ERR-RESTRICTED
 
     res = simnet.callPublicFn(
       "withdrawal-caps-v1",
-      "check-daily-collateral-cap",
+      "check-withdrawal-collateral-cap",
       [Cl.contractPrincipal(deployer, "mock-btc"), Cl.uint(0)],
       deployer
     );
-    expect(res.result).toBeErr(Cl.uint(90000)); // ERR-RESTRICTED
+    expect(res.result).toBeErr(Cl.uint(120000)); // ERR-RESTRICTED
   });
 
   it("lp cap should block withdrawing above the limit", () => {
@@ -137,7 +137,7 @@ describe("daily caps tests", () => {
       [Cl.uint(410_000_000_00), Cl.principal(depositor)],
       depositor
     ).result;
-    expect(resp).toBeErr(Cl.uint(90002));
+    expect(resp).toBeErr(Cl.uint(120002));
 
     resp = simnet.callPublicFn(
       "liquidity-provider-v1",
@@ -193,7 +193,7 @@ describe("daily caps tests", () => {
       [Cl.none(), Cl.uint(410_000_000_00)],
       borrower
     );
-    expect(res.result).toBeErr(Cl.uint(90003));
+    expect(res.result).toBeErr(Cl.uint(120003));
 
     // Borrow 150 USDC
     res = simnet.callPublicFn(
@@ -236,7 +236,7 @@ describe("daily caps tests", () => {
       [Cl.none(), Cl.uint(51_000_000_00)],
       borrower
     );
-    expect(res.result).toBeErr(Cl.uint(90003));
+    expect(res.result).toBeErr(Cl.uint(120003));
 
     // Mine some blocks enlarge debt bucket
     for (let x = 0; x < 100; x++) {
@@ -313,7 +313,7 @@ describe("daily caps tests", () => {
       [Cl.none(), btcCV, Cl.uint(700_000_000_0)],
       depositor
     ).result;
-    expect(resp).toBeErr(Cl.uint(90004));
+    expect(resp).toBeErr(Cl.uint(120004));
 
     // Remove 50 btc (while 64 btc can be removed)
     resp = simnet.callPublicFn(
@@ -356,7 +356,7 @@ describe("daily caps tests", () => {
       [Cl.none(), btcCV, Cl.uint(41_000_000_0)],
       depositor
     ).result;
-    expect(resp).toBeErr(Cl.uint(90004));
+    expect(resp).toBeErr(Cl.uint(120004));
 
     // Mine some blocks enlarge the bucket
     for (let x = 0; x < 100; x++) {

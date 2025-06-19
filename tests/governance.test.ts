@@ -30,7 +30,7 @@ const deployer = accounts.get("deployer")!;
 
 function execute_proposal(response: any) {
   const proposal_id = response.result.value.buffer;
-  simnet.mineEmptyBlocks(17280);
+  simnet.mineEmptyBlocks(21600);
   const res = simnet.callPublicFn(
     "governance-v1",
     "execute",
@@ -42,7 +42,7 @@ function execute_proposal(response: any) {
 
 function execute_proposal_failed(response: any, error: any) {
   const proposal_id = response.result.value.buffer;
-  simnet.mineEmptyBlocks(17280);
+  simnet.mineEmptyBlocks(21600);
   const res = simnet.callPublicFn(
     "governance-v1",
     "execute",
@@ -181,6 +181,7 @@ describe("governance tests", () => {
       governance_account
     );
     expect(response.result.type).toBe(ClarityType.ResponseOk);
+    execute_proposal(response);
 
     response = simnet.callPublicFn(
       "borrower-v1",
@@ -197,6 +198,7 @@ describe("governance tests", () => {
       governance_account
     );
     expect(response.result.type).toBe(ClarityType.ResponseOk);
+    execute_proposal(response);
 
     remove_collateral("mock-btc", 1000, deployer, governance_account);
   });
@@ -396,6 +398,7 @@ describe("governance tests", () => {
       governance_account
     );
     expect(response.result.type).toBe(ClarityType.ResponseOk);
+    execute_proposal(response);
 
     response = simnet.callPublicFn(
       "liquidity-provider-v1",
@@ -420,6 +423,7 @@ describe("governance tests", () => {
       governance_account
     );
     expect(response.result.type).toBe(ClarityType.ResponseOk);
+    execute_proposal(response);
 
     response = simnet.callPublicFn(
       "liquidity-provider-v1",
@@ -649,6 +653,7 @@ describe("governance tests", () => {
       governance_account
     );
     expect(response.result.type).toBe(ClarityType.ResponseOk);
+    execute_proposal(response);
 
     response = simnet.callReadOnlyFn(
       "state-v1",
@@ -1282,6 +1287,7 @@ describe("governance tests", () => {
       governance_account
     );
     expect(response.result.type).toBe(ClarityType.ResponseOk);
+    execute_proposal(response);
 
     response = simnet.callReadOnlyFn(
       "state-v1",
@@ -1743,6 +1749,85 @@ describe("governance tests", () => {
       deployer
     );
     expect(response.result.value.data["completed"]).toEqual(Cl.bool(true));
+  });
+
+  it("market timelocked proposal can be expired and closed", async () => {
+    state_set_governance_contract(deployer);
+
+    let response = simnet.callReadOnlyFn(
+      "state-v1",
+      "is-repay-enabled",
+      [],
+      deployer
+    );
+    expect(response.result).toEqual(Cl.bool(true));
+
+    response = simnet.callPublicFn(
+      "governance-v1",
+      "initiate-proposal-to-set-market-feature",
+      [Cl.uint(7n), Cl.bool(false), Cl.uint(10), Cl.uint(10)],
+      governance_account
+    );
+    expect(response.result.type).toBe(ClarityType.ResponseOk);
+    let proposal_id = response.result.value.buffer;
+
+    // proposal should be not closed
+    response = simnet.callReadOnlyFn(
+      "governance-v1",
+      "get-proposal",
+      [Cl.buffer(proposal_id)],
+      deployer
+    );
+    expect(response.result.value.data["closed"]).toEqual(Cl.bool(false));
+    expect(response.result.value.data["executed"]).toEqual(Cl.bool(false));
+
+    let block_number = simnet.blockHeight;
+    let execute_at = block_number + 21600;
+    let expires_at = execute_at + 151200;
+    expect(response.result.value.data["execute-at"]).toEqual(
+      Cl.some(Cl.uint(execute_at))
+    );
+    expect(response.result.value.data["expires-at"]).toEqual(
+      Cl.uint(expires_at)
+    );
+
+    simnet.mineEmptyBlocks(expires_at);
+
+    // cannot execute expired proposal
+    const res = simnet.callPublicFn(
+      "governance-v1",
+      "execute",
+      [Cl.buffer(proposal_id)],
+      governance_account
+    );
+    expect(res.result).toBeErr(Cl.uint(40013)); // ERR-PROPOSAL-EXPIRED
+
+    // close the proposal since its expired
+    response = simnet.callPublicFn(
+      "governance-v1",
+      "close",
+      [Cl.buffer(proposal_id)],
+      governance_account
+    );
+    expect(response.result).toBeOk(Cl.bool(true));
+
+    // proposal should be closed
+    response = simnet.callReadOnlyFn(
+      "governance-v1",
+      "get-proposal",
+      [Cl.buffer(proposal_id)],
+      deployer
+    );
+    expect(response.result.value.data["closed"]).toEqual(Cl.bool(true));
+    expect(response.result.value.data["executed"]).toEqual(Cl.bool(false));
+
+    response = simnet.callReadOnlyFn(
+      "state-v1",
+      "is-repay-enabled",
+      [],
+      deployer
+    );
+    expect(response.result).toEqual(Cl.bool(true));
   });
 
   it("governance can remove collateral", async () => {

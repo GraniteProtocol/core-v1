@@ -1,4 +1,4 @@
-;; TITLE: daily-caps-module
+;; TITLE: withdrawal-caps
 ;; SPDX-License-Identifier: BUSL-1.1
 ;; VERSION: 1.0
 
@@ -8,16 +8,16 @@
 (define-constant LP-CONTRACT (as-contract .liquidity-provider-v1))
 (define-constant BORROWER-CONTRACT (as-contract .borrower-v1))
 (define-constant SUCCESS (ok true))
-(define-constant SCALING-FACTOR (contract-call? .constants-v2 get-scaling-factor))
+(define-constant SCALING-FACTOR u100000000)
 
 ;; ERRORS
-(define-constant ERR-RESTRICTED (err u90000))
-(define-constant ERR-FAILED-TO-GET-BALANCE (err u90001))
-(define-constant ERR-DAILY-LP-CAP-EXCEEDED (err u90002))
-(define-constant ERR-DAILY-DEBT-CAP-EXCEEDED (err u90003))
-(define-constant ERR-DAILY-COLLATERAL-CAP-EXCEEDED (err u90004))
-(define-constant ERR-INVALID-CAP-FACTOR (err u90005))
-(define-constant ERR-NOT-AUTHORIZED (err u90006))
+(define-constant ERR-RESTRICTED (err u120000))
+(define-constant ERR-FAILED-TO-GET-BALANCE (err u120001))
+(define-constant ERR-WITHDRAWAL-LP-CAP-EXCEEDED (err u120002))
+(define-constant ERR-WITHDRAWAL-DEBT-CAP-EXCEEDED (err u120003))
+(define-constant ERR-WITHDRAWAL-COLLATERAL-CAP-EXCEEDED (err u120004))
+(define-constant ERR-INVALID-CAP-FACTOR (err u120005))
+(define-constant ERR-NOT-AUTHORIZED (err u120006))
 
 ;; VARIABLES
 (define-data-var time-window uint u86400)
@@ -34,7 +34,7 @@
 
 ;; Collateral
 (define-map last-collateral-bucket-update principal uint)
-(define-map collateral-bucket principal uint) ;; current available collateal withdrawal credit
+(define-map collateral-bucket principal uint) ;; current available collateral withdrawal credit
 (define-map collateral-cap-factor principal uint)
 
 
@@ -48,9 +48,9 @@
 (define-read-only (get-last-debt-bucket-update) (var-get last-debt-bucket-update))
 (define-read-only (get-debt-bucket) (var-get debt-bucket))
 
-(define-read-only (get-collateral-cap-factor (collateral <token-trait>)) (default-to u0 (map-get? collateral-cap-factor (contract-of collateral))))
-(define-read-only (get-last-collateral-bucket-update (collateral <token-trait>)) (default-to u0 (map-get? last-collateral-bucket-update (contract-of collateral))))
-(define-read-only (get-collateral-bucket (collateral <token-trait>)) (default-to u0 (map-get? collateral-bucket (contract-of collateral))))
+(define-read-only (get-collateral-cap-factor (collateral principal)) (default-to u0 (map-get? collateral-cap-factor collateral)))
+(define-read-only (get-last-collateral-bucket-update (collateral principal)) (default-to u0 (map-get? last-collateral-bucket-update collateral)))
+(define-read-only (get-collateral-bucket (collateral principal)) (default-to u0 (map-get? collateral-bucket collateral)))
 
 (define-read-only (min (a uint) (b uint)) (if (> a b) b a ))
 
@@ -72,7 +72,7 @@
       (new-bucket-value (min (+ current-bucket refill-amount) max-lp-bucket))
     )
     (print {
-      old-lp-bucket-value: (var-get lp-bucket),
+      old-lp-bucket-value: current-bucket,
       new-lp-bucket-value: new-bucket-value,
       sender: contract-caller,
       action: "sync-lp-bucket"
@@ -99,7 +99,7 @@
       (new-bucket-value (min (+ current-bucket refill-amount) max-debt-bucket))
     )
     (print {
-      old-debt-bucket-value: (var-get debt-bucket),
+      old-debt-bucket-value: current-bucket,
       new-debt-bucket-value: new-bucket-value,
       sender: contract-caller,
       action: "sync-debt-bucket"
@@ -127,7 +127,7 @@
       (new-bucket-value (min (+ current-bucket refill-amount) max-collateral-bucket))
     )
     (print {
-      old-collateral-bucket-value: (default-to u0 (map-get? collateral-bucket collateral-token)),
+      old-collateral-bucket-value: current-bucket,
       new-collateral-bucket-value: new-bucket-value,
       sender: contract-caller,
       action: "sync-collateral-bucket"
@@ -138,15 +138,19 @@
   )
 )
 
+(define-private (is-governance)
+  (is-eq (contract-call? .state-v1 get-governance) contract-caller)
+)
+
 ;; PUBLIC FUNCTIONS
-(define-public (check-daily-lp-cap (amount uint))
+(define-public (check-withdrawal-lp-cap (amount uint))
   (begin 
     (asserts! (is-eq contract-caller LP-CONTRACT) ERR-RESTRICTED)
     (if (is-eq (var-get lp-cap-factor) u0)
       SUCCESS
       (begin
         (try! (sync-lp-bucket))
-        (asserts! (<= amount (var-get lp-bucket)) ERR-DAILY-LP-CAP-EXCEEDED)
+        (asserts! (<= amount (var-get lp-bucket)) ERR-WITHDRAWAL-LP-CAP-EXCEEDED)
         (var-set lp-bucket (- (var-get lp-bucket) amount))
         SUCCESS
       )
@@ -154,14 +158,14 @@
   )
 )
 
-(define-public (check-daily-debt-cap (amount uint))
+(define-public (check-withdrawal-debt-cap (amount uint))
   (begin 
     (asserts! (is-eq contract-caller BORROWER-CONTRACT) ERR-RESTRICTED)
     (if (is-eq (var-get debt-cap-factor) u0)
       SUCCESS
       (begin
         (unwrap-panic (sync-debt-bucket))
-        (asserts! (<= amount (var-get debt-bucket)) ERR-DAILY-DEBT-CAP-EXCEEDED)
+        (asserts! (<= amount (var-get debt-bucket)) ERR-WITHDRAWAL-DEBT-CAP-EXCEEDED)
         (var-set debt-bucket (- (var-get debt-bucket) amount))
         SUCCESS
       )
@@ -169,7 +173,7 @@
   )
 )
 
-(define-public (check-daily-collateral-cap (collateral <token-trait>) (amount uint))
+(define-public (check-withdrawal-collateral-cap (collateral <token-trait>) (amount uint))
   (let
     (
       (collateral-token (contract-of collateral))
@@ -179,7 +183,7 @@
       SUCCESS
       (begin 
         (try! (sync-collateral-bucket collateral))
-        (asserts! (<= amount (default-to u0 (map-get? collateral-bucket collateral-token))) ERR-DAILY-COLLATERAL-CAP-EXCEEDED)
+        (asserts! (<= amount (default-to u0 (map-get? collateral-bucket collateral-token))) ERR-WITHDRAWAL-COLLATERAL-CAP-EXCEEDED)
         (map-set collateral-bucket collateral-token (- (default-to u0 (map-get? collateral-bucket collateral-token)) amount))
         SUCCESS
       )
@@ -189,7 +193,8 @@
 
 (define-public (set-lp-cap (new-cap uint))
   (begin
-    (asserts! (is-eq (contract-call? .state-v1 get-governance) contract-caller) ERR-NOT-AUTHORIZED)
+    (asserts! (is-governance) ERR-NOT-AUTHORIZED)
+    (asserts! (<= new-cap SCALING-FACTOR) ERR-INVALID-CAP-FACTOR)
     (print {
       action: "set-lp-cap",
       old-value: (var-get lp-cap-factor),
@@ -202,7 +207,8 @@
 
 (define-public (set-debt-cap (new-cap uint))
   (begin
-    (asserts! (is-eq (contract-call? .state-v1 get-governance) contract-caller) ERR-NOT-AUTHORIZED)
+    (asserts! (is-governance) ERR-NOT-AUTHORIZED)
+    (asserts! (<= new-cap SCALING-FACTOR) ERR-INVALID-CAP-FACTOR)
     (print {
       action: "set-debt-cap",
       old-value: (var-get lp-cap-factor),
@@ -215,7 +221,8 @@
 
 (define-public (set-collateral-cap (collateral principal) (new-cap uint))
   (begin
-    (asserts! (is-eq (contract-call? .state-v1 get-governance) contract-caller) ERR-NOT-AUTHORIZED)
+    (asserts! (is-governance) ERR-NOT-AUTHORIZED)
+    (asserts! (<= new-cap SCALING-FACTOR) ERR-INVALID-CAP-FACTOR)
     (print {
       action: "set-collateral-cap",
       collateral: collateral,
@@ -229,7 +236,7 @@
 
 (define-public (set-time-window (new-window uint))
   (begin
-    (asserts! (is-eq (contract-call? .state-v1 get-governance) contract-caller) ERR-NOT-AUTHORIZED)
+    (asserts! (is-governance) ERR-NOT-AUTHORIZED)
     (print {
       action: "set-time-window",
       old-value: (var-get time-window),

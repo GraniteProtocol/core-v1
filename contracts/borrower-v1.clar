@@ -23,7 +23,7 @@
 ;; PUBLIC FUNCTIONS
 (define-public (borrow (pyth-price-feed-data (optional (buff 8192))) (amount uint) )
   (begin
-    (try! (contract-call? .withdrawal-caps-v1 check-daily-debt-cap amount))
+    (try! (contract-call? .withdrawal-caps-v1 check-withdrawal-debt-cap amount))
     (try! (contract-call? .pyth-adapter-v1 update-pyth pyth-price-feed-data))
     (try! (accrue-interest))
     (asserts! (>= (contract-call? .state-v1 get-borrowable-balance) amount) ERR-INSUFFICIENT-FREE-LIQUIDITY)
@@ -162,7 +162,7 @@
 
 (define-public (remove-collateral (pyth-price-feed-data (optional (buff 8192))) (collateral <token-trait>) (amount uint))
   (begin
-    (try! (contract-call? .withdrawal-caps-v1 check-daily-collateral-cap collateral amount))
+    (try! (contract-call? .withdrawal-caps-v1 check-withdrawal-collateral-cap collateral amount))
     (try! (contract-call? .pyth-adapter-v1 update-pyth pyth-price-feed-data))
     (try! (accrue-interest))
     (let
