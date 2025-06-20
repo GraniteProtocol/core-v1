@@ -113,6 +113,7 @@
         borrowed-block: (get borrowed-block position)
       }))
       (try! (contract-call? .staking-v1 increase-lp-staked-balance staked-lp-tokens))
+      (try! (contract-call? .withdrawal-caps-v1 repay repay-amount))
       (print {
         assets: repay-amount,
         total-user-debt-shares: total-user-debt-shares,
@@ -149,6 +150,7 @@
         user: contract-caller,
         user-position: {debt-shares: (get debt-shares position), collaterals: updated-collaterals, borrowed-amount: (get borrowed-amount position), borrowed-block: (get borrowed-block position)},
       }))
+      (try! (contract-call? .withdrawal-caps-v1 collateral-deposit collateral amount))
       (print {
         collateral: collateral-token,
         amount-deposited: amount,

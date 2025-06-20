@@ -128,7 +128,7 @@ describe("withdrawal caps tests", () => {
       [],
       deployer
     ).result;
-    expect(lp_bucket).toBeUint(0);
+    expect(lp_bucket).toBeUint(40000000000);
 
     // Withdraw 410 USDC, it should be bloked
     let resp = simnet.callPublicFn(
@@ -304,7 +304,7 @@ describe("withdrawal caps tests", () => {
       [btcCV],
       deployer
     ).result;
-    expect(collateral_bucket).toBeUint(0);
+    expect(collateral_bucket).toBeUint(6400000000);
 
     // Remove 70 btc. It should be bloked
     let resp = simnet.callPublicFn(
@@ -573,7 +573,7 @@ describe("withdrawal caps tests", () => {
       [],
       deployer
     ).result;
-    expect(bucket).toBeUint(0n);
+    expect(bucket).toBeUint(100000000000000);
 
     // Withdraw 10% of the USDC balance
     let withdraw = simnet.callPublicFn(

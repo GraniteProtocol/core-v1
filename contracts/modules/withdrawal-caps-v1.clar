@@ -7,6 +7,7 @@
 ;; CONSTANTS
 (define-constant LP-CONTRACT (as-contract .liquidity-provider-v1))
 (define-constant BORROWER-CONTRACT (as-contract .borrower-v1))
+(define-constant LIQUIDATOR-CONTRACT (as-contract .liquidator-v1))
 (define-constant SUCCESS (ok true))
 (define-constant SCALING-FACTOR u100000000)
 
@@ -56,7 +57,7 @@
 
 ;; PRIVATE FUNCTIONS
 
-(define-private (sync-lp-bucket)
+(define-private (sync-lp-bucket (inflow uint))
   (let
     (
       (cap-reset-time (var-get time-window))
@@ -69,7 +70,7 @@
                      max-lp-bucket
                      (/ (* max-lp-bucket elapsed) cap-reset-time)))
       (current-bucket (var-get lp-bucket))
-      (new-bucket-value (min (+ current-bucket refill-amount) max-lp-bucket))
+      (new-bucket-value (min (+ current-bucket refill-amount inflow) max-lp-bucket))
     )
     (print {
       old-lp-bucket-value: current-bucket,
@@ -83,7 +84,7 @@
   )
 )
 
-(define-private (sync-debt-bucket)
+(define-private (sync-debt-bucket (inflow uint))
   (let
     (
       (cap-reset-time (var-get time-window))
@@ -96,7 +97,7 @@
                      max-debt-bucket
                      (/ (* max-debt-bucket elapsed) cap-reset-time)))
       (current-bucket (var-get debt-bucket))
-      (new-bucket-value (min (+ current-bucket refill-amount) max-debt-bucket))
+      (new-bucket-value (min (+ current-bucket refill-amount inflow) max-debt-bucket))
     )
     (print {
       old-debt-bucket-value: current-bucket,
@@ -110,7 +111,7 @@
   )
 )
 
-(define-private (sync-collateral-bucket (collateral <token-trait>))
+(define-private (sync-collateral-bucket (collateral <token-trait>) (inflow uint))
   (let
     (
       (cap-reset-time (var-get time-window))
@@ -124,7 +125,7 @@
                      max-collateral-bucket
                      (/ (* max-collateral-bucket elapsed) cap-reset-time)))
       (current-bucket (default-to u0 (map-get? collateral-bucket collateral-token)))
-      (new-bucket-value (min (+ current-bucket refill-amount) max-collateral-bucket))
+      (new-bucket-value (min (+ current-bucket refill-amount inflow) max-collateral-bucket))
     )
     (print {
       old-collateral-bucket-value: current-bucket,
@@ -149,11 +150,21 @@
     (if (is-eq (var-get lp-cap-factor) u0)
       SUCCESS
       (begin
-        (try! (sync-lp-bucket))
+        (try! (sync-lp-bucket u0))
         (asserts! (<= amount (var-get lp-bucket)) ERR-WITHDRAWAL-LP-CAP-EXCEEDED)
         (var-set lp-bucket (- (var-get lp-bucket) amount))
         SUCCESS
       )
+    )
+  )
+)
+
+(define-public (lp-deposit (amount uint))
+  (begin 
+    (asserts! (is-eq contract-caller LP-CONTRACT) ERR-RESTRICTED)
+    (if (is-eq (var-get lp-cap-factor) u0)
+      SUCCESS
+      (sync-lp-bucket amount)
     )
   )
 )
@@ -164,11 +175,21 @@
     (if (is-eq (var-get debt-cap-factor) u0)
       SUCCESS
       (begin
-        (unwrap-panic (sync-debt-bucket))
+        (unwrap-panic (sync-debt-bucket u0))
         (asserts! (<= amount (var-get debt-bucket)) ERR-WITHDRAWAL-DEBT-CAP-EXCEEDED)
         (var-set debt-bucket (- (var-get debt-bucket) amount))
         SUCCESS
       )
+    )
+  )
+)
+
+(define-public (repay (amount uint))
+  (begin 
+    (asserts! (or (is-eq contract-caller BORROWER-CONTRACT) (is-eq contract-caller LIQUIDATOR-CONTRACT)) ERR-RESTRICTED)
+    (if (is-eq (var-get debt-cap-factor) u0)
+      SUCCESS
+      (sync-debt-bucket amount)
     )
   )
 )
@@ -182,11 +203,21 @@
     (if (is-eq (default-to u0 (map-get? collateral-cap-factor collateral-token)) u0) 
       SUCCESS
       (begin 
-        (try! (sync-collateral-bucket collateral))
+        (try! (sync-collateral-bucket collateral u0))
         (asserts! (<= amount (default-to u0 (map-get? collateral-bucket collateral-token))) ERR-WITHDRAWAL-COLLATERAL-CAP-EXCEEDED)
         (map-set collateral-bucket collateral-token (- (default-to u0 (map-get? collateral-bucket collateral-token)) amount))
         SUCCESS
       )
+    )
+  )
+)
+
+(define-public (collateral-deposit (collateral <token-trait>) (amount uint))
+  (let ((collateral-token (contract-of collateral)))
+    (asserts! (is-eq contract-caller BORROWER-CONTRACT) ERR-RESTRICTED)
+    (if (is-eq (default-to u0 (map-get? collateral-cap-factor collateral-token)) u0) 
+      SUCCESS
+      (sync-collateral-bucket collateral amount)
     )
   )
 )
