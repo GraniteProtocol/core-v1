@@ -13,6 +13,7 @@
 (define-constant ERR-INSUFFICIENT-BALANCE (err u20006))
 (define-constant ERR-COLLATERAL-NOT-SUPPORTED (err u20007))
 (define-constant ERR-MISSING-MARKET-PRICE (err u20008))
+(define-constant ERR-NO-DEBT (err u20009))
 
 ;; CONSTANTS
 (define-constant SUCCESS (ok true))
@@ -81,6 +82,7 @@
         (repay-amount (get repay-amount repay-info))
         (borrowed-amount (get borrowed-amount position))
         (current-debt (get current-debt repay-info))
+        (debt-check (asserts! (> current-debt u0) ERR-NO-DEBT))
         (interest-portion (contract-call? .math-v1 calculate-interest-portions current-debt borrowed-amount repay-amount))
         (principal-part (get principal-part interest-portion))
         (interest-part (get interest-part interest-portion))
