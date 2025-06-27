@@ -104,8 +104,11 @@
 ;; action to set collateral cap
 (define-constant ACTION_SET_COLLATERAL_CAP u32)
 
-;; action to set time window
-(define-constant ACTION_SET_TIME_WINDOW u33)
+;; action to set refill time window
+(define-constant ACTION_SET_REFILL_TIME_WINDOW u33)
+
+;; action to set decay time window
+(define-constant ACTION_SET_DECAY_TIME_WINDOW u34)
 
 ;; Threshold to either execute or remove proposal
 ;; 66% and above
@@ -458,9 +461,15 @@
   )
 )
 
-(define-private (execute-set-time-window (proposal-id (buff 32)))
+(define-private (execute-set-refill-time-window (proposal-id (buff 32)))
   (let ((data (unwrap-panic (map-get? cap-data proposal-id))))
-    (contract-call? .withdrawal-caps-v1 set-time-window (get factor data))
+    (contract-call? .withdrawal-caps-v1 set-refill-time-window (get factor data))
+  )
+)
+
+(define-private (execute-set-decay-time-window (proposal-id (buff 32)))
+  (let ((data (unwrap-panic (map-get? cap-data proposal-id))))
+    (contract-call? .withdrawal-caps-v1 set-decay-time-window (get factor data))
   )
 )
 
@@ -509,7 +518,8 @@
     (asserts! (not (is-eq action ACTION_SET_LP_CAP)) (execute-set-lp-cap proposal-id))
     (asserts! (not (is-eq action ACTION_SET_DEBT_CAP)) (execute-set-debt-cap proposal-id))
     (asserts! (not (is-eq action ACTION_SET_COLLATERAL_CAP)) (execute-set-collateral-cap proposal-id))
-    (asserts! (not (is-eq action ACTION_SET_TIME_WINDOW)) (execute-set-time-window proposal-id))
+    (asserts! (not (is-eq action ACTION_SET_REFILL_TIME_WINDOW)) (execute-set-refill-time-window proposal-id))
+    (asserts! (not (is-eq action ACTION_SET_DECAY_TIME_WINDOW)) (execute-set-decay-time-window proposal-id))
     ERR-INVALID-ACTION
 ))
 
@@ -1021,7 +1031,7 @@
         expires-in: expires-in
       }) ERR-FAILED-TO-GENERATE-PROPOSAL-ID)))
     )
-    (asserts! (and (>= action ACTION_SET_LP_CAP) (<= action ACTION_SET_TIME_WINDOW)) ERR-INVALID-ACTION)
+    (asserts! (and (>= action ACTION_SET_LP_CAP) (<= action ACTION_SET_DECAY_TIME_WINDOW)) ERR-INVALID-ACTION)
     (try! (create-proposal proposal-id action expires-in))
     (asserts! (if (is-eq action ACTION_SET_COLLATERAL_CAP)
       (is-some (get collateral data))
@@ -1176,7 +1186,8 @@
 (map-set time-locked ACTION_SET_LP_CAP true)
 (map-set time-locked ACTION_SET_DEBT_CAP true)
 (map-set time-locked ACTION_SET_COLLATERAL_CAP true)
-(map-set time-locked ACTION_SET_TIME_WINDOW true)
+(map-set time-locked ACTION_SET_REFILL_TIME_WINDOW true)
+(map-set time-locked ACTION_SET_DECAY_TIME_WINDOW true)
 (map-set time-locked ACTION_SET_WITHDRAW_ASSET_FLAG true)
 (map-set time-locked ACTION_SET_REMOVE_COLLATERAL_FLAG true)
 (map-set time-locked ACTION_SET_REPAY_FLAG true)

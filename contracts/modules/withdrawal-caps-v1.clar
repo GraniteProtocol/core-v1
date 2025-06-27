@@ -21,7 +21,14 @@
 (define-constant ERR-NOT-AUTHORIZED (err u120006))
 
 ;; VARIABLES
-(define-data-var time-window uint u86400)
+
+;; refill time window of 24 hrs
+;; updatable through governance
+(define-data-var refill-time-window uint u86400)
+
+;; decay time window of 60 seconds
+;; updatable through governance
+(define-data-var decay-time-window uint u60)
 
 ;; LP
 (define-data-var lp-cap-factor uint u0)
@@ -39,7 +46,8 @@
 (define-map collateral-cap-factor principal uint)
 
 
-(define-read-only (get-time-window) (var-get time-window))
+(define-read-only (get-refill-time-window) (var-get refill-time-window))
+(define-read-only (get-decay-time-window) (var-get decay-time-window))
 
 (define-read-only (get-lp-cap-factor) (var-get lp-cap-factor))
 (define-read-only (get-last-lp-bucket-update) (var-get last-lp-bucket-update))
@@ -57,24 +65,48 @@
 
 ;; PRIVATE FUNCTIONS
 
+(define-private (get-time-now)
+  (unwrap-panic (get-stacks-block-info? time (- stacks-block-height u1)))
+)
+
+(define-private (refill-bucket-amount (last-updated-at uint) (time-now uint) (max-bucket uint) (current-bucket uint) (inflow uint))
+  (let (
+      (refill-window (get-refill-time-window))
+      (elapsed (if (is-eq last-updated-at u0) refill-window (- time-now last-updated-at)))
+      (refill-amount (if (>= elapsed refill-window) max-bucket (/ (* max-bucket elapsed) refill-window)))
+      (new-bucket (min (+ current-bucket refill-amount) max-bucket))
+  )
+    (+ new-bucket inflow)
+))
+
+(define-private (decay-bucket-amount (last-updated-at uint) (time-now uint) (max-bucket uint) (current-bucket uint) (inflow uint))
+  (let (
+      (extra-bucket-amount (- current-bucket max-bucket))
+      (decay-window (get-decay-time-window))
+      (elapsed (if (is-eq last-updated-at u0) decay-window (- time-now last-updated-at)))
+      (decayed-amount (if (>= elapsed decay-window) extra-bucket-amount (/ (* extra-bucket-amount elapsed) decay-window)))
+      (new-bucket (- current-bucket decayed-amount))
+  )
+    (+ new-bucket inflow)
+))
+
 (define-private (sync-lp-bucket (inflow uint))
   (let
     (
-      (cap-reset-time (var-get time-window))
-      (time-now (unwrap-panic (get-stacks-block-info? time (- stacks-block-height u1))))
+      (time-now (get-time-now))
       (last-ts (var-get last-lp-bucket-update))
-      (elapsed (if (is-eq last-ts u0) cap-reset-time (- time-now last-ts)))
       (total-liquidity (unwrap! (contract-call? .mock-usdc get-balance .state-v1) ERR-FAILED-TO-GET-BALANCE))
       (max-lp-bucket (/ (* total-liquidity (var-get lp-cap-factor)) SCALING-FACTOR))
-      (refill-amount (if (>= elapsed cap-reset-time) 
-                     max-lp-bucket
-                     (/ (* max-lp-bucket elapsed) cap-reset-time)))
       (current-bucket (var-get lp-bucket))
-      (new-bucket-value (min (+ current-bucket refill-amount inflow) max-lp-bucket))
+      (new-bucket-value (if (>= current-bucket max-lp-bucket) 
+          (decay-bucket-amount last-ts time-now max-lp-bucket current-bucket inflow)
+          (refill-bucket-amount last-ts time-now max-lp-bucket current-bucket inflow)))
     )
     (print {
       old-lp-bucket-value: current-bucket,
       new-lp-bucket-value: new-bucket-value,
+      max-lp-bucket: max-lp-bucket,
+      inflow: inflow,
       sender: contract-caller,
       action: "sync-lp-bucket"
     })
@@ -87,21 +119,19 @@
 (define-private (sync-debt-bucket (inflow uint))
   (let
     (
-      (cap-reset-time (var-get time-window))
-      (time-now (unwrap-panic (get-stacks-block-info? time (- stacks-block-height u1))))
+      (time-now (get-time-now))
       (last-ts (var-get last-debt-bucket-update))
-      (elapsed (if (is-eq last-ts u0) cap-reset-time (- time-now last-ts)))
       (total-liquidity (contract-call? .state-v1 get-borrowable-balance))
       (max-debt-bucket (/ (* total-liquidity (var-get debt-cap-factor)) SCALING-FACTOR))
-      (refill-amount (if (>= elapsed cap-reset-time) 
-                     max-debt-bucket
-                     (/ (* max-debt-bucket elapsed) cap-reset-time)))
       (current-bucket (var-get debt-bucket))
-      (new-bucket-value (min (+ current-bucket refill-amount inflow) max-debt-bucket))
+      (new-bucket-value (if (>= current-bucket max-debt-bucket) 
+          (decay-bucket-amount last-ts time-now max-debt-bucket current-bucket inflow)
+          (refill-bucket-amount last-ts time-now max-debt-bucket current-bucket inflow)))
     )
     (print {
       old-debt-bucket-value: current-bucket,
       new-debt-bucket-value: new-bucket-value,
+      inflow: inflow,
       sender: contract-caller,
       action: "sync-debt-bucket"
     })
@@ -114,22 +144,20 @@
 (define-private (sync-collateral-bucket (collateral <token-trait>) (inflow uint))
   (let
     (
-      (cap-reset-time (var-get time-window))
+      (time-now (get-time-now))
       (collateral-token (contract-of collateral))
-      (time-now (unwrap-panic (get-stacks-block-info? time (- stacks-block-height u1))))
       (last-ts (default-to u0 (map-get? last-collateral-bucket-update collateral-token)))
-      (elapsed (if (is-eq last-ts u0) cap-reset-time (- time-now last-ts)))
       (total-liquidity (unwrap! (contract-call? collateral get-balance .state-v1) ERR-FAILED-TO-GET-BALANCE))
       (max-collateral-bucket (/ (* total-liquidity (default-to u0 (map-get? collateral-cap-factor collateral-token))) SCALING-FACTOR))
-      (refill-amount (if (>= elapsed cap-reset-time) 
-                     max-collateral-bucket
-                     (/ (* max-collateral-bucket elapsed) cap-reset-time)))
       (current-bucket (default-to u0 (map-get? collateral-bucket collateral-token)))
-      (new-bucket-value (min (+ current-bucket refill-amount inflow) max-collateral-bucket))
+      (new-bucket-value (if (>= current-bucket max-collateral-bucket) 
+          (decay-bucket-amount last-ts time-now max-collateral-bucket current-bucket inflow)
+          (refill-bucket-amount last-ts time-now max-collateral-bucket current-bucket inflow)))
     )
     (print {
       old-collateral-bucket-value: current-bucket,
       new-collateral-bucket-value: new-bucket-value,
+      inflow: inflow,
       sender: contract-caller,
       action: "sync-collateral-bucket"
     })
@@ -265,15 +293,28 @@
   )
 )
 
-(define-public (set-time-window (new-window uint))
+(define-public (set-refill-time-window (new-window uint))
   (begin
     (asserts! (is-governance) ERR-NOT-AUTHORIZED)
     (print {
-      action: "set-time-window",
-      old-value: (var-get time-window),
+      action: "set-refill-time-window",
+      old-value: (var-get refill-time-window),
       new-value: new-window
     })
-    (var-set time-window new-window)
+    (var-set refill-time-window new-window)
+    SUCCESS
+  )
+)
+
+(define-public (set-decay-time-window (new-window uint))
+  (begin
+    (asserts! (is-governance) ERR-NOT-AUTHORIZED)
+    (print {
+      action: "set-decay-time-window",
+      old-value: (var-get decay-time-window),
+      new-value: new-window
+    })
+    (var-set decay-time-window new-window)
     SUCCESS
   )
 )

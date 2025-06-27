@@ -98,6 +98,7 @@
         (updated-total-borrowed-amount (contract-call? .math-v1 safe-sub total-borrowed-amount principal-part))
       )
       (asserts! (<= shares (get debt-shares position)) ERR-NOT-ENOUGH-SHARES)
+      (try! (contract-call? .withdrawal-caps-v1 repay repay-amount))
       (try! (contract-call? .state-v1 update-repay-state {
         user: user,
         user-debt-shares: total-user-debt-shares,
@@ -115,7 +116,6 @@
         borrowed-block: (get borrowed-block position)
       }))
       (try! (contract-call? .staking-v1 increase-lp-staked-balance staked-lp-tokens))
-      (try! (contract-call? .withdrawal-caps-v1 repay repay-amount))
       (print {
         assets: repay-amount,
         total-user-debt-shares: total-user-debt-shares,
@@ -146,13 +146,13 @@
         ))
       )
       (asserts! (> (get max-ltv collateral-info) u0) ERR-COLLATERAL-NOT-SUPPORTED)
+      (try! (contract-call? .withdrawal-caps-v1 collateral-deposit collateral amount))
       (try! (contract-call? .state-v1 update-add-collateral collateral {
         amount: amount,
         total-collateral-amount: new-amount,
         user: contract-caller,
         user-position: {debt-shares: (get debt-shares position), collaterals: updated-collaterals, borrowed-amount: (get borrowed-amount position), borrowed-block: (get borrowed-block position)},
       }))
-      (try! (contract-call? .withdrawal-caps-v1 collateral-deposit collateral amount))
       (print {
         collateral: collateral-token,
         amount-deposited: amount,

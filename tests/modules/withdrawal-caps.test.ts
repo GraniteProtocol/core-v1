@@ -27,7 +27,8 @@ const borrower = accounts.get("wallet_2")!;
 const ACTION_SET_LP_CAP = 30;
 const ACTION_SET_DEBT_CAP = 31;
 const ACTION_SET_COLLATERAL_CAP = 32;
-const ACTION_SET_TIME_WINDOW = 33;
+const ACTION_SET_REFILL_TIME_WINDOW = 33;
+const ACTION_SET_DECAY_TIME_WINDOW = 34;
 
 const SCALING_FACTOR = 100000000;
 
@@ -117,18 +118,29 @@ describe("withdrawal caps tests", () => {
     ).result;
     expect(lp_cap_factor).toEqual(Cl.uint(0.8 * SCALING_FACTOR));
 
-    // Deposit 500 USDC
-    let amount = 500_000_000_00;
-    mint_token("mock-usdc", amount, depositor);
-    deposit(amount, depositor);
-
     let lp_bucket = simnet.callReadOnlyFn(
       "withdrawal-caps-v1",
       "get-lp-bucket",
       [],
       deployer
     ).result;
-    expect(lp_bucket).toBeUint(40000000000);
+    expect(lp_bucket).toBeUint(0);
+
+    // Deposit 500 USDC
+    let amount = 500_000_000_00;
+    mint_token("mock-usdc", amount, depositor);
+    deposit(amount, depositor);
+
+    lp_bucket = simnet.callReadOnlyFn(
+      "withdrawal-caps-v1",
+      "get-lp-bucket",
+      [],
+      deployer
+    ).result;
+    expect(lp_bucket).toBeUint(50000000000);
+
+    // let the extra amount to decay to bring to max bucket
+    simnet.mineEmptyBlocks(20);
 
     // Withdraw 410 USDC, it should be bloked
     let resp = simnet.callPublicFn(
@@ -304,7 +316,9 @@ describe("withdrawal caps tests", () => {
       [btcCV],
       deployer
     ).result;
-    expect(collateral_bucket).toBeUint(6400000000);
+    expect(collateral_bucket).toBeUint(8000000000);
+
+    simnet.mineEmptyBlocks(20);
 
     // Remove 70 btc. It should be bloked
     let resp = simnet.callPublicFn(
@@ -466,10 +480,10 @@ describe("withdrawal caps tests", () => {
     expect(value.result.value).toBe(BigInt(0.05 * SCALING_FACTOR));
   });
 
-  it("correctly update the time window", () => {
+  it("correctly update the refill time window", () => {
     let value = simnet.callReadOnlyFn(
       "withdrawal-caps-v1",
-      "get-time-window",
+      "get-refill-time-window",
       [],
       deployer
     );
@@ -479,7 +493,7 @@ describe("withdrawal caps tests", () => {
       "governance-v1",
       "initiate-proposal-to-update-withdrawal-caps-param",
       [
-        Cl.uint(ACTION_SET_TIME_WINDOW),
+        Cl.uint(ACTION_SET_REFILL_TIME_WINDOW),
         Cl.tuple({
           collateral: Cl.none(),
           factor: Cl.uint(100),
@@ -493,7 +507,41 @@ describe("withdrawal caps tests", () => {
 
     value = simnet.callReadOnlyFn(
       "withdrawal-caps-v1",
-      "get-time-window",
+      "get-refill-time-window",
+      [],
+      deployer
+    );
+    expect(value.result.value).toBe(100n);
+  });
+
+  it("correctly update the decay time window", () => {
+    let value = simnet.callReadOnlyFn(
+      "withdrawal-caps-v1",
+      "get-decay-time-window",
+      [],
+      deployer
+    );
+    expect(value.result.value).toBe(60n);
+
+    const response = simnet.callPublicFn(
+      "governance-v1",
+      "initiate-proposal-to-update-withdrawal-caps-param",
+      [
+        Cl.uint(ACTION_SET_DECAY_TIME_WINDOW),
+        Cl.tuple({
+          collateral: Cl.none(),
+          factor: Cl.uint(100),
+        }),
+        Cl.uint(1),
+      ],
+      deployer
+    );
+    expect(response.result.type).toBe(ClarityType.ResponseOk);
+    execute_proposal(response);
+
+    value = simnet.callReadOnlyFn(
+      "withdrawal-caps-v1",
+      "get-decay-time-window",
       [],
       deployer
     );
@@ -573,7 +621,9 @@ describe("withdrawal caps tests", () => {
       [],
       deployer
     ).result;
-    expect(bucket).toBeUint(100000000000000);
+    expect(bucket).toBeUint(1000000000000000);
+
+    simnet.mineEmptyBlocks(20);
 
     // Withdraw 10% of the USDC balance
     let withdraw = simnet.callPublicFn(
