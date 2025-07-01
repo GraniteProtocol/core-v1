@@ -61,9 +61,9 @@
 (define-constant ACTION_REMOVE_GOVERNANCE_MULTISIG u1)
 
 ;; Threshold to either execute or remove proposal
-;; 66% and above
+;; 60% and above
 ;; 1 & 2 Account Multisig will require all of them to execute or deny proposal
-(define-constant THRESHOLD u66)
+(define-constant THRESHOLD u60)
 
 ;; Success response
 (define-constant SUCCESS (ok true))

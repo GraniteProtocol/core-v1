@@ -11,6 +11,7 @@
   (begin
     (try! (accrue-interest))
     (let ((shares (contract-call? .math-v1 convert-to-shares (contract-call? .state-v1 get-lp-params) assets false)))
+      (try! (contract-call? .withdrawal-caps-v1 lp-deposit assets))
       (try! (contract-call? .state-v1 add-assets contract-caller recipient assets shares))
       (print { 
         recipient: recipient,

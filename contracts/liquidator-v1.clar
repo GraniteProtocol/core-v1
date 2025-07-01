@@ -310,6 +310,7 @@
         updated-collaterals: updated-collaterals-list
       }))
       (try! (contract-call? .staking-v1 increase-lp-staked-balance staked-lp-tokens))
+      (try! (contract-call? .withdrawal-caps-v1 repay repay-amount))
       ;; slippage check
       (asserts! (>= collateral-to-give min-collateral-expected) ERR-SLIPPAGE)
       (let (
