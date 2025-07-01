@@ -26,9 +26,9 @@
 ;; updatable through governance
 (define-data-var refill-time-window uint u86400)
 
-;; decay time window of 60 seconds
+;; decay time window of 3 hrs
 ;; updatable through governance
-(define-data-var decay-time-window uint u60)
+(define-data-var decay-time-window uint u10800)
 
 ;; LP
 (define-data-var lp-cap-factor uint u0)

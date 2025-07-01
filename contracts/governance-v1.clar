@@ -111,9 +111,9 @@
 (define-constant ACTION_SET_DECAY_TIME_WINDOW u34)
 
 ;; Threshold to either execute or remove proposal
-;; 66% and above
+;; 60% and above
 ;; 1 & 2 Account Multisig will require all of them to execute or deny proposal
-(define-constant THRESHOLD u66)
+(define-constant THRESHOLD u60)
 
 ;; Time lock period before executing approved proposal
 ;; approximately 24 hours assuming 4 second block time

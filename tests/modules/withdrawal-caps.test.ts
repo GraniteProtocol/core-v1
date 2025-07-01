@@ -521,7 +521,7 @@ describe("withdrawal caps tests", () => {
       [],
       deployer
     );
-    expect(value.result.value).toBe(60n);
+    expect(value.result.value).toBe(10800n);
 
     const response = simnet.callPublicFn(
       "governance-v1",

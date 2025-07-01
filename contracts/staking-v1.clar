@@ -88,6 +88,10 @@
   (ok none)
 )
 
+(define-read-only (get-next-user-withdrawal-index (user principal)) 
+  (ok (map-get? user-withdrawal-index user))
+)
+
 ;; Read only functions
 ;; lp-tokens * total-staked-lp-tokens / total-lp-token
 (define-read-only (convert-to-staked-lp-tokens (lp-tokens uint) (round-up bool))
