@@ -72,7 +72,7 @@
   (begin
     (asserts! (is-governance) ERR-NOT-AUTHORIZED)
     (print {
-      action: "allow-any-contract",
+      action: "update-allow-any-contract",
       old-value: (var-get allow-any),
       new-value: value,
     })
