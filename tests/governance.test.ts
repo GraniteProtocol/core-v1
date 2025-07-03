@@ -1940,4 +1940,122 @@ describe("governance tests", () => {
     );
     expect(response.result).toBeOk(Cl.bool(true));
   });
+
+  it("flash loan fee can be updated", async () => {
+    state_set_governance_contract(deployer);
+
+    let response = simnet.callReadOnlyFn(
+      "flash-loan-v1",
+      "get-fee",
+      [],
+      deployer
+    );
+    expect(response.result).toEqual(Cl.uint(10000n));
+
+    response = simnet.callPublicFn(
+      "governance-v1",
+      "initiate-proposal-to-update-flash-loan-fee",
+      [Cl.uint(50000n), Cl.uint(10)],
+      governance_account
+    );
+    expect(response.result.type).toBe(ClarityType.ResponseOk);
+    execute_proposal(response);
+
+    response = simnet.callReadOnlyFn("flash-loan-v1", "get-fee", [], deployer);
+    expect(response.result).toEqual(Cl.uint(50000n));
+  });
+
+  it("flash loan contract can be updated", async () => {
+    state_set_governance_contract(deployer);
+
+    const contract = Cl.contractPrincipal(deployer, "state-v1");
+    let response = simnet.callReadOnlyFn(
+      "flash-loan-v1",
+      "is-contract-allowed",
+      [contract],
+      deployer
+    );
+    expect(response.result).toEqual(Cl.bool(false));
+
+    response = simnet.callPublicFn(
+      "governance-v1",
+      "initiate-proposal-to-update-flash-loan-contract",
+      [Cl.uint(36), contract, Cl.uint(10)],
+      governance_account
+    );
+    expect(response.result.type).toBe(ClarityType.ResponseOk);
+    execute_proposal(response);
+
+    response = simnet.callReadOnlyFn(
+      "flash-loan-v1",
+      "is-contract-allowed",
+      [contract],
+      deployer
+    );
+    expect(response.result).toEqual(Cl.bool(true));
+
+    response = simnet.callPublicFn(
+      "governance-v1",
+      "initiate-proposal-to-update-flash-loan-contract",
+      [Cl.uint(37), contract, Cl.uint(10)],
+      governance_account
+    );
+    expect(response.result.type).toBe(ClarityType.ResponseOk);
+    execute_proposal(response);
+
+    response = simnet.callReadOnlyFn(
+      "flash-loan-v1",
+      "is-contract-allowed",
+      [contract],
+      deployer
+    );
+    expect(response.result).toEqual(Cl.bool(false));
+  });
+
+  it("flash loan allow any can be updated", async () => {
+    state_set_governance_contract(deployer);
+
+    const contract = Cl.contractPrincipal(deployer, "state-v1");
+    let response = simnet.callReadOnlyFn(
+      "flash-loan-v1",
+      "is-contract-allowed",
+      [contract],
+      deployer
+    );
+    expect(response.result).toEqual(Cl.bool(false));
+
+    response = simnet.callPublicFn(
+      "governance-v1",
+      "initiate-proposal-to-update-allow-any-flash-loan",
+      [Cl.bool(true), Cl.uint(10)],
+      governance_account
+    );
+    expect(response.result.type).toBe(ClarityType.ResponseOk);
+    execute_proposal(response);
+
+    response = simnet.callReadOnlyFn(
+      "flash-loan-v1",
+      "is-contract-allowed",
+      [contract],
+      deployer
+    );
+    expect(response.result).toEqual(Cl.bool(true));
+
+    response = simnet.callPublicFn(
+      "governance-v1",
+      "initiate-proposal-to-update-allow-any-flash-loan",
+      [Cl.bool(false), Cl.uint(10)],
+      governance_account
+    );
+    expect(response.result.type).toBe(ClarityType.ResponseOk);
+    execute_proposal(response);
+
+    response = simnet.callReadOnlyFn(
+      "flash-loan-v1",
+      "is-contract-allowed",
+      [contract],
+      deployer
+    );
+    expect(response.result).toEqual(Cl.bool(false));
+  });
 });

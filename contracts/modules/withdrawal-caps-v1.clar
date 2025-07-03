@@ -223,10 +223,7 @@
 )
 
 (define-public (check-withdrawal-collateral-cap (collateral <token-trait>) (amount uint))
-  (let
-    (
-      (collateral-token (contract-of collateral))
-    )
+  (let ((collateral-token (contract-of collateral)))
     (asserts! (is-eq contract-caller BORROWER-CONTRACT) ERR-RESTRICTED)
     (if (is-eq (default-to u0 (map-get? collateral-cap-factor collateral-token)) u0) 
       SUCCESS

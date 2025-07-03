@@ -110,6 +110,18 @@
 ;; action to set decay time window
 (define-constant ACTION_SET_DECAY_TIME_WINDOW u34)
 
+;; action to update flash loan fee
+(define-constant ACTION_UPDATE_FLASH_LOAN_FEE u35)
+
+;; action to add contract to allow list in flash loan
+(define-constant ACTION_ADD_CONTRACT_FLASH_LOAN u36)
+
+;; action to remove contract from allow list in flash loan
+(define-constant ACTION_REMOVE_CONTRACT_FLASH_LOAN u37)
+
+;; action to allow or disable any contract
+(define-constant ACTION_ALLOW_ANY_CONTRACT_FLASH_LOAN u38)
+
 ;; Threshold to either execute or remove proposal
 ;; 60% and above
 ;; 1 & 2 Account Multisig will require all of them to execute or deny proposal
@@ -270,6 +282,15 @@
     factor: uint
   }
 )
+
+;; flash loan fee update
+(define-map flash-loan-fee-update (buff 32) uint)
+
+;; flash loan add or remove contract
+(define-map flash-loan-contract-update (buff 32) principal)
+
+;; flash loan allow or disable any contract
+(define-map flash-allow-disable-contract-update (buff 32) bool)
 
 ;; PRIVATE FUNCTIONS
 (define-private (create-proposal (proposal-id (buff 32)) (action uint) (expires-in uint))
@@ -473,6 +494,30 @@
   )
 )
 
+(define-private (execute-update-flash-loan-fee (proposal-id (buff 32)))
+  (let ((data (unwrap-panic (map-get? flash-loan-fee-update proposal-id))))
+    (contract-call? .flash-loan-v1 update-fee data)
+  )
+)
+
+(define-private (execute-add-flash-loan-contract (proposal-id (buff 32)))
+  (let ((data (unwrap-panic (map-get? flash-loan-contract-update proposal-id))))
+    (contract-call? .flash-loan-v1 set-allowed-contract data)
+  )
+)
+
+(define-private (execute-remove-flash-loan-contract (proposal-id (buff 32)))
+  (let ((data (unwrap-panic (map-get? flash-loan-contract-update proposal-id))))
+    (contract-call? .flash-loan-v1 remove-allowed-contract data)
+  )
+)
+
+(define-private (execute-allow-any-contract-flash-loan (proposal-id (buff 32)))
+  (let ((data (unwrap-panic (map-get? flash-allow-disable-contract-update proposal-id))))
+    (contract-call? .flash-loan-v1 update-allow-any-contract data)
+  )
+)
+
 (define-private (approve-threshold-met (proposal-id (buff 32)))
   (let (
       (proposal (unwrap! (map-get? governance-proposal proposal-id) ERR-UNKNOWN-PROPOSAL))
@@ -520,6 +565,10 @@
     (asserts! (not (is-eq action ACTION_SET_COLLATERAL_CAP)) (execute-set-collateral-cap proposal-id))
     (asserts! (not (is-eq action ACTION_SET_REFILL_TIME_WINDOW)) (execute-set-refill-time-window proposal-id))
     (asserts! (not (is-eq action ACTION_SET_DECAY_TIME_WINDOW)) (execute-set-decay-time-window proposal-id))
+    (asserts! (not (is-eq action ACTION_UPDATE_FLASH_LOAN_FEE)) (execute-update-flash-loan-fee proposal-id))
+    (asserts! (not (is-eq action ACTION_ADD_CONTRACT_FLASH_LOAN)) (execute-add-flash-loan-contract proposal-id))
+    (asserts! (not (is-eq action ACTION_REMOVE_CONTRACT_FLASH_LOAN)) (execute-remove-flash-loan-contract proposal-id))
+    (asserts! (not (is-eq action ACTION_ALLOW_ANY_CONTRACT_FLASH_LOAN)) (execute-allow-any-contract-flash-loan proposal-id))
     ERR-INVALID-ACTION
 ))
 
@@ -1042,6 +1091,60 @@
     (ok proposal-id)
 ))
 
+(define-public (initiate-proposal-to-update-flash-loan-fee (new-fee uint) (expires-in uint))
+  (let (
+      (proposal-nonce (var-get next-proposal-nonce))
+      (proposal-id (keccak256 (unwrap! (to-consensus-buff? {
+        sender: contract-caller,
+        nonce: proposal-nonce,
+        action: ACTION_UPDATE_FLASH_LOAN_FEE,
+        new-fee: new-fee,
+        expires-in: expires-in
+      }) ERR-FAILED-TO-GENERATE-PROPOSAL-ID)))
+    )
+    (try! (create-proposal proposal-id ACTION_UPDATE_FLASH_LOAN_FEE expires-in))
+    (map-set flash-loan-fee-update proposal-id new-fee)
+    (try! (execute-if-approve-threshold-met proposal-id))
+    (ok proposal-id)
+))
+
+(define-public (initiate-proposal-to-update-flash-loan-contract (action uint) (contract principal) (expires-in uint))
+  (let (
+      (proposal-nonce (var-get next-proposal-nonce))
+      (proposal-id (keccak256 (unwrap! (to-consensus-buff? {
+        sender: contract-caller,
+        nonce: proposal-nonce,
+        action: action,
+        expires-in: expires-in,
+        contract: contract,
+      }) ERR-FAILED-TO-GENERATE-PROPOSAL-ID)))
+    )
+    (asserts! (and (>= action ACTION_ADD_CONTRACT_FLASH_LOAN) (<= action ACTION_REMOVE_CONTRACT_FLASH_LOAN)) ERR-INVALID-ACTION)
+    (try! (create-proposal proposal-id action expires-in))
+    (map-set flash-loan-contract-update proposal-id contract)
+    ;; try to execute the proposal if threshold is met
+    (try! (execute-if-approve-threshold-met proposal-id))
+    (ok proposal-id)
+))
+
+(define-public (initiate-proposal-to-update-allow-any-flash-loan (value bool) (expires-in uint))
+  (let (
+      (proposal-nonce (var-get next-proposal-nonce))
+      (proposal-id (keccak256 (unwrap! (to-consensus-buff? {
+        sender: contract-caller,
+        nonce: proposal-nonce,
+        action: ACTION_ALLOW_ANY_CONTRACT_FLASH_LOAN,
+        value: value,
+        expires-in: expires-in
+      }) ERR-FAILED-TO-GENERATE-PROPOSAL-ID)))
+    )
+    (try! (create-proposal proposal-id ACTION_ALLOW_ANY_CONTRACT_FLASH_LOAN expires-in))
+    (map-set flash-allow-disable-contract-update proposal-id value)
+    (try! (execute-if-approve-threshold-met proposal-id))
+    (ok proposal-id)
+))
+
+
 
 (define-public (approve (proposal-id (buff 32)))
   (let ((proposal (unwrap! (map-get? governance-proposal proposal-id) ERR-UNKNOWN-PROPOSAL)))
@@ -1195,3 +1298,7 @@
 (map-set time-locked ACTION_SET_ALLOWED_CONTRACT true)
 (map-set time-locked ACTION_REMOVE_ALLOWED_CONTRACT true)
 (map-set time-locked ACTION_SET_STAKING_FLAG true)
+(map-set time-locked ACTION_UPDATE_FLASH_LOAN_FEE true)
+(map-set time-locked ACTION_ADD_CONTRACT_FLASH_LOAN true)
+(map-set time-locked ACTION_REMOVE_CONTRACT_FLASH_LOAN true)
+(map-set time-locked ACTION_ALLOW_ANY_CONTRACT_FLASH_LOAN true)
