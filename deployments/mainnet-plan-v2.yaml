@@ -1,0 +1,91 @@
+---
+id: 0
+name: Mainnet deployment V1
+network: mainnet
+stacks-node: "https://api.hiro.so"
+bitcoin-node: "http://blockstack:blockstacksystem@bitcoin.blockstack.com:8332"
+plan:
+  batches:
+    - id: 0
+      transactions:
+        - contract-publish:
+            contract-name: constants-v2
+            expected-sender: SPM64PE3B5J97QQRJ9EXVMHVRX01TES3N6QJ9RCB
+            cost: 1018
+            path: contracts/constants-v2.clar
+            anchor-block-only: true
+            clarity-version: 3
+        - contract-publish:
+            contract-name: staking-v1
+            expected-sender: SPM64PE3B5J97QQRJ9EXVMHVRX01TES3N6QJ9RCB
+            cost: 13836
+            path: contracts/staking-v1.clar
+            anchor-block-only: true
+            clarity-version: 3
+        - contract-publish:
+            contract-name: withdrawal-caps-v1
+            expected-sender: SPM64PE3B5J97QQRJ9EXVMHVRX01TES3N6QJ9RCB
+            cost: 11616
+            path: contracts/modules/withdrawal-caps-v1.clar
+            anchor-block-only: true
+            clarity-version: 3
+        - contract-publish:
+            contract-name: borrower-v1
+            expected-sender: SPM64PE3B5J97QQRJ9EXVMHVRX01TES3N6QJ9RCB
+            cost: 17279
+            path: contracts/borrower-v1.clar
+            anchor-block-only: true
+            clarity-version: 3
+        - contract-publish:
+            contract-name: trait-flash-loan-v1
+            expected-sender: SPM64PE3B5J97QQRJ9EXVMHVRX01TES3N6QJ9RCB
+            cost: 382
+            path: contracts/traits/trait-flash-loan-v1.clar
+            anchor-block-only: true
+            clarity-version: 3
+        - contract-publish:
+            contract-name: flash-loan-v1
+            expected-sender: SPM64PE3B5J97QQRJ9EXVMHVRX01TES3N6QJ9RCB
+            cost: 3526
+            path: contracts/flash-loan-v1.clar
+            anchor-block-only: true
+            clarity-version: 3
+        - contract-publish:
+            contract-name: governance-v1
+            expected-sender: SPM64PE3B5J97QQRJ9EXVMHVRX01TES3N6QJ9RCB
+            cost: 53568
+            path: contracts/governance-v1.clar
+            anchor-block-only: true
+            clarity-version: 3
+        - contract-publish:
+            contract-name: liquidator-v1
+            expected-sender: SPM64PE3B5J97QQRJ9EXVMHVRX01TES3N6QJ9RCB
+            cost: 28695
+            path: contracts/liquidator-v1.clar
+            anchor-block-only: true
+            clarity-version: 3
+        - contract-publish:
+            contract-name: liquidity-provider-v1
+            expected-sender: SPM64PE3B5J97QQRJ9EXVMHVRX01TES3N6QJ9RCB
+            cost: 3490
+            path: contracts/liquidity-provider-v1.clar
+            anchor-block-only: true
+            clarity-version: 3
+        - contract-publish:
+            contract-name: utility
+            expected-sender: SPM64PE3B5J97QQRJ9EXVMHVRX01TES3N6QJ9RCB
+            cost: 2797
+            path: contracts/modules/utility.clar
+            anchor-block-only: true
+            clarity-version: 3
+      epoch: "3.0"
+    - id: 0
+      transactions:
+        - contract-call:
+            contract-id: SPM64PE3B5J97QQRJ9EXVMHVRX01TES3N6QJ9RCB.governance-v1
+            expected-sender: SPM64PE3B5J97QQRJ9EXVMHVRX01TES3N6QJ9RCB
+            method: initialize-governance
+            parameters:
+              - "(list (some 'SP49QE04FKRS915XGTN777SF1TM2XP0BF80HEJRS) (some 'SP1A7G8ERC6MT1G3SKQQTZWGQF81NP86HC2E7JVCH) (some 'SP3KAPVBWM7YEPGFZAV53C7EFAN0KZEXZ3TRV6JCJ) (some 'SP9H922BJ4SE6EZG55QTQPKGV6HCF5QMXADP7JG1) (some 'SPTXMEW26M54HX1ZXF6VN7QKK4XES1038ERD40T5))"
+            cost: 297
+      epoch: "3.0"

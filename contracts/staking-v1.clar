@@ -33,7 +33,7 @@
 ;; governance
 (define-public (update-withdrawal-finalization-period (new-value uint))
   (begin
-    (asserts! (is-eq contract-caller (contract-call? .state-v1 get-governance)) ERR-NOT-GOVERNANCE)
+    (asserts! (is-eq contract-caller (contract-call? 'SP35E2BBMDT2Y1HB0NTK139YBGYV3PAPK3WA8BRNA.state-v1 get-governance)) ERR-NOT-GOVERNANCE)
     (print {
       sender: contract-caller,
       old-withdrawal-finalization-period: (var-get withdrawal-finalization-period),
@@ -49,7 +49,7 @@
 (define-public (transfer (amount uint) (sender principal) (recipient principal) (memo (optional (buff 34))))
   (begin
     (asserts! (or (is-eq tx-sender sender) (is-eq contract-caller sender)) ERR-SENDER-MISMATCH)
-    (asserts! (contract-call? .state-v1 is-staking-enabled) ERR-STAKING-DISABLED)
+    (asserts! (contract-call? 'SP35E2BBMDT2Y1HB0NTK139YBGYV3PAPK3WA8BRNA.state-v1 is-staking-enabled) ERR-STAKING-DISABLED)
     (match memo to-print (print to-print) 0x)
     (try! (ft-transfer? staked-lp-token amount sender recipient))
     (print {
@@ -81,7 +81,7 @@
 
 (define-read-only (get-decimals)
   ;; Lp token decimals -> market asset decimals
-  (contract-call? .state-v1 get-decimals)
+  (contract-call? 'SP35E2BBMDT2Y1HB0NTK139YBGYV3PAPK3WA8BRNA.state-v1 get-decimals)
 )
 
 (define-read-only (get-token-uri)
@@ -101,7 +101,7 @@
     )
     (if (is-eq total-staked-lp-tokens u0)
       lp-tokens
-      (contract-call? .math-v1 divide round-up (* total-staked-lp-tokens lp-tokens) total-lp-tokens)
+      (contract-call? 'SP35E2BBMDT2Y1HB0NTK139YBGYV3PAPK3WA8BRNA.math-v1 divide round-up (* total-staked-lp-tokens lp-tokens) total-lp-tokens)
     )
 ))
 
@@ -113,7 +113,7 @@
     )
     (if (is-eq total-lp-tokens u0)
       staked-lp-tokens
-      (contract-call? .math-v1 divide round-up (* staked-lp-tokens total-lp-tokens) total-staked-lp-tokens)
+      (contract-call? 'SP35E2BBMDT2Y1HB0NTK139YBGYV3PAPK3WA8BRNA.math-v1 divide round-up (* staked-lp-tokens total-lp-tokens) total-staked-lp-tokens)
     )
 ))
 
@@ -126,7 +126,7 @@
     )
     (if (is-eq total-withdrawal-shares u0)
       lp-tokens
-      (contract-call? .math-v1 divide false (* total-withdrawal-shares lp-tokens) total-withdrawal-lp-tokens)
+      (contract-call? 'SP35E2BBMDT2Y1HB0NTK139YBGYV3PAPK3WA8BRNA.math-v1 divide false (* total-withdrawal-shares lp-tokens) total-withdrawal-lp-tokens)
     )
 ))
 
@@ -139,7 +139,7 @@
     )
     (if (is-eq total-withdrawal-lp-tokens u0)
       u0
-      (contract-call? .math-v1 divide false (* withdrawal-shares total-withdrawal-lp-tokens) total-withdrawal-shares)
+      (contract-call? 'SP35E2BBMDT2Y1HB0NTK139YBGYV3PAPK3WA8BRNA.math-v1 divide false (* withdrawal-shares total-withdrawal-lp-tokens) total-withdrawal-shares)
     )
 ))
 
@@ -172,7 +172,7 @@
     (try! (accrue-interest))
     (asserts! (> lp-tokens u0) ERR-ZERO-LP-TOKEN-STAKE)
     ;; transfer lp-tokens to staking contract and mint staked lp tokens to user
-    (try! (contract-call? .state-v1 transfer lp-tokens contract-caller (as-contract contract-caller) none))
+    (try! (contract-call? 'SP35E2BBMDT2Y1HB0NTK139YBGYV3PAPK3WA8BRNA.state-v1 transfer lp-tokens contract-caller (as-contract contract-caller) none))
     (try! (ft-mint? staked-lp-token staked-lp-tokens-to-mint contract-caller))
     (var-set total-lp-tokens-staked (+ (var-get total-lp-tokens-staked) lp-tokens))
     (print {
@@ -186,7 +186,7 @@
 
 (define-public (increase-lp-staked-balance (lp-tokens uint))
   (begin
-    (try! (contract-call? .state-v1 is-allowed-contract contract-caller))
+    (try! (contract-call? 'SP35E2BBMDT2Y1HB0NTK139YBGYV3PAPK3WA8BRNA.state-v1 is-allowed-contract contract-caller))
     (var-set total-lp-tokens-staked (+ (var-get total-lp-tokens-staked) lp-tokens))
     (print {
       action: "increase-lp-staked-balance",
@@ -206,7 +206,7 @@
       (withdrawal-lp-tokens-to-slash (/ (* lp-tokens withdrawal-lp-token-rate) SCALING-FACTOR))
       (active-staked-lp-tokens-to-slash (- lp-tokens withdrawal-lp-tokens-to-slash))
     ) 
-    (try! (contract-call? .state-v1 is-allowed-contract contract-caller))
+    (try! (contract-call? 'SP35E2BBMDT2Y1HB0NTK139YBGYV3PAPK3WA8BRNA.state-v1 is-allowed-contract contract-caller))
     (var-set total-lp-tokens-staked (- (var-get total-lp-tokens-staked) active-staked-lp-tokens-to-slash))
     (if (is-eq withdrawal-lp-tokens withdrawal-lp-tokens-to-slash)
       (var-set unfinalized-withdrawals {
@@ -239,13 +239,13 @@
 
 (define-public (reconcile-lp-token-balance)
   (let (
-      (current-balance (unwrap! (contract-call? .state-v1 get-balance (as-contract contract-caller)) ERR-LP-TOKEN-SUPPLY))
+      (current-balance (unwrap! (contract-call? 'SP35E2BBMDT2Y1HB0NTK139YBGYV3PAPK3WA8BRNA.state-v1 get-balance (as-contract contract-caller)) ERR-LP-TOKEN-SUPPLY))
       (staked-lp-tokens (var-get total-lp-tokens-staked))
       (accounted-lp-tokens (+ staked-lp-tokens (get lp-tokens (var-get unfinalized-withdrawals))))
     )
     (try! (check-staking-enabled))
     (try! (accrue-interest))
-    (asserts! (is-eq (contract-call? .state-v1 get-governance) contract-caller) ERR-NOT-GOVERNANCE)
+    (asserts! (is-eq (contract-call? 'SP35E2BBMDT2Y1HB0NTK139YBGYV3PAPK3WA8BRNA.state-v1 get-governance) contract-caller) ERR-NOT-GOVERNANCE)
     (if (>= current-balance accounted-lp-tokens)
       (var-set total-lp-tokens-staked (+ staked-lp-tokens (- current-balance accounted-lp-tokens)))
       (var-set total-lp-tokens-staked (- staked-lp-tokens (- accounted-lp-tokens current-balance)))
@@ -302,7 +302,7 @@
     )
     (asserts! (>= stacks-block-height finalization-at) ERR-WITHDRAWAL-NOT-FINALIZED)
     (try! (if (> lp-tokens-to-return u0)
-      (as-contract (contract-call? .state-v1 transfer lp-tokens-to-return (as-contract contract-caller) user none))
+      (as-contract (contract-call? 'SP35E2BBMDT2Y1HB0NTK139YBGYV3PAPK3WA8BRNA.state-v1 transfer lp-tokens-to-return (as-contract contract-caller) user none))
       SUCCESS
     ))
     (var-set unfinalized-withdrawals {
@@ -323,24 +323,24 @@
 ;; private functions
 (define-private (accrue-interest)
   (let (
-    (accrue-interest-params (unwrap! (contract-call? .state-v1 get-accrue-interest-params) ERR-INTEREST-PARAMS))
-    (accrued-interest (try! (contract-call? .linear-kinked-ir-v1 accrue-interest
+    (accrue-interest-params (unwrap! (contract-call? 'SP35E2BBMDT2Y1HB0NTK139YBGYV3PAPK3WA8BRNA.state-v1 get-accrue-interest-params) ERR-INTEREST-PARAMS))
+    (accrued-interest (try! (contract-call? 'SP35E2BBMDT2Y1HB0NTK139YBGYV3PAPK3WA8BRNA.linear-kinked-ir-v1 accrue-interest
       (get last-accrued-block-time accrue-interest-params)
       (get lp-interest accrue-interest-params)
       (get staked-interest accrue-interest-params)
-      (try! (contract-call? .staking-reward-v1 calculate-staking-reward-percentage (get-active-staked-lp-tokens)))
+      (try! (contract-call? 'SP35E2BBMDT2Y1HB0NTK139YBGYV3PAPK3WA8BRNA.staking-reward-v1 calculate-staking-reward-percentage (get-active-staked-lp-tokens)))
       (get protocol-interest accrue-interest-params)
       (get protocol-reserve-percentage accrue-interest-params)
       (get total-assets accrue-interest-params)))
     )
   )
-  (contract-call? .state-v1 set-accrued-interest accrued-interest)
+  (contract-call? 'SP35E2BBMDT2Y1HB0NTK139YBGYV3PAPK3WA8BRNA.state-v1 set-accrued-interest accrued-interest)
 ))
 
 
 (define-private (check-staking-enabled)
   (let (
-    (staking-disabled (not (contract-call? .state-v1 is-staking-enabled)))
+    (staking-disabled (not (contract-call? 'SP35E2BBMDT2Y1HB0NTK139YBGYV3PAPK3WA8BRNA.state-v1 is-staking-enabled)))
     (wiped-out (var-get staking-wiped-out))
   )
     (if (or staking-disabled wiped-out)

@@ -2,7 +2,7 @@
 ;; SPDX-License-Identifier: BUSL-1.1
 ;; VERSION: 1.0
 
-(use-trait token-trait .trait-sip-010.sip-010-trait)
+(use-trait token-trait 'SP3FBR2AGK5H9QBDH3EEN6DF8EK8JY7RX8QJ5SVTE.sip-010-trait-ft-standard.sip-010-trait)
 
 ;; CONSTANTS
 (define-constant LP-CONTRACT (as-contract .liquidity-provider-v1))
@@ -95,7 +95,7 @@
     (
       (time-now (get-time-now))
       (last-ts (var-get last-lp-bucket-update))
-      (total-liquidity (unwrap! (contract-call? .mock-usdc get-balance .state-v1) ERR-FAILED-TO-GET-BALANCE))
+      (total-liquidity (unwrap! (contract-call? 'SP3Y2ZSH8P7D50B0VBTSX11S7XSG24M1VB9YFQA4K.token-aeusdc get-balance 'SP35E2BBMDT2Y1HB0NTK139YBGYV3PAPK3WA8BRNA.state-v1) ERR-FAILED-TO-GET-BALANCE))
       (max-lp-bucket (/ (* total-liquidity (var-get lp-cap-factor)) SCALING-FACTOR))
       (current-bucket (var-get lp-bucket))
       (new-bucket-value (if (>= current-bucket max-lp-bucket) 
@@ -121,7 +121,7 @@
     (
       (time-now (get-time-now))
       (last-ts (var-get last-debt-bucket-update))
-      (total-liquidity (contract-call? .state-v1 get-borrowable-balance))
+      (total-liquidity (contract-call? 'SP35E2BBMDT2Y1HB0NTK139YBGYV3PAPK3WA8BRNA.state-v1 get-borrowable-balance))
       (max-debt-bucket (/ (* total-liquidity (var-get debt-cap-factor)) SCALING-FACTOR))
       (current-bucket (var-get debt-bucket))
       (new-bucket-value (if (>= current-bucket max-debt-bucket) 
@@ -147,7 +147,7 @@
       (time-now (get-time-now))
       (collateral-token (contract-of collateral))
       (last-ts (default-to u0 (map-get? last-collateral-bucket-update collateral-token)))
-      (total-liquidity (unwrap! (contract-call? collateral get-balance .state-v1) ERR-FAILED-TO-GET-BALANCE))
+      (total-liquidity (unwrap! (contract-call? collateral get-balance 'SP35E2BBMDT2Y1HB0NTK139YBGYV3PAPK3WA8BRNA.state-v1) ERR-FAILED-TO-GET-BALANCE))
       (max-collateral-bucket (/ (* total-liquidity (default-to u0 (map-get? collateral-cap-factor collateral-token))) SCALING-FACTOR))
       (current-bucket (default-to u0 (map-get? collateral-bucket collateral-token)))
       (new-bucket-value (if (>= current-bucket max-collateral-bucket) 
@@ -168,7 +168,7 @@
 )
 
 (define-private (is-governance)
-  (is-eq (contract-call? .state-v1 get-governance) contract-caller)
+  (is-eq (contract-call? 'SP35E2BBMDT2Y1HB0NTK139YBGYV3PAPK3WA8BRNA.state-v1 get-governance) contract-caller)
 )
 
 ;; PUBLIC FUNCTIONS

@@ -1,7 +1,7 @@
 ;; SPDX-License-Identifier: BUSL-1.1
 
 ;; TRAITS
-(use-trait token-trait .trait-sip-010.sip-010-trait)
+(use-trait token-trait 'SP3FBR2AGK5H9QBDH3EEN6DF8EK8JY7RX8QJ5SVTE.sip-010-trait-ft-standard.sip-010-trait)
 
 ;; CONSTANTS
 
@@ -329,11 +329,11 @@
 
 (define-private (execute-update-pyth-token-price-feed (proposal-id (buff 32)))
   (let ((pyth-data (unwrap-panic (map-get? update-pyth-feed proposal-id))))
-    (contract-call? .pyth-adapter-v1 update-price-feed-id (get token pyth-data) (get feed pyth-data) (get max-confidence-ratio pyth-data))
+    (contract-call? 'SP35E2BBMDT2Y1HB0NTK139YBGYV3PAPK3WA8BRNA.pyth-adapter-v1 update-price-feed-id (get token pyth-data) (get feed pyth-data) (get max-confidence-ratio pyth-data))
 ))
 
 (define-private (execute-state-governance-update (proposal-id (buff 32)))
-  (contract-call? .state-v1 update-governance (unwrap-panic (map-get? update-governance-proposal-data proposal-id)))
+  (contract-call? 'SP35E2BBMDT2Y1HB0NTK139YBGYV3PAPK3WA8BRNA.state-v1 update-governance (unwrap-panic (map-get? update-governance-proposal-data proposal-id)))
 )
 
 (define-private (execute-state-set-feature-flag (proposal-id (buff 32)) (action uint))
@@ -342,27 +342,27 @@
       (flag (get flag data))
       (cooldown (get cooldown data))
     )
-    (asserts! (not (is-eq action ACTION_SET_DEPOSIT_ASSET_FLAG)) (contract-call? .state-v1 set-deposit-asset-flag flag))
-    (asserts! (not (is-eq action ACTION_SET_WITHDRAW_ASSET_FLAG)) (contract-call? .state-v1 set-withdraw-asset-flag flag))
-    (asserts! (not (is-eq action ACTION_SET_ADD_COLLATERAL_FLAG)) (contract-call? .state-v1 set-add-collateral-flag flag))
-    (asserts! (not (is-eq action ACTION_SET_REMOVE_COLLATERAL_FLAG)) (contract-call? .state-v1 set-remove-collateral-flag flag))
-    (asserts! (not (is-eq action ACTION_SET_BORROW_FLAG)) (contract-call? .state-v1 set-borrow-flag flag))
-    (asserts! (not (is-eq action ACTION_SET_REPAY_FLAG)) (contract-call? .state-v1 set-repay-flag flag))
-    (asserts! (not (is-eq action ACTION_SET_LIQUIDATION_FLAG)) (contract-call? .state-v1 set-liquidation-flag flag cooldown))
-    (asserts! (not (is-eq action ACTION_SET_INTEREST_ACCRUAL_FLAG)) (contract-call? .state-v1 set-interest-accrual-flag flag))
+    (asserts! (not (is-eq action ACTION_SET_DEPOSIT_ASSET_FLAG)) (contract-call? 'SP35E2BBMDT2Y1HB0NTK139YBGYV3PAPK3WA8BRNA.state-v1 set-deposit-asset-flag flag))
+    (asserts! (not (is-eq action ACTION_SET_WITHDRAW_ASSET_FLAG)) (contract-call? 'SP35E2BBMDT2Y1HB0NTK139YBGYV3PAPK3WA8BRNA.state-v1 set-withdraw-asset-flag flag))
+    (asserts! (not (is-eq action ACTION_SET_ADD_COLLATERAL_FLAG)) (contract-call? 'SP35E2BBMDT2Y1HB0NTK139YBGYV3PAPK3WA8BRNA.state-v1 set-add-collateral-flag flag))
+    (asserts! (not (is-eq action ACTION_SET_REMOVE_COLLATERAL_FLAG)) (contract-call? 'SP35E2BBMDT2Y1HB0NTK139YBGYV3PAPK3WA8BRNA.state-v1 set-remove-collateral-flag flag))
+    (asserts! (not (is-eq action ACTION_SET_BORROW_FLAG)) (contract-call? 'SP35E2BBMDT2Y1HB0NTK139YBGYV3PAPK3WA8BRNA.state-v1 set-borrow-flag flag))
+    (asserts! (not (is-eq action ACTION_SET_REPAY_FLAG)) (contract-call? 'SP35E2BBMDT2Y1HB0NTK139YBGYV3PAPK3WA8BRNA.state-v1 set-repay-flag flag))
+    (asserts! (not (is-eq action ACTION_SET_LIQUIDATION_FLAG)) (contract-call? 'SP35E2BBMDT2Y1HB0NTK139YBGYV3PAPK3WA8BRNA.state-v1 set-liquidation-flag flag cooldown))
+    (asserts! (not (is-eq action ACTION_SET_INTEREST_ACCRUAL_FLAG)) (contract-call? 'SP35E2BBMDT2Y1HB0NTK139YBGYV3PAPK3WA8BRNA.state-v1 set-interest-accrual-flag flag))
     ERR-INVALID-ACTION
 ))
 
 (define-private (execute-state-set-market-flag (proposal-id (buff 32)) (action uint))
   (let ((cooldown (unwrap-panic (map-get? unpause-market-data proposal-id))))
-    (asserts! (not (is-eq action ACTION_SET_MARKET_PAUSE_FLAG)) (contract-call? .state-v1 pause-market))
-    (asserts! (not (is-eq action ACTION_SET_MARKET_UNPAUSE_FLAG)) (contract-call? .state-v1 unpause-market cooldown))
+    (asserts! (not (is-eq action ACTION_SET_MARKET_PAUSE_FLAG)) (contract-call? 'SP35E2BBMDT2Y1HB0NTK139YBGYV3PAPK3WA8BRNA.state-v1 pause-market))
+    (asserts! (not (is-eq action ACTION_SET_MARKET_UNPAUSE_FLAG)) (contract-call? 'SP35E2BBMDT2Y1HB0NTK139YBGYV3PAPK3WA8BRNA.state-v1 unpause-market cooldown))
     ERR-INVALID-ACTION
 ))
 
 (define-private (execute-state-update-collateral-settings (proposal-id (buff 32)))
   (let ((settings (unwrap-panic (map-get? collateral-settings-proposal-data proposal-id))))
-    (contract-call? .state-v1 update-collateral-settings
+    (contract-call? 'SP35E2BBMDT2Y1HB0NTK139YBGYV3PAPK3WA8BRNA.state-v1 update-collateral-settings
       (get collateral settings)
       (get max-ltv settings)
       (get liquidation-ltv settings)
@@ -373,15 +373,15 @@
 
 (define-private (execute-state-reserve-action (proposal-id (buff 32)) (action uint))
   (let ((amount (unwrap-panic (map-get? reserve-proposal-data proposal-id))))
-    (asserts! (not (is-eq action ACTION_DEPOSIT_TO_RESERVE)) (as-contract (contract-call? .state-v1 deposit-to-reserve amount)))
-    (asserts! (not (is-eq action ACTION_WITHDRAW_FROM_RESERVE)) (contract-call? .state-v1 withdraw-from-reserve amount))
+    (asserts! (not (is-eq action ACTION_DEPOSIT_TO_RESERVE)) (as-contract (contract-call? 'SP35E2BBMDT2Y1HB0NTK139YBGYV3PAPK3WA8BRNA.state-v1 deposit-to-reserve amount)))
+    (asserts! (not (is-eq action ACTION_WITHDRAW_FROM_RESERVE)) (contract-call? 'SP35E2BBMDT2Y1HB0NTK139YBGYV3PAPK3WA8BRNA.state-v1 withdraw-from-reserve amount))
     ERR-INVALID-ACTION
 ))
 
 (define-private (execute-state-set-allowed-contract (proposal-id (buff 32)) (action uint))
   (let ((allowed-contract (unwrap-panic (map-get? allowed-contract-data proposal-id))))
-    (asserts! (not (is-eq action ACTION_SET_ALLOWED_CONTRACT)) (contract-call? .state-v1 set-allowed-contract allowed-contract))
-    (asserts! (not (is-eq action ACTION_REMOVE_ALLOWED_CONTRACT)) (contract-call? .state-v1 remove-allowed-contract allowed-contract))
+    (asserts! (not (is-eq action ACTION_SET_ALLOWED_CONTRACT)) (contract-call? 'SP35E2BBMDT2Y1HB0NTK139YBGYV3PAPK3WA8BRNA.state-v1 set-allowed-contract allowed-contract))
+    (asserts! (not (is-eq action ACTION_REMOVE_ALLOWED_CONTRACT)) (contract-call? 'SP35E2BBMDT2Y1HB0NTK139YBGYV3PAPK3WA8BRNA.state-v1 remove-allowed-contract allowed-contract))
     ERR-INVALID-ACTION
 ))
 
@@ -395,7 +395,7 @@
 (define-private (execute-update-interest-rate-params (proposal-id (buff 32)))
   (let ((ir-data (unwrap-panic (map-get? update-interest-rate-params proposal-id))))
     (try! (accrue-interest))
-    (contract-call? .linear-kinked-ir-v1 update-ir-params
+    (contract-call? 'SP35E2BBMDT2Y1HB0NTK139YBGYV3PAPK3WA8BRNA.linear-kinked-ir-v1 update-ir-params
       (get ir-slope-1-val ir-data)
       (get ir-slope-2-val ir-data)
       (get utilization-kink-val ir-data)
@@ -406,18 +406,18 @@
 (define-private (execute-protocol-reserve-percentage (proposal-id (buff 32)))
   (let ((reserve-value (unwrap-panic (map-get? protocol-reserve-percentage proposal-id))))
     (try! (accrue-interest))
-    (contract-call? .state-v1 set-protocol-reserve-percentage reserve-value)
+    (contract-call? 'SP35E2BBMDT2Y1HB0NTK139YBGYV3PAPK3WA8BRNA.state-v1 set-protocol-reserve-percentage reserve-value)
 ))
 
 (define-private (execute-update-asset-cap (proposal-id (buff 32)))
   (let ((asset-cap (unwrap-panic (map-get? asset-cap-update proposal-id))))
-    (contract-call? .state-v1 update-asset-cap asset-cap)
+    (contract-call? 'SP35E2BBMDT2Y1HB0NTK139YBGYV3PAPK3WA8BRNA.state-v1 update-asset-cap asset-cap)
 ))
 
 (define-private (execute-update-reward-rate-params (proposal-id (buff 32)))
   (let ((reward-data (unwrap-panic (map-get? update-reward-rate-params proposal-id))))
     (try! (accrue-interest))
-    (contract-call? .staking-reward-v1 update-reward-params
+    (contract-call? 'SP35E2BBMDT2Y1HB0NTK139YBGYV3PAPK3WA8BRNA.staking-reward-v1 update-reward-params
       (get slope-1-val reward-data)
       (get slope-2-val reward-data)
       (get staked-kink-val reward-data)
@@ -432,17 +432,17 @@
 
 (define-private (execute-transfer-funds (proposal-id (buff 32)))
   (let ((transfer-funds-data (unwrap-panic (map-get? transfer-funds proposal-id))))
-    (as-contract (try! (contract-call? .mock-usdc transfer (get amount transfer-funds-data) (as-contract contract-caller) (get account transfer-funds-data) none)))
+    (as-contract (try! (contract-call? 'SP3Y2ZSH8P7D50B0VBTSX11S7XSG24M1VB9YFQA4K.token-aeusdc transfer (get amount transfer-funds-data) (as-contract contract-caller) (get account transfer-funds-data) none)))
     SUCCESS
 ))
 
 (define-private (execute-freeze-upgrades)
-  (contract-call? .state-v1 freeze-upgrades)
+  (contract-call? 'SP35E2BBMDT2Y1HB0NTK139YBGYV3PAPK3WA8BRNA.state-v1 freeze-upgrades)
 )
 
 (define-private (execute-remove-collateral (proposal-id (buff 32)))
   (let ((collateral (unwrap-panic (map-get? remove-collateral proposal-id))))
-    (try! (contract-call? .state-v1 remove-collateral collateral))
+    (try! (contract-call? 'SP35E2BBMDT2Y1HB0NTK139YBGYV3PAPK3WA8BRNA.state-v1 remove-collateral collateral))
     SUCCESS
 ))
 
@@ -452,12 +452,12 @@
 
 (define-private (execute-set-staking-flag (proposal-id (buff 32)))
   (let ((status (unwrap-panic (map-get? staking-flag proposal-id))))
-    (contract-call? .state-v1 set-staking-flag status)
+    (contract-call? 'SP35E2BBMDT2Y1HB0NTK139YBGYV3PAPK3WA8BRNA.state-v1 set-staking-flag status)
 ))
 
 (define-private (execute-update-time-delta (proposal-id (buff 32)))
   (let ((time-delta (unwrap-panic (map-get? update-time-delta-params proposal-id))))
-    (contract-call? .pyth-adapter-v1 update-time-delta time-delta)
+    (contract-call? 'SP35E2BBMDT2Y1HB0NTK139YBGYV3PAPK3WA8BRNA.pyth-adapter-v1 update-time-delta time-delta)
 ))
 
 (define-private (execute-set-lp-cap (proposal-id (buff 32)))
@@ -522,7 +522,7 @@
   (let (
       (proposal (unwrap! (map-get? governance-proposal proposal-id) ERR-UNKNOWN-PROPOSAL))
       (approve-count (get approve-count proposal))
-      (total-count (contract-call? .meta-governance-v1 governance-multisig-count))
+      (total-count (contract-call? 'SP35E2BBMDT2Y1HB0NTK139YBGYV3PAPK3WA8BRNA.meta-governance-v1 governance-multisig-count))
       (percentage (/ (* approve-count u100) total-count))
     )
     (ok (>= percentage THRESHOLD))
@@ -532,7 +532,7 @@
   (let (
       (proposal (unwrap! (map-get? governance-proposal proposal-id) ERR-UNKNOWN-PROPOSAL))
       (deny-count (get deny-count proposal))
-      (total-count (contract-call? .meta-governance-v1 governance-multisig-count))
+      (total-count (contract-call? 'SP35E2BBMDT2Y1HB0NTK139YBGYV3PAPK3WA8BRNA.meta-governance-v1 governance-multisig-count))
       (percentage (/ (* deny-count u100) total-count))
     )
     (ok (>= percentage THRESHOLD))
@@ -649,18 +649,18 @@
 
 (define-private (accrue-interest)
   (let (
-      (accrue-interest-params (unwrap! (contract-call? .state-v1 get-accrue-interest-params) ERR-INTEREST-RATE-PARAMS))
-      (accrued-interest (try! (contract-call? .linear-kinked-ir-v1 accrue-interest
+      (accrue-interest-params (unwrap! (contract-call? 'SP35E2BBMDT2Y1HB0NTK139YBGYV3PAPK3WA8BRNA.state-v1 get-accrue-interest-params) ERR-INTEREST-RATE-PARAMS))
+      (accrued-interest (try! (contract-call? 'SP35E2BBMDT2Y1HB0NTK139YBGYV3PAPK3WA8BRNA.linear-kinked-ir-v1 accrue-interest
         (get last-accrued-block-time accrue-interest-params)
         (get lp-interest accrue-interest-params)
         (get staked-interest accrue-interest-params)
-        (try! (contract-call? .staking-reward-v1 calculate-staking-reward-percentage (contract-call? .staking-v1 get-active-staked-lp-tokens)))
+        (try! (contract-call? 'SP35E2BBMDT2Y1HB0NTK139YBGYV3PAPK3WA8BRNA.staking-reward-v1 calculate-staking-reward-percentage (contract-call? .staking-v1 get-active-staked-lp-tokens)))
         (get protocol-interest accrue-interest-params)
         (get protocol-reserve-percentage accrue-interest-params)
         (get total-assets accrue-interest-params)))
       )
     )
-    (contract-call? .state-v1 set-accrued-interest accrued-interest)
+    (contract-call? 'SP35E2BBMDT2Y1HB0NTK139YBGYV3PAPK3WA8BRNA.state-v1 set-accrued-interest accrued-interest)
 ))
 
 (define-private (get-proposal-execution-time (proposal-id (buff 32)))
@@ -677,7 +677,7 @@
 
 ;; READ ONLY FUNCTIONS
 (define-read-only (is-governance-member (member principal))
-  (contract-call? .meta-governance-v1 is-governance-member member)
+  (contract-call? 'SP35E2BBMDT2Y1HB0NTK139YBGYV3PAPK3WA8BRNA.meta-governance-v1 is-governance-member member)
 )
 
 (define-read-only (is-guardian (member principal))
@@ -1061,7 +1061,7 @@
         time-delta: time-delta,
       }) ERR-FAILED-TO-GENERATE-PROPOSAL-ID)))
     )
-    (asserts! (>= time-delta (contract-call? .pyth-adapter-v1 get-pyth-minimum-time-delta)) ERR-MINIMUM-PYTH-PRICE-DELTA)
+    (asserts! (>= time-delta (contract-call? 'SP35E2BBMDT2Y1HB0NTK139YBGYV3PAPK3WA8BRNA.pyth-adapter-v1 get-pyth-minimum-time-delta)) ERR-MINIMUM-PYTH-PRICE-DELTA)
     (try! (create-proposal proposal-id action expires-in))
     (map-set update-time-delta-params proposal-id time-delta)
     ;; try to execute the proposal if threshold is met
@@ -1194,7 +1194,7 @@
   (let (
       (proposal (unwrap! (map-get? governance-proposal proposal-id) ERR-UNKNOWN-PROPOSAL))
       (total-voted (+ (get approve-count proposal) (get deny-count proposal)))
-      (total-count (contract-call? .meta-governance-v1 governance-multisig-count))
+      (total-count (contract-call? 'SP35E2BBMDT2Y1HB0NTK139YBGYV3PAPK3WA8BRNA.meta-governance-v1 governance-multisig-count))
       (deny-threshold (try! (deny-threshold-met proposal-id)))
       (approve-threshold (try! (approve-threshold-met proposal-id)))
       (has-threshold-met (or deny-threshold approve-threshold))
@@ -1271,8 +1271,8 @@
 (define-public (guardian-pause-market)
   (begin
     (try! (is-guardian contract-caller))
-    (try! (contract-call? .state-v1 pause-market))
-    (try! (contract-call? .state-v1 set-staking-flag false))
+    (try! (contract-call? 'SP35E2BBMDT2Y1HB0NTK139YBGYV3PAPK3WA8BRNA.state-v1 pause-market))
+    (try! (contract-call? 'SP35E2BBMDT2Y1HB0NTK139YBGYV3PAPK3WA8BRNA.state-v1 set-staking-flag false))
     SUCCESS
 ))
 
