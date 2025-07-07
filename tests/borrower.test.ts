@@ -686,11 +686,11 @@ describe("borrower tests", () => {
       deployer
     );
     mint_token("mock-btc", 2e8, borrower1);
-    mint_token("mock-usdc", 100000001, borrower1);
+    mint_token("mock-usdc", 100000002, borrower1);
     mint_token("mock-usdc", 1800000e8, borrower2);
 
-    // 1. attacker deposit 1
-    deposit(1, borrower1);
+    // 1. attacker deposit 2
+    deposit(2, borrower1);
 
     let userBalancePostBorrow = simnet.callReadOnlyFn(
       "mock-usdc",
@@ -735,7 +735,7 @@ describe("borrower tests", () => {
     expect(borrow.result).toBeErr(Cl.uint(20001));
 
     // 5. victim deposit many usdc to protocol, and receive the same amount of share token balance
-    deposit(9999999999999, borrower2);
+    deposit(9999999999998, borrower2);
 
     let shareTokenBalance = simnet.callReadOnlyFn(
       "state-v1",
@@ -743,7 +743,7 @@ describe("borrower tests", () => {
       [Cl.principal(borrower2)],
       borrower2
     );
-    expect(shareTokenBalance.result.value.value).toEqual(9999999999999n);
+    expect(shareTokenBalance.result.value.value).toEqual(9999999999998n);
 
     shareTokenBalance = simnet.callReadOnlyFn(
       "state-v1",
@@ -751,7 +751,7 @@ describe("borrower tests", () => {
       [Cl.principal(borrower1)],
       borrower2
     );
-    expect(shareTokenBalance.result.value.value).toEqual(1n);
+    expect(shareTokenBalance.result.value.value).toEqual(2n);
 
     // 6. attacker redeem but cannot steal from protocol
     const response = simnet.callPublicFn(
@@ -956,4 +956,118 @@ describe("borrower tests", () => {
 
     remove_collateral("mock-btc", 549948753641, deployer, borrower1);
   });
+
+  it.each([2, 10, 25, 50, 75, 100, 500, 1000, 2500, 7500, 10000, 22500, 72500])(
+    "should not have vault inflation attack: %i",
+    async (initial_deposit) => {
+      mint_token("mock-usdc", 100_000_000_000, borrower1);
+      mint_token("mock-usdc", 100_000_000_000, borrower2);
+      mint_token("mock-btc", 100_000_000, borrower1);
+
+      update_supported_collateral(
+        "mock-btc",
+        70000000,
+        80000000,
+        10000000,
+        8,
+        deployer
+      );
+
+      let depositResult = simnet.callPublicFn(
+        "liquidity-provider-v1",
+        "deposit",
+        [Cl.uint(initial_deposit), Cl.principal(borrower1)],
+        borrower1
+      );
+      expect(depositResult.result).toBeOk(Cl.bool(true));
+
+      add_collateral("mock-btc", 100_000_000, deployer, borrower1);
+
+      let borrowResult = simnet.callPublicFn(
+        "borrower-v1",
+        "borrow",
+        [Cl.none(), Cl.uint(1)],
+        borrower1
+      ); // Borrow the 1 wei
+      expect(borrowResult.result).toBeOk(Cl.bool(true));
+
+      simnet.mineEmptyBlocks(1);
+
+      let repayResult = simnet.callPublicFn(
+        "borrower-v1",
+        "repay",
+        [Cl.uint(10), Cl.none()],
+        borrower1
+      ); // Repay the debt
+      expect(repayResult.result).toBeOk(Cl.bool(true));
+
+      for (let i = 0; i < 10; i++) {
+        // Doing the inflation thingy
+        let lpParams = simnet.callReadOnlyFn(
+          "state-v1",
+          "get-lp-params",
+          [],
+          deployer
+        );
+        let currentTotalAssets = lpParams.result?.data?.["total-assets"].value;
+        let depositAmount = 2n * currentTotalAssets - 1n; // 2 * totalAssets - 1
+        depositResult = simnet.callPublicFn(
+          "liquidity-provider-v1",
+          "deposit",
+          [Cl.uint(Number(depositAmount)), Cl.principal(borrower1)],
+          borrower1
+        );
+        expect(depositResult.result).toBeOk(Cl.bool(true));
+
+        let withdrawResult = simnet.callPublicFn(
+          "liquidity-provider-v1",
+          "withdraw",
+          [Cl.uint(1), Cl.principal(borrower1)],
+          borrower1
+        ); // Withdraw 1 on each iteration, abusing round ups here as we favor the protocol
+        expect(withdrawResult.result).toBeOk(Cl.bool(true));
+      }
+
+      let lpParams = simnet.callReadOnlyFn(
+        "state-v1",
+        "get-lp-params",
+        [],
+        deployer
+      );
+      let finalTotalAssets = lpParams.result?.data?.["total-assets"]?.value;
+      let victimDepositAmountFinal = (19n * finalTotalAssets) / 10n;
+      let victimDeposit = simnet.callPublicFn(
+        "liquidity-provider-v1",
+        "deposit",
+        [Cl.uint(Number(victimDepositAmountFinal)), Cl.principal(borrower2)],
+        borrower2
+      );
+      expect(victimDeposit.result).toBeOk(Cl.bool(true));
+
+      let victimShares = simnet.callReadOnlyFn(
+        "state-v1",
+        "get-balance",
+        [Cl.principal(borrower2)],
+        borrower2
+      );
+
+      let finalLpParams = simnet.callReadOnlyFn(
+        "state-v1",
+        "get-lp-params",
+        [],
+        deployer
+      );
+      let finalAssetsAfterVictim =
+        finalLpParams.result?.data?.["total-assets"]?.value;
+      let finalSharesAfterVictim =
+        finalLpParams.result?.data?.["total-shares"]?.value;
+
+      let shareValueFinal =
+        Number(finalAssetsAfterVictim) / Number(finalSharesAfterVictim);
+      let victimValue =
+        Number(victimShares.result.value.value) * shareValueFinal;
+
+      expect(Number(victimDepositAmountFinal) - victimValue).toBeLessThan(1); // Victim loss
+    }
+  );
 });
