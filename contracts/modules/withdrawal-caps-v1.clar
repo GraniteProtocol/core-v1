@@ -22,21 +22,21 @@
 
 ;; VARIABLES
 
-;; refill time window of 24 hrs
+;; refill time window of 10 hrs
 ;; updatable through governance
-(define-data-var refill-time-window uint u86400)
+(define-data-var refill-time-window uint u36000)
 
 ;; decay time window of 3 hrs
 ;; updatable through governance
 (define-data-var decay-time-window uint u10800)
 
 ;; LP
-(define-data-var lp-cap-factor uint u0)
+(define-data-var lp-cap-factor uint u20000000)
 (define-data-var last-lp-bucket-update uint u0)
 (define-data-var lp-bucket uint u0) ;; current available lp withdrawal credit
 
 ;; Debt
-(define-data-var debt-cap-factor uint u0)
+(define-data-var debt-cap-factor uint u20000000)
 (define-data-var last-debt-bucket-update uint u0)
 (define-data-var debt-bucket uint u0) ;; current available debt borrowing credit
 
@@ -315,3 +315,5 @@
     SUCCESS
   )
 )
+
+(map-set collateral-cap-factor 'SM3VDXK3WZZSA84XXFKAFAF15NNZX32CTSG82JFQ4.sbtc-token u20000000)

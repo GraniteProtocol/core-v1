@@ -109,3 +109,6 @@
 (define-private (is-governance)
   (is-eq (contract-call? 'SP35E2BBMDT2Y1HB0NTK139YBGYV3PAPK3WA8BRNA.state-v1 get-governance) contract-caller)
 )
+
+(map-set allowed-contracts 'SPEP08Q2GWNA8MTCT6QHYMRSV30BD9YMXP99WZNC.liquidator true)
+(map-set allowed-contracts 'SP15GZK5ZXX3B9FBKDM5JE2M7KVKMC8ZW8E6NQYG2.liquidator true)
