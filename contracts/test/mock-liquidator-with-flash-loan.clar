@@ -22,7 +22,7 @@
       (repay-amount (get repay-amount ldata))
       (min-collateral-expected (get min-collateral-expected ldata))
     )
-    (try! (contract-call? .liquidator-v1 liquidate-collateral pyth-price-feed .mock-btc user repay-amount min-collateral-expected))
+    (try! (contract-call? .liquidator-v1 liquidate-collateral pyth-price-feed 'SM3VDXK3WZZSA84XXFKAFAF15NNZX32CTSG82JFQ4.sbtc-token user repay-amount min-collateral-expected))
     (ok true)
   )
 )

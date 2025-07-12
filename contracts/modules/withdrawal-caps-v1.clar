@@ -95,7 +95,7 @@
     (
       (time-now (get-time-now))
       (last-ts (var-get last-lp-bucket-update))
-      (total-liquidity (unwrap! (contract-call? .mock-usdc get-balance .state-v1) ERR-FAILED-TO-GET-BALANCE))
+      (total-liquidity (unwrap! (contract-call? 'SP3Y2ZSH8P7D50B0VBTSX11S7XSG24M1VB9YFQA4K.token-aeusdc get-balance .state-v1) ERR-FAILED-TO-GET-BALANCE))
       (max-lp-bucket (/ (* total-liquidity (var-get lp-cap-factor)) SCALING-FACTOR))
       (current-bucket (var-get lp-bucket))
       (new-bucket-value (if (>= current-bucket max-lp-bucket) 

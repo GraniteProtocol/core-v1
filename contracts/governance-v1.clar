@@ -432,7 +432,7 @@
 
 (define-private (execute-transfer-funds (proposal-id (buff 32)))
   (let ((transfer-funds-data (unwrap-panic (map-get? transfer-funds proposal-id))))
-    (as-contract (try! (contract-call? .mock-usdc transfer (get amount transfer-funds-data) (as-contract contract-caller) (get account transfer-funds-data) none)))
+    (as-contract (try! (contract-call? 'SP3Y2ZSH8P7D50B0VBTSX11S7XSG24M1VB9YFQA4K.token-aeusdc transfer (get amount transfer-funds-data) (as-contract contract-caller) (get account transfer-funds-data) none)))
     SUCCESS
 ))
 

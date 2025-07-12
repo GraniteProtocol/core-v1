@@ -7,7 +7,7 @@
 (define-public (on-granite-flash-loan (amount uint) (fee uint) (data (optional (buff 20480))))
   (let (
       (caller tx-sender)
-      (user-balance (contract-call? .mock-usdc get-balance caller))
+      (user-balance (contract-call? 'SP3Y2ZSH8P7D50B0VBTSX11S7XSG24M1VB9YFQA4K.token-aeusdc get-balance caller))
     ) 
     (print {
       action: "flash-loan-callback",

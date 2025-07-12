@@ -119,7 +119,7 @@
     (asserts! (var-get deposit-asset-enabled) ERR-PAUSED)
     (asserts! (not (asset-deposit-exceeds-cap assets)) ERR-ASSET-CAP)
     (try! (is-allowed-contract contract-caller))
-    (try! (transfer-from .mock-usdc user assets))
+    (try! (transfer-from 'SP3Y2ZSH8P7D50B0VBTSX11S7XSG24M1VB9YFQA4K.token-aeusdc user assets))
     ;; If transfer is successful, proceed to mint share tokens to the user
     (try! (ft-mint? lp-token shares recipient))
     (var-set total-assets (+ (var-get total-assets) assets))
@@ -144,7 +144,7 @@
     (if (> (var-get borrowable-balance) assets) 
       (var-set borrowable-balance (- (var-get borrowable-balance) assets))
       (var-set borrowable-balance u0))
-    (try! (transfer-to .mock-usdc recipient assets))
+    (try! (transfer-to 'SP3Y2ZSH8P7D50B0VBTSX11S7XSG24M1VB9YFQA4K.token-aeusdc recipient assets))
     (print {
       recipient: recipient,
       assets: assets,
@@ -381,7 +381,7 @@
     (asserts! (is-governance) ERR-UNAUTHORIZED)
     (var-set reserve-balance (+ amount (var-get reserve-balance)))
     (asserts! (> amount u0) ERR-TRANSFER-NULL)
-    (try! (contract-call? .mock-usdc transfer amount contract-caller (as-contract contract-caller) none))
+    (try! (contract-call? 'SP3Y2ZSH8P7D50B0VBTSX11S7XSG24M1VB9YFQA4K.token-aeusdc transfer amount contract-caller (as-contract contract-caller) none))
     (print {
       amount: amount,
       user: contract-caller,
@@ -400,7 +400,7 @@
     (asserts! (>= (free-liquidity) amount) ERR-INSUFFICIENT-FREE-LIQUIDITY)
     (var-set reserve-balance (- current-reserve-balance amount))
     (asserts! (> amount u0) ERR-TRANSFER-NULL)
-    (as-contract (try! (contract-call? .mock-usdc transfer amount (as-contract contract-caller) recipient none)))
+    (as-contract (try! (contract-call? 'SP3Y2ZSH8P7D50B0VBTSX11S7XSG24M1VB9YFQA4K.token-aeusdc transfer amount (as-contract contract-caller) recipient none)))
     (print {
       amount: amount,
       user: contract-caller,
@@ -473,7 +473,7 @@
 )
 
 (define-read-only (get-decimals)
-  (contract-call? .mock-usdc get-decimals)
+  (contract-call? 'SP3Y2ZSH8P7D50B0VBTSX11S7XSG24M1VB9YFQA4K.token-aeusdc get-decimals)
 )
 
 (define-read-only (get-token-uri)
@@ -550,7 +550,7 @@
 (define-read-only (get-reserve-balance) (var-get reserve-balance))
 
 (define-read-only (free-liquidity)
-  (unwrap-panic (contract-call? .mock-usdc get-balance (as-contract tx-sender)))
+  (unwrap-panic (contract-call? 'SP3Y2ZSH8P7D50B0VBTSX11S7XSG24M1VB9YFQA4K.token-aeusdc get-balance (as-contract tx-sender)))
 )
 
 (define-read-only (available-liquidity)
@@ -717,7 +717,7 @@
     (var-set total-debt-shares (+ (var-get total-debt-shares) (get shares borrow-state)))
     (var-set borrowable-balance (- (var-get borrowable-balance) amount))
     (try! (can-borrow-without-reserve amount))
-    (try! (transfer-to .mock-usdc user amount))
+    (try! (transfer-to 'SP3Y2ZSH8P7D50B0VBTSX11S7XSG24M1VB9YFQA4K.token-aeusdc user amount))
     (var-set total-borrowed-amount (get total-borrowed-amount borrow-state))
     SUCCESS
 ))
@@ -753,7 +753,7 @@
     })
     (var-set reserve-balance (+ (var-get reserve-balance) protocol-part))
     (var-set borrowable-balance (+ (+ (var-get borrowable-balance) lp-part) staked-part))
-    (try! (transfer-from .mock-usdc (get payor repay-state) (get amount repay-state)))
+    (try! (transfer-from 'SP3Y2ZSH8P7D50B0VBTSX11S7XSG24M1VB9YFQA4K.token-aeusdc (get payor repay-state) (get amount repay-state)))
     (if (> staked-lp-tokens u0)
       (ft-mint? lp-token staked-lp-tokens (get staking-contract repay-state))
       SUCCESS
@@ -848,7 +848,7 @@
     ;; transfer collateral to liquidator
     (try! (transfer-to collateral liquidator collateral-to-give))
     ;; transfer repay amount from liquidator
-    (try! (if (> repay-amount u0) (transfer-from .mock-usdc liquidator repay-amount) SUCCESS))
+    (try! (if (> repay-amount u0) (transfer-from 'SP3Y2ZSH8P7D50B0VBTSX11S7XSG24M1VB9YFQA4K.token-aeusdc liquidator repay-amount) SUCCESS))
     (if (> staked-lp-tokens u0)
       (ft-mint? lp-token staked-lp-tokens (get staking-contract liquidate-collateral-state))
       SUCCESS

@@ -19,7 +19,7 @@
       (balance (stx-get-balance (as-contract tx-sender)))
       (user tx-sender)
     )
-    (try! (contract-call? .mock-usdc mint amount user))
+    (try! (contract-call? 'SP3Y2ZSH8P7D50B0VBTSX11S7XSG24M1VB9YFQA4K.token-aeusdc mint amount user))
     SUCCESS
   )
 )
@@ -30,7 +30,7 @@
       (balance (stx-get-balance (as-contract tx-sender)))
       (user tx-sender)
     )
-    (try! (contract-call? .mock-btc mint amount user))
+    (try! (contract-call? 'SM3VDXK3WZZSA84XXFKAFAF15NNZX32CTSG82JFQ4.sbtc-token mint amount user))
     SUCCESS
   )
 )
@@ -41,7 +41,7 @@
       (balance (stx-get-balance (as-contract tx-sender)))
       (user tx-sender)
     )
-    (try! (contract-call? .mock-eth mint amount user))
+    (try! (contract-call? 'SM3VDXK3WZZSA84XXFKAFAF15NNZX32CTSG82JFQ4.sbtc-token mint amount user))
     SUCCESS
   )
 )

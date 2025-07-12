@@ -2,7 +2,7 @@
 
 (define-public (gift (assets uint))
   (begin
-    (try! (contract-call? .mock-usdc transfer assets tx-sender .state-v1 none))
+    (try! (contract-call? 'SP3Y2ZSH8P7D50B0VBTSX11S7XSG24M1VB9YFQA4K.token-aeusdc transfer assets tx-sender .state-v1 none))
     (try! (accrue-interest))
     (try! (update-total-assets assets))
     (ok true)
