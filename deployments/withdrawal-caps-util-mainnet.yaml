@@ -1,0 +1,18 @@
+---
+id: 0
+name: Mainnet deployment V1
+network: mainnet
+stacks-node: "https://api.hiro.so"
+bitcoin-node: "http://blockstack:blockstacksystem@bitcoin.blockstack.com:8332"
+plan:
+  batches:
+    - id: 0
+      transactions:
+        - contract-publish:
+            contract-name: withdrawal-caps-util-v1
+            expected-sender: SP24JTGNHHZFZNG7EBD13VQRGA4HCSDVFWG9WV3RP
+            cost: 2760
+            path: contracts/modules/withdrawal-caps-util-v1.clar
+            anchor-block-only: true
+            clarity-version: 3
+      epoch: "3.0"
