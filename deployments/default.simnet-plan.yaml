@@ -235,4 +235,9 @@ plan:
             emulated-sender: ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM
             path: contracts/modules/utility.clar
             clarity-version: 3
+        - emulated-contract-publish:
+            contract-name: withdrawal-caps-util-v1
+            emulated-sender: ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM
+            path: contracts/modules/withdrawal-caps-util-v1.clar
+            clarity-version: 3
       epoch: "3.0"
