@@ -67,7 +67,7 @@
       (pyth-feed-data (unwrap! (map-get? price-feeds token) ERR-UNSUPPORTED-ASSET))
       (pyth-record 
           (try! (contract-call? 
-            .pyth-storage-v3
+            'SP3R4F6C1J3JQWWCVZ3S7FRRYPMYG6ZW6RZK31FXY.pyth-storage-v3
             get-price
             (get feed-id pyth-feed-data)
           ))
@@ -81,12 +81,12 @@
   (match maybe-vaa-buffer vaa-buffer
     (begin
       (try! 
-        (contract-call? .pyth-oracle-v3 verify-and-update-price-feeds 
+        (contract-call? 'SP3R4F6C1J3JQWWCVZ3S7FRRYPMYG6ZW6RZK31FXY.pyth-oracle-v3 verify-and-update-price-feeds 
           vaa-buffer
           {
-            pyth-storage-contract: .pyth-storage-v3,
-            pyth-decoder-contract: .pyth-pnau-decoder-v2,
-            wormhole-core-contract: .wormhole-core-v3
+            pyth-storage-contract: 'SP3R4F6C1J3JQWWCVZ3S7FRRYPMYG6ZW6RZK31FXY.pyth-storage-v3,
+            pyth-decoder-contract: 'SP3R4F6C1J3JQWWCVZ3S7FRRYPMYG6ZW6RZK31FXY.pyth-pnau-decoder-v2,
+            wormhole-core-contract: 'SP3R4F6C1J3JQWWCVZ3S7FRRYPMYG6ZW6RZK31FXY.wormhole-core-v3
           }) 
       )
       SUCCESS

@@ -88,10 +88,10 @@
     )
     (asserts! (is-contract-allowed callback-contract) ERR_CONTRACT_NOT_ALLOWED)
     ;; transfer funds to user
-    (try! (contract-call? .state-v1 transfer-to .mock-usdc caller amount))
+    (try! (contract-call? .state-v1 transfer-to 'SP3Y2ZSH8P7D50B0VBTSX11S7XSG24M1VB9YFQA4K.token-aeusdc caller amount))
     (try! (contract-call? callback on-granite-flash-loan amount flash-loan-fee data))
-    (try! (contract-call? .state-v1 transfer-from .mock-usdc caller amount))
-    (try! (contract-call? .mock-usdc transfer flash-loan-fee caller .governance-v1 none))
+    (try! (contract-call? .state-v1 transfer-from 'SP3Y2ZSH8P7D50B0VBTSX11S7XSG24M1VB9YFQA4K.token-aeusdc caller amount))
+    (try! (contract-call? 'SP3Y2ZSH8P7D50B0VBTSX11S7XSG24M1VB9YFQA4K.token-aeusdc transfer flash-loan-fee caller .governance-v1 none))
     (print {
       action: "flash-loan",
       amount: amount,

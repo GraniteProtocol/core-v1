@@ -7,33 +7,43 @@ genesis:
     - name: deployer
       address: ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM
       balance: "100000000000000"
+      sbtc-balance: "1000000000"
     - name: faucet
       address: STNHKEPYEPJ8ET55ZZ0M5A34J0R3N5FM2CMMMAZ6
       balance: "100000000000000"
+      sbtc-balance: "1000000000"
     - name: wallet_1
       address: ST1SJ3DTE5DN7X54YDH5D64R3BCB6A2AG2ZQ8YPD5
       balance: "100000000000000"
+      sbtc-balance: "1000000000"
     - name: wallet_2
       address: ST2CY5V39NHDPWSXMW9QDT3HC3GD6Q6XX4CFRK9AG
       balance: "100000000000000"
+      sbtc-balance: "1000000000"
     - name: wallet_3
       address: ST2JHG361ZXG51QTKY2NQCVBPPRRE2KZB1HR05NNC
       balance: "100000000000000"
+      sbtc-balance: "1000000000"
     - name: wallet_4
       address: ST2NEB84ASENDXKYGJPQW86YXQCEFEX2ZQPG87ND
       balance: "100000000000000"
+      sbtc-balance: "1000000000"
     - name: wallet_5
       address: ST2REHHS5J3CERCRBEPMGH7921Q6PYKAADT7JP2VB
       balance: "100000000000000"
+      sbtc-balance: "1000000000"
     - name: wallet_6
       address: ST3AM1A56AK2C1XAFJ4115ZSV26EB49BVQ10MGCS0
       balance: "100000000000000"
+      sbtc-balance: "1000000000"
     - name: wallet_7
       address: ST3PF13W7Z0RRM42A8VZRVFQ75SV1K26RXEP8YGKJ
       balance: "100000000000000"
+      sbtc-balance: "1000000000"
     - name: wallet_8
       address: ST3NBRSFKX28FQ2ZJ1MAKX58HKHSDGNV5N7R21XCP
       balance: "100000000000000"
+      sbtc-balance: "1000000000"
   contracts:
     - costs
     - pox
@@ -50,6 +60,14 @@ plan:
     - id: 0
       transactions:
         - emulated-contract-publish:
+            contract-name: sip-010-trait-ft-standard
+            emulated-sender: SP3FBR2AGK5H9QBDH3EEN6DF8EK8JY7RX8QJ5SVTE
+            path: "./.cache/requirements/SP3FBR2AGK5H9QBDH3EEN6DF8EK8JY7RX8QJ5SVTE.sip-010-trait-ft-standard.clar"
+            clarity-version: 1
+      epoch: "2.0"
+    - id: 1
+      transactions:
+        - emulated-contract-publish:
             contract-name: hk-cursor-v2
             emulated-sender: SP2J933XB2CP2JQ1A4FGN8JA968BBG3NK3EKZ7Q9F
             path: "./.cache/requirements/SP2J933XB2CP2JQ1A4FGN8JA968BBG3NK3EKZ7Q9F.hk-cursor-v2.clar"
@@ -64,19 +82,77 @@ plan:
             emulated-sender: SP2J933XB2CP2JQ1A4FGN8JA968BBG3NK3EKZ7Q9F
             path: "./.cache/requirements/SP2J933XB2CP2JQ1A4FGN8JA968BBG3NK3EKZ7Q9F.hk-merkle-tree-keccak160-v1.clar"
             clarity-version: 2
+        - emulated-contract-publish:
+            contract-name: ownable-trait
+            emulated-sender: SP3Y2ZSH8P7D50B0VBTSX11S7XSG24M1VB9YFQA4K
+            path: "./.cache/requirements/SP3Y2ZSH8P7D50B0VBTSX11S7XSG24M1VB9YFQA4K.ownable-trait.clar"
+            clarity-version: 2
+        - emulated-contract-publish:
+            contract-name: bridge-token-trait
+            emulated-sender: SP3Y2ZSH8P7D50B0VBTSX11S7XSG24M1VB9YFQA4K
+            path: "./.cache/requirements/SP3Y2ZSH8P7D50B0VBTSX11S7XSG24M1VB9YFQA4K.bridge-token-trait.clar"
+            clarity-version: 2
+        - emulated-contract-publish:
+            contract-name: token-aeusdc
+            emulated-sender: SP3Y2ZSH8P7D50B0VBTSX11S7XSG24M1VB9YFQA4K
+            path: "./.cache/requirements/SP3Y2ZSH8P7D50B0VBTSX11S7XSG24M1VB9YFQA4K.token-aeusdc.clar"
+            clarity-version: 2
       epoch: "2.4"
-    - id: 1
+    - id: 3
       transactions:
         - emulated-contract-publish:
-            contract-name: trait-sip-010
-            emulated-sender: ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM
-            path: contracts/traits/trait-sip-010.clar
+            contract-name: wormhole-traits-v1
+            emulated-sender: SP3R4F6C1J3JQWWCVZ3S7FRRYPMYG6ZW6RZK31FXY
+            path: "./.cache/requirements/SP3R4F6C1J3JQWWCVZ3S7FRRYPMYG6ZW6RZK31FXY.wormhole-traits-v1.clar"
             clarity-version: 3
         - emulated-contract-publish:
-            contract-name: mock-usdc
-            emulated-sender: ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM
-            path: contracts/test/mock-usdc.clar
+            contract-name: pyth-traits-v1
+            emulated-sender: SP3R4F6C1J3JQWWCVZ3S7FRRYPMYG6ZW6RZK31FXY
+            path: "./.cache/requirements/SP3R4F6C1J3JQWWCVZ3S7FRRYPMYG6ZW6RZK31FXY.pyth-traits-v1.clar"
             clarity-version: 3
+        - emulated-contract-publish:
+            contract-name: pyth-governance-v2
+            emulated-sender: SP3R4F6C1J3JQWWCVZ3S7FRRYPMYG6ZW6RZK31FXY
+            path: "./.cache/requirements/SP3R4F6C1J3JQWWCVZ3S7FRRYPMYG6ZW6RZK31FXY.pyth-governance-v2.clar"
+            clarity-version: 3
+        - emulated-contract-publish:
+            contract-name: pyth-oracle-v3
+            emulated-sender: SP3R4F6C1J3JQWWCVZ3S7FRRYPMYG6ZW6RZK31FXY
+            path: "./.cache/requirements/SP3R4F6C1J3JQWWCVZ3S7FRRYPMYG6ZW6RZK31FXY.pyth-oracle-v3.clar"
+            clarity-version: 3
+        - emulated-contract-publish:
+            contract-name: pyth-pnau-decoder-v2
+            emulated-sender: SP3R4F6C1J3JQWWCVZ3S7FRRYPMYG6ZW6RZK31FXY
+            path: "./.cache/requirements/SP3R4F6C1J3JQWWCVZ3S7FRRYPMYG6ZW6RZK31FXY.pyth-pnau-decoder-v2.clar"
+            clarity-version: 3
+        - emulated-contract-publish:
+            contract-name: pyth-storage-v3
+            emulated-sender: SP3R4F6C1J3JQWWCVZ3S7FRRYPMYG6ZW6RZK31FXY
+            path: "./.cache/requirements/SP3R4F6C1J3JQWWCVZ3S7FRRYPMYG6ZW6RZK31FXY.pyth-storage-v3.clar"
+            clarity-version: 3
+        - emulated-contract-publish:
+            contract-name: wormhole-core-v3
+            emulated-sender: SP3R4F6C1J3JQWWCVZ3S7FRRYPMYG6ZW6RZK31FXY
+            path: "./.cache/requirements/SP3R4F6C1J3JQWWCVZ3S7FRRYPMYG6ZW6RZK31FXY.wormhole-core-v3.clar"
+            clarity-version: 3
+        - emulated-contract-publish:
+            contract-name: sbtc-registry
+            emulated-sender: SM3VDXK3WZZSA84XXFKAFAF15NNZX32CTSG82JFQ4
+            path: "./.cache/requirements/SM3VDXK3WZZSA84XXFKAFAF15NNZX32CTSG82JFQ4.sbtc-registry.clar"
+            clarity-version: 3
+        - emulated-contract-publish:
+            contract-name: sbtc-token
+            emulated-sender: SM3VDXK3WZZSA84XXFKAFAF15NNZX32CTSG82JFQ4
+            path: "./.cache/requirements/SM3VDXK3WZZSA84XXFKAFAF15NNZX32CTSG82JFQ4.sbtc-token.clar"
+            clarity-version: 3
+        - emulated-contract-publish:
+            contract-name: sbtc-deposit
+            emulated-sender: SM3VDXK3WZZSA84XXFKAFAF15NNZX32CTSG82JFQ4
+            path: "./.cache/requirements/SM3VDXK3WZZSA84XXFKAFAF15NNZX32CTSG82JFQ4.sbtc-deposit.clar"
+            clarity-version: 3
+      epoch: "3.1"
+    - id: 2
+      transactions:
         - emulated-contract-publish:
             contract-name: constants-v1
             emulated-sender: ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM
@@ -101,41 +177,6 @@ plan:
             contract-name: linear-kinked-ir-v1
             emulated-sender: ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM
             path: contracts/modules/linear-kinked-ir-v1.clar
-            clarity-version: 3
-        - emulated-contract-publish:
-            contract-name: wormhole-traits-v1
-            emulated-sender: ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM
-            path: contracts/pyth/contracts/wormhole/wormhole-traits-v1.clar
-            clarity-version: 3
-        - emulated-contract-publish:
-            contract-name: pyth-traits-v1
-            emulated-sender: ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM
-            path: contracts/pyth/contracts/pyth-traits-v1.clar
-            clarity-version: 3
-        - emulated-contract-publish:
-            contract-name: pyth-governance-v2
-            emulated-sender: ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM
-            path: contracts/pyth/contracts/pyth-governance-v2.clar
-            clarity-version: 3
-        - emulated-contract-publish:
-            contract-name: pyth-oracle-v3
-            emulated-sender: ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM
-            path: contracts/pyth/contracts/pyth-oracle-v3.clar
-            clarity-version: 3
-        - emulated-contract-publish:
-            contract-name: pyth-pnau-decoder-v2
-            emulated-sender: ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM
-            path: contracts/pyth/contracts/pyth-pnau-decoder-v2.clar
-            clarity-version: 3
-        - emulated-contract-publish:
-            contract-name: pyth-storage-v3
-            emulated-sender: ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM
-            path: contracts/pyth/contracts/pyth-storage-v3.clar
-            clarity-version: 3
-        - emulated-contract-publish:
-            contract-name: wormhole-core-v3
-            emulated-sender: ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM
-            path: contracts/pyth/contracts/wormhole/wormhole-core-v3.clar
             clarity-version: 3
         - emulated-contract-publish:
             contract-name: pyth-adapter-v1
@@ -163,21 +204,6 @@ plan:
             path: contracts/borrower-v1.clar
             clarity-version: 3
         - emulated-contract-publish:
-            contract-name: mock-btc
-            emulated-sender: ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM
-            path: contracts/test/mock-btc.clar
-            clarity-version: 3
-        - emulated-contract-publish:
-            contract-name: mock-eth
-            emulated-sender: ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM
-            path: contracts/test/mock-eth.clar
-            clarity-version: 3
-        - emulated-contract-publish:
-            contract-name: faucet
-            emulated-sender: ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM
-            path: contracts/test/faucet.clar
-            clarity-version: 3
-        - emulated-contract-publish:
             contract-name: trait-flash-loan-v1
             emulated-sender: ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM
             path: contracts/traits/trait-flash-loan-v1.clar
@@ -192,9 +218,6 @@ plan:
             emulated-sender: ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM
             path: contracts/meta-governance-v1.clar
             clarity-version: 3
-      epoch: "3.0"
-    - id: 2
-      transactions:
         - emulated-contract-publish:
             contract-name: governance-v1
             emulated-sender: ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM
@@ -214,21 +237,6 @@ plan:
             contract-name: lp-incentives-v2
             emulated-sender: ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM
             path: contracts/lp-incentives-v2.clar
-            clarity-version: 3
-        - emulated-contract-publish:
-            contract-name: mock-flash-loan-callback
-            emulated-sender: ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM
-            path: contracts/test/mock-flash-loan-callback.clar
-            clarity-version: 3
-        - emulated-contract-publish:
-            contract-name: mock-liquidator-with-flash-loan
-            emulated-sender: ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM
-            path: contracts/test/mock-liquidator-with-flash-loan.clar
-            clarity-version: 3
-        - emulated-contract-publish:
-            contract-name: test-gifter
-            emulated-sender: ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM
-            path: contracts/test/gifter.clar
             clarity-version: 3
         - emulated-contract-publish:
             contract-name: utility

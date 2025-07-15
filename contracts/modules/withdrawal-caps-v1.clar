@@ -2,7 +2,7 @@
 ;; SPDX-License-Identifier: BUSL-1.1
 ;; VERSION: 1.0
 
-(use-trait token-trait .trait-sip-010.sip-010-trait)
+(use-trait token-trait 'SP3FBR2AGK5H9QBDH3EEN6DF8EK8JY7RX8QJ5SVTE.sip-010-trait-ft-standard.sip-010-trait)
 
 ;; CONSTANTS
 (define-constant LP-CONTRACT (as-contract .liquidity-provider-v1))
@@ -22,21 +22,21 @@
 
 ;; VARIABLES
 
-;; refill time window of 24 hrs
+;; refill time window of 10 hrs
 ;; updatable through governance
-(define-data-var refill-time-window uint u86400)
+(define-data-var refill-time-window uint u36000)
 
 ;; decay time window of 3 hrs
 ;; updatable through governance
 (define-data-var decay-time-window uint u10800)
 
 ;; LP
-(define-data-var lp-cap-factor uint u0)
+(define-data-var lp-cap-factor uint u20000000)
 (define-data-var last-lp-bucket-update uint u0)
 (define-data-var lp-bucket uint u0) ;; current available lp withdrawal credit
 
 ;; Debt
-(define-data-var debt-cap-factor uint u0)
+(define-data-var debt-cap-factor uint u20000000)
 (define-data-var last-debt-bucket-update uint u0)
 (define-data-var debt-bucket uint u0) ;; current available debt borrowing credit
 
@@ -95,7 +95,7 @@
     (
       (time-now (get-time-now))
       (last-ts (var-get last-lp-bucket-update))
-      (total-liquidity (unwrap! (contract-call? .mock-usdc get-balance .state-v1) ERR-FAILED-TO-GET-BALANCE))
+      (total-liquidity (unwrap! (contract-call? 'SP3Y2ZSH8P7D50B0VBTSX11S7XSG24M1VB9YFQA4K.token-aeusdc get-balance .state-v1) ERR-FAILED-TO-GET-BALANCE))
       (max-lp-bucket (/ (* total-liquidity (var-get lp-cap-factor)) SCALING-FACTOR))
       (current-bucket (var-get lp-bucket))
       (new-bucket-value (if (>= current-bucket max-lp-bucket) 
@@ -315,3 +315,5 @@
     SUCCESS
   )
 )
+
+(map-set collateral-cap-factor 'SM3VDXK3WZZSA84XXFKAFAF15NNZX32CTSG82JFQ4.sbtc-token u20000000)

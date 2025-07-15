@@ -1,7 +1,7 @@
 ;; SPDX-License-Identifier: BUSL-1.1
 
 ;; TRAITS
-(use-trait token-trait .trait-sip-010.sip-010-trait)
+(use-trait token-trait 'SP3FBR2AGK5H9QBDH3EEN6DF8EK8JY7RX8QJ5SVTE.sip-010-trait-ft-standard.sip-010-trait)
 
 ;; CONSTANTS
 
@@ -123,9 +123,9 @@
 (define-constant ACTION_ALLOW_ANY_CONTRACT_FLASH_LOAN u38)
 
 ;; Threshold to either execute or remove proposal
-;; 60% and above
+;; 10% and above
 ;; 1 & 2 Account Multisig will require all of them to execute or deny proposal
-(define-constant THRESHOLD u60)
+(define-constant THRESHOLD u10)
 
 ;; Time lock period before executing approved proposal
 ;; approximately 24 hours assuming 4 second block time
@@ -432,7 +432,7 @@
 
 (define-private (execute-transfer-funds (proposal-id (buff 32)))
   (let ((transfer-funds-data (unwrap-panic (map-get? transfer-funds proposal-id))))
-    (as-contract (try! (contract-call? .mock-usdc transfer (get amount transfer-funds-data) (as-contract contract-caller) (get account transfer-funds-data) none)))
+    (as-contract (try! (contract-call? 'SP3Y2ZSH8P7D50B0VBTSX11S7XSG24M1VB9YFQA4K.token-aeusdc transfer (get amount transfer-funds-data) (as-contract contract-caller) (get account transfer-funds-data) none)))
     SUCCESS
 ))
 

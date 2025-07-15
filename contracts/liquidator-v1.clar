@@ -1,7 +1,7 @@
 ;; SPDX-License-Identifier: BUSL-1.1
 
 ;; TRAITS
-(use-trait token-trait .trait-sip-010.sip-010-trait)
+(use-trait token-trait 'SP3FBR2AGK5H9QBDH3EEN6DF8EK8JY7RX8QJ5SVTE.sip-010-trait-ft-standard.sip-010-trait)
 
 ;; CONSTANTS
 (define-constant SUCCESS (ok true))
@@ -76,7 +76,7 @@
       ;; get user current debt
       (debt-params (contract-call? .state-v1 get-debt-params))
       (current-debt (contract-call? .math-v1 convert-to-debt-assets debt-params (get debt-shares position) true))
-      (market-asset-price (match maybe-market-asset-price price price (unwrap! (contract-call? .pyth-adapter-v1 read-price .mock-usdc) ERR-MISSING-MARKET-PRICE)))
+      (market-asset-price (match maybe-market-asset-price price price (unwrap! (contract-call? .pyth-adapter-v1 read-price 'SP3Y2ZSH8P7D50B0VBTSX11S7XSG24M1VB9YFQA4K.token-aeusdc) ERR-MISSING-MARKET-PRICE)))
       (current-debt-adjusted (contract-call? .math-v1 get-market-asset-value market-asset-price current-debt))
       (position-collaterals (get collaterals position))
       (total-liquid-ltv (match maybe-total-liquid-ltv ltv 

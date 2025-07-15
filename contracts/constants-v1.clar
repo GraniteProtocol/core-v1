@@ -6,7 +6,7 @@
 
 (define-read-only (get-scaling-factor) SCALING-FACTOR)
 
-(define-constant MARKET-TOKEN-DECIMALS (unwrap-panic (contract-call? .mock-usdc get-decimals)))
+(define-constant MARKET-TOKEN-DECIMALS (unwrap-panic (contract-call? 'SP3Y2ZSH8P7D50B0VBTSX11S7XSG24M1VB9YFQA4K.token-aeusdc get-decimals)))
 
 (define-read-only (get-market-token-decimals) MARKET-TOKEN-DECIMALS)
 

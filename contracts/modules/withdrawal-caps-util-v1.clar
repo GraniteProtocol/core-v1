@@ -34,7 +34,7 @@
     (
       (time-now (get-time-now))
       (last-ts (contract-call? .withdrawal-caps-v1 get-last-lp-bucket-update))
-      (total-liquidity (unwrap! (contract-call? .mock-usdc get-balance .state-v1) ERR-FAILED-TO-GET-BALANCE))
+      (total-liquidity (unwrap! (contract-call? 'SP3Y2ZSH8P7D50B0VBTSX11S7XSG24M1VB9YFQA4K.token-aeusdc get-balance .state-v1) ERR-FAILED-TO-GET-BALANCE))
       (max-lp-bucket (/ (* total-liquidity (contract-call? .withdrawal-caps-v1 get-lp-cap-factor)) SCALING-FACTOR))
       (current-bucket (contract-call? .withdrawal-caps-v1 get-lp-bucket))
       (new-bucket-value (if (>= current-bucket max-lp-bucket) 
@@ -75,7 +75,7 @@
       (time-now (get-time-now))
       (collateral-token .mock-btc)
       (last-ts (contract-call? .withdrawal-caps-v1 get-last-collateral-bucket-update collateral-token))
-      (total-liquidity (unwrap! (contract-call? .mock-btc get-balance .state-v1) ERR-FAILED-TO-GET-BALANCE))
+      (total-liquidity (unwrap! (contract-call? 'SM3VDXK3WZZSA84XXFKAFAF15NNZX32CTSG82JFQ4.sbtc-token get-balance .state-v1) ERR-FAILED-TO-GET-BALANCE))
       (max-collateral-bucket (/ (* total-liquidity (contract-call? .withdrawal-caps-v1 get-collateral-cap-factor collateral-token)) SCALING-FACTOR))
       (current-bucket (contract-call? .withdrawal-caps-v1 get-collateral-bucket collateral-token))
       (new-bucket-value (if (>= current-bucket max-collateral-bucket) 
