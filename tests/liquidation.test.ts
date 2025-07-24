@@ -510,7 +510,7 @@ describe("liquidation tests", () => {
       tx.callPublicFn(
         "borrower-v1",
         "borrow",
-        [Cl.none(), Cl.uint(18000000000)],
+        [Cl.none(), Cl.uint(18000000000), Cl.none()],
         borrower1
       ),
       // make position insolvant
@@ -682,7 +682,7 @@ describe("liquidation tests", () => {
     simnet.callPublicFn(
       "borrower-v1",
       "borrow",
-      [Cl.none(), Cl.uint(10000000000)],
+      [Cl.none(), Cl.uint(10000000000), Cl.none()],
       borrower1
     );
 

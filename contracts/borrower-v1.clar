@@ -42,7 +42,8 @@
         (total-user-debt-shares (+ new-debt-shares (get debt-shares position)))
         (position-collaterals (get collaterals position))
         (collateral-prices (try! (contract-call? .pyth-adapter-v1 bulk-read-collateral-prices position-collaterals)))
-        (total-max-ltv (fold + (map iterate-collateral-value position-collaterals collateral-prices (list user user user user user user user user user user)) u0))
+        (user-list (unwrap-panic (slice? (list user user user user user user user user user user) u0 (len collateral-prices))))
+        (total-max-ltv (fold + (map iterate-collateral-value position-collaterals collateral-prices user-list) u0))
         (new-current-debt (+ amount current-debt))
         (market-asset-price (unwrap! (contract-call? .pyth-adapter-v1 read-price .mock-usdc) ERR-MISSING-MARKET-PRICE))
         (new-current-debt-adjusted (contract-call? .math-v1 get-market-asset-value market-asset-price new-current-debt))
@@ -131,12 +132,13 @@
     )
 ))
 
-(define-public (add-collateral (collateral <token-trait>) (amount uint))
+(define-public (add-collateral (collateral <token-trait>) (amount uint) (maybe-user (optional principal)))
   (begin
     (let
       (
+        (user (match maybe-user user (begin (asserts! (is-eq user tx-sender) ERR-NOT-TX-SENDER) user) contract-caller))
         (collateral-token (contract-of collateral))
-        (add-collateral-params (try! (contract-call? .state-v1 get-collateral-params collateral-token contract-caller)))
+        (add-collateral-params (try! (contract-call? .state-v1 get-collateral-params collateral-token user)))
         (collateral-info (get collateral-info add-collateral-params))
         (user-balance (get user-balance add-collateral-params))
         (new-amount (+ amount (default-to u0 (get amount user-balance))))
@@ -153,14 +155,14 @@
       (try! (contract-call? .state-v1 update-add-collateral collateral {
         amount: amount,
         total-collateral-amount: new-amount,
-        user: contract-caller,
+        user: user,
         user-position: {debt-shares: (get debt-shares position), collaterals: updated-collaterals, borrowed-amount: (get borrowed-amount position), borrowed-block: (get borrowed-block position)},
       }))
       (print {
         collateral: collateral-token,
         amount-deposited: amount,
         user-balance: new-amount,
-        user: contract-caller,
+        user: user,
         action: "add-collateral"
       })
       SUCCESS

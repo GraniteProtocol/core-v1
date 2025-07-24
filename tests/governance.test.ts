@@ -159,7 +159,7 @@ describe("governance tests", () => {
     response = simnet.callPublicFn(
       "borrower-v1",
       "add-collateral",
-      [Cl.contractPrincipal(deployer, "mock-btc"), Cl.uint(1)],
+      [Cl.contractPrincipal(deployer, "mock-btc"), Cl.uint(1), Cl.none()],
       governance_account
     );
     expect(response.result).toBeErr(Cl.uint(102));

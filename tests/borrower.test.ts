@@ -47,7 +47,7 @@ describe("borrower tests", () => {
     const deposit = simnet.callPublicFn(
       "borrower-v1",
       "add-collateral",
-      [btc_collateral_contract, Cl.uint(0)],
+      [btc_collateral_contract, Cl.uint(0), Cl.none()],
       borrower1
     );
     expect(deposit.result).toBeErr(Cl.uint(108));
@@ -176,7 +176,11 @@ describe("borrower tests", () => {
     const addCollateralRes = simnet.callPublicFn(
       "borrower-v1",
       "add-collateral",
-      [Cl.contractPrincipal(deployer, "mock-btc"), Cl.uint(100000000000n)],
+      [
+        Cl.contractPrincipal(deployer, "mock-btc"),
+        Cl.uint(100000000000n),
+        Cl.none(),
+      ],
       borrower1
     );
     expect(addCollateralRes.result).toBeErr(Cl.uint(20007n));
@@ -314,7 +318,14 @@ describe("borrower tests", () => {
       deployer
     );
     mint_token("mock-btc", 100000000000, borrower1);
-    add_collateral("mock-btc", 20000000000, deployer, borrower1);
+
+    const response = simnet.callPublicFn(
+      "borrower-proxy",
+      "add-collateral",
+      [Cl.contractPrincipal(deployer, "mock-btc"), Cl.uint(20000000000)],
+      borrower1
+    );
+    expect(response.result).toBeOk(Cl.bool(true));
 
     let borrow = simnet.callPublicFn(
       "borrower-proxy",

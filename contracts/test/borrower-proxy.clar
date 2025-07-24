@@ -3,3 +3,7 @@
 (define-public (borrow (pyth-price-feed-data (optional (buff 8192))) (amount uint))
     (contract-call? .borrower-v1 borrow pyth-price-feed-data amount (some tx-sender))
 )
+
+(define-public (add-collateral (collateral <token-trait>) (amount uint))
+    (contract-call? .borrower-v1 add-collateral collateral amount (some tx-sender))
+)
