@@ -202,7 +202,7 @@ describe("withdrawal caps tests", () => {
     res = simnet.callPublicFn(
       "borrower-v1",
       "borrow",
-      [Cl.none(), Cl.uint(410_000_000_00)],
+      [Cl.none(), Cl.uint(410_000_000_00), Cl.none()],
       borrower
     );
     expect(res.result).toBeErr(Cl.uint(120003));
@@ -211,7 +211,7 @@ describe("withdrawal caps tests", () => {
     res = simnet.callPublicFn(
       "borrower-v1",
       "borrow",
-      [Cl.none(), Cl.uint(150_000_000_00)],
+      [Cl.none(), Cl.uint(150_000_000_00), Cl.none()],
       borrower
     );
     expect(res.result).toBeOk(Cl.bool(true));
@@ -228,7 +228,7 @@ describe("withdrawal caps tests", () => {
     res = simnet.callPublicFn(
       "borrower-v1",
       "borrow",
-      [Cl.none(), Cl.uint(200_000_000_00)],
+      [Cl.none(), Cl.uint(200_000_000_00), Cl.none()],
       borrower
     );
     expect(res.result).toBeOk(Cl.bool(true));
@@ -245,7 +245,7 @@ describe("withdrawal caps tests", () => {
     res = simnet.callPublicFn(
       "borrower-v1",
       "borrow",
-      [Cl.none(), Cl.uint(51_000_000_00)],
+      [Cl.none(), Cl.uint(51_000_000_00), Cl.none()],
       borrower
     );
     expect(res.result).toBeErr(Cl.uint(120003));
@@ -259,7 +259,7 @@ describe("withdrawal caps tests", () => {
     res = simnet.callPublicFn(
       "borrower-v1",
       "borrow",
-      [Cl.none(), Cl.uint(51_000_000_00)],
+      [Cl.none(), Cl.uint(51_000_000_00), Cl.none()],
       borrower
     );
 

@@ -14,6 +14,7 @@
 (define-constant ERR-COLLATERAL-NOT-SUPPORTED (err u20007))
 (define-constant ERR-MISSING-MARKET-PRICE (err u20008))
 (define-constant ERR-NO-DEBT (err u20009))
+(define-constant ERR-NOT-TX-SENDER (err u20010))
 
 ;; CONSTANTS
 (define-constant SUCCESS (ok true))
@@ -22,7 +23,7 @@
 (define-constant PRICE-SCALING-FACTOR (contract-call? .constants-v2 get-price-scaling-factor))
 
 ;; PUBLIC FUNCTIONS
-(define-public (borrow (pyth-price-feed-data (optional (buff 8192))) (amount uint) )
+(define-public (borrow (pyth-price-feed-data (optional (buff 8192))) (amount uint) (maybe-user (optional principal)))
   (begin
     (try! (contract-call? .withdrawal-caps-v1 check-withdrawal-debt-cap amount))
     (try! (contract-call? .pyth-adapter-v1 update-pyth pyth-price-feed-data))
@@ -30,8 +31,9 @@
     (asserts! (>= (contract-call? .state-v1 get-borrowable-balance) amount) ERR-INSUFFICIENT-FREE-LIQUIDITY)
     (let
       (
+        (user (match maybe-user user (begin (asserts! (is-eq user tx-sender) ERR-NOT-TX-SENDER) user) contract-caller))
         ;; can't borrow if no collaterals were posted
-        (borrow-params (contract-call? .state-v1 get-borrow-repay-params contract-caller))
+        (borrow-params (contract-call? .state-v1 get-borrow-repay-params user))
         (position (unwrap! (get user-position borrow-params) ERR-NO-POSITION))
         (current-debt-shares (get debt-shares position))
         (debt-params (contract-call? .state-v1 get-debt-params))
@@ -40,14 +42,14 @@
         (total-user-debt-shares (+ new-debt-shares (get debt-shares position)))
         (position-collaterals (get collaterals position))
         (collateral-prices (try! (contract-call? .pyth-adapter-v1 bulk-read-collateral-prices position-collaterals)))
-        (total-max-ltv (fold + (map iterate-collateral-value position-collaterals collateral-prices) u0))
+        (total-max-ltv (fold + (map iterate-collateral-value position-collaterals collateral-prices (list user user user user user user user user user user)) u0))
         (new-current-debt (+ amount current-debt))
         (market-asset-price (unwrap! (contract-call? .pyth-adapter-v1 read-price .mock-usdc) ERR-MISSING-MARKET-PRICE))
         (new-current-debt-adjusted (contract-call? .math-v1 get-market-asset-value market-asset-price new-current-debt))
       )
       (asserts! (<= new-current-debt-adjusted total-max-ltv) ERR-MAX-LTV)
       (try! (contract-call? .state-v1 update-borrow-state {
-        user: contract-caller,
+        user: user,
         user-debt-shares: total-user-debt-shares,
         user-collaterals: position-collaterals,
         user-borrowed-amount: (+ (get borrowed-amount position) amount),
@@ -59,12 +61,13 @@
         assets: amount,
         total-user-debt-shares: total-user-debt-shares,
         new-debt-shares: new-debt-shares,
-        user: contract-caller,
+        user: user,
         action: "borrow"
       })
       SUCCESS
     )
-))
+  )
+)
 
 (define-public (repay (amount uint) (on-behalf-of (optional principal)))
   (begin
@@ -171,15 +174,17 @@
     (try! (accrue-interest))
     (let
       (
+        (user contract-caller)
         (collateral-token (contract-of collateral))
-        (remove-collateral-params (try! (contract-call? .state-v1 get-collateral-params collateral-token contract-caller)))
+        (remove-collateral-params (try! (contract-call? .state-v1 get-collateral-params collateral-token user)))
         (collateral-info (get collateral-info remove-collateral-params))
         (user-balance (unwrap! (get user-balance remove-collateral-params) ERR-INSUFFICIENT-BALANCE))
         (prev-amount (get amount user-balance))
         (position (get user-position remove-collateral-params))
         (remove-user-collateral-info (try! (remove-user-collateral prev-amount amount collateral-token (get debt-shares position) (get collaterals position) (get borrowed-amount position) (get borrowed-block position))))
         (collateral-prices (try! (contract-call? .pyth-adapter-v1 bulk-read-collateral-prices (get position-collaterals remove-user-collateral-info))))
-        (total-max-ltv (fold + (map iterate-collateral-value (get position-collaterals remove-user-collateral-info) collateral-prices) u0))
+        (user-list (unwrap-panic (slice? (list user user user user user user user user user user) u0 (len collateral-prices))))
+        (total-max-ltv (fold + (map iterate-collateral-value (get position-collaterals remove-user-collateral-info) collateral-prices user-list) u0))
         (debt-params (contract-call? .state-v1 get-debt-params))
         (current-debt (contract-call? .math-v1 convert-to-debt-assets debt-params (get debt-shares position) true))
         (market-asset-price (unwrap! (contract-call? .pyth-adapter-v1 read-price .mock-usdc) ERR-MISSING-MARKET-PRICE))
@@ -188,12 +193,12 @@
       (asserts! (<= current-debt-adjusted total-max-ltv) ERR-MAX-LTV)
 
       ;; transfer the collateral tokens to the user
-      (try! (contract-call? .state-v1 transfer-to collateral contract-caller amount))
+      (try! (contract-call? .state-v1 transfer-to collateral user amount))
       (print {
           collateral: collateral-token,
           amount-removed: amount,
           user-balance: (get remaining-amount remove-user-collateral-info),
-          user: contract-caller,
+          user: user,
           action: "remove-collateral"
       })
       SUCCESS
@@ -250,11 +255,11 @@
   )
 )
 
-(define-private (iterate-collateral-value (collateral principal) (collateral-price uint))
+(define-private (iterate-collateral-value (collateral principal) (collateral-price uint) (user principal))
   (let
     (
       (collateral-info (contract-call? .state-v1 get-collateral collateral))
-      (user-collateral-value (get-collateral-value collateral contract-caller collateral-price))
+      (user-collateral-value (get-collateral-value collateral user collateral-price))
       (max-ltv (default-to u0 (get max-ltv collateral-info)))
     )
     (/ (* user-collateral-value max-ltv) SCALING-FACTOR)

@@ -84,7 +84,7 @@ describe("borrower tests", () => {
     const borrow = simnet.callPublicFn(
       "borrower-v1",
       "borrow",
-      [Cl.none(), Cl.uint(70000000000)],
+      [Cl.none(), Cl.uint(70000000000), Cl.none()],
       borrower1
     );
     expect(borrow.result).toBeOk(Cl.bool(true));
@@ -276,7 +276,7 @@ describe("borrower tests", () => {
     let borrow = simnet.callPublicFn(
       "borrower-v1",
       "borrow",
-      [Cl.none(), Cl.uint(100000000000)],
+      [Cl.none(), Cl.uint(100000000000), Cl.none()],
       borrower1
     );
     expect(borrow.result).toBeErr(Cl.uint(20002));
@@ -285,6 +285,39 @@ describe("borrower tests", () => {
     add_collateral("mock-btc", 10000000000, deployer, borrower1);
     borrow = simnet.callPublicFn(
       "borrower-v1",
+      "borrow",
+      [Cl.none(), Cl.uint(10000000000), Cl.none()],
+      borrower1
+    );
+    expect(borrow.result).toBeOk(Cl.bool(true));
+
+    // User should have 100 assets after borrow
+    const userBalancePostBorrow = simnet.callReadOnlyFn(
+      "mock-usdc",
+      "get-balance",
+      [Cl.principal(borrower1)],
+      borrower1
+    );
+    expect(userBalancePostBorrow.result.value.value).toBe(10000000000n);
+  });
+
+  it("should correctly borrow through proxy", async () => {
+    mint_token("mock-usdc", 100000000000, depositor);
+    deposit(100000000000, depositor);
+
+    update_supported_collateral(
+      "mock-btc",
+      70000000,
+      80000000,
+      10000000,
+      8,
+      deployer
+    );
+    mint_token("mock-btc", 100000000000, borrower1);
+    add_collateral("mock-btc", 20000000000, deployer, borrower1);
+
+    let borrow = simnet.callPublicFn(
+      "borrower-proxy",
       "borrow",
       [Cl.none(), Cl.uint(10000000000)],
       borrower1
@@ -320,7 +353,7 @@ describe("borrower tests", () => {
     const borrow = simnet.callPublicFn(
       "borrower-v1",
       "borrow",
-      [Cl.none(), Cl.uint(10000000000)],
+      [Cl.none(), Cl.uint(10000000000), Cl.none()],
       borrower1
     );
     expect(borrow.result).toBeOk(Cl.bool(true));
@@ -353,7 +386,7 @@ describe("borrower tests", () => {
     const borrow = simnet.callPublicFn(
       "borrower-v1",
       "borrow",
-      [Cl.none(), Cl.uint(1000000000)],
+      [Cl.none(), Cl.uint(1000000000), Cl.none()],
       borrower1
     );
     expect(borrow.result).toBeOk(Cl.bool(true));
@@ -385,7 +418,7 @@ describe("borrower tests", () => {
     let borrow = simnet.callPublicFn(
       "borrower-v1",
       "borrow",
-      [Cl.none(), Cl.uint(11000000000)],
+      [Cl.none(), Cl.uint(11000000000), Cl.none()],
       borrower1
     );
     expect(borrow.result).toBeErr(Cl.uint(20001));
@@ -452,7 +485,7 @@ describe("borrower tests", () => {
     const borrow = simnet.callPublicFn(
       "borrower-v1",
       "borrow",
-      [Cl.none(), Cl.uint(10000000000)],
+      [Cl.none(), Cl.uint(10000000000), Cl.none()],
       borrower1
     );
     expect(borrow.result).toBeOk(Cl.bool(true));
@@ -554,7 +587,7 @@ describe("borrower tests", () => {
     const borrow = simnet.callPublicFn(
       "borrower-v1",
       "borrow",
-      [Cl.none(), Cl.uint(10000000000)],
+      [Cl.none(), Cl.uint(10000000000), Cl.none()],
       borrower1
     );
     expect(borrow.result).toBeOk(Cl.bool(true));
@@ -630,7 +663,7 @@ describe("borrower tests", () => {
     const borrow = simnet.callPublicFn(
       "borrower-v1",
       "borrow",
-      [Cl.none(), Cl.uint(10000000000)],
+      [Cl.none(), Cl.uint(10000000000), Cl.none()],
       borrower1
     );
     expect(borrow.result).toBeOk(Cl.bool(true));
@@ -729,7 +762,7 @@ describe("borrower tests", () => {
     const borrow = simnet.callPublicFn(
       "borrower-v1",
       "borrow",
-      [Cl.none(), Cl.uint(0.99999991e8)],
+      [Cl.none(), Cl.uint(0.99999991e8), Cl.none()],
       borrower1
     );
     expect(borrow.result).toBeErr(Cl.uint(20001));
@@ -813,7 +846,7 @@ describe("borrower tests", () => {
       simnet.callPublicFn(
         "borrower-v1",
         "borrow",
-        [Cl.none(), Cl.uint(100000000000)],
+        [Cl.none(), Cl.uint(100000000000), Cl.none()],
         borrower1
       );
     } catch (err) {}
@@ -837,7 +870,7 @@ describe("borrower tests", () => {
     let borrow = simnet.callPublicFn(
       "borrower-v1",
       "borrow",
-      [Cl.none(), Cl.uint(2418649660)],
+      [Cl.none(), Cl.uint(2418649660), Cl.none()],
       borrower1
     );
 
@@ -906,7 +939,7 @@ describe("borrower tests", () => {
     let borrow = simnet.callPublicFn(
       "borrower-v1",
       "borrow",
-      [Cl.none(), Cl.uint(2418649660)],
+      [Cl.none(), Cl.uint(2418649660), Cl.none()],
       borrower1
     );
 

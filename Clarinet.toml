@@ -184,6 +184,11 @@ path = 'contracts/test/mock-liquidator-with-flash-loan.clar'
 clarity_version = 3
 epoch = 3.0
 
+[contracts.borrower-proxy]
+path = 'contracts/test/borrower-proxy.clar'
+clarity_version = 3
+epoch = 3.0
+
 [repl.analysis]
 passes = []
 
