@@ -169,21 +169,21 @@
     )
 ))
 
-(define-public (remove-collateral (pyth-price-feed-data (optional (buff 8192))) (collateral <token-trait>) (amount uint))
+(define-public (remove-collateral (pyth-price-feed-data (optional (buff 8192))) (collateral <token-trait>) (amount uint) (maybe-user (optional principal)))
   (begin
     (try! (contract-call? .withdrawal-caps-v1 check-withdrawal-collateral-cap collateral amount))
     (try! (contract-call? .pyth-adapter-v1 update-pyth pyth-price-feed-data))
     (try! (accrue-interest))
     (let
       (
-        (user contract-caller)
+        (user (match maybe-user user (begin (asserts! (is-eq user tx-sender) ERR-NOT-TX-SENDER) user) contract-caller))
         (collateral-token (contract-of collateral))
         (remove-collateral-params (try! (contract-call? .state-v1 get-collateral-params collateral-token user)))
         (collateral-info (get collateral-info remove-collateral-params))
         (user-balance (unwrap! (get user-balance remove-collateral-params) ERR-INSUFFICIENT-BALANCE))
         (prev-amount (get amount user-balance))
         (position (get user-position remove-collateral-params))
-        (remove-user-collateral-info (try! (remove-user-collateral prev-amount amount collateral-token (get debt-shares position) (get collaterals position) (get borrowed-amount position) (get borrowed-block position))))
+        (remove-user-collateral-info (try! (remove-user-collateral user prev-amount amount collateral-token (get debt-shares position) (get collaterals position) (get borrowed-amount position) (get borrowed-block position))))
         (collateral-prices (try! (contract-call? .pyth-adapter-v1 bulk-read-collateral-prices (get position-collaterals remove-user-collateral-info))))
         (user-list (unwrap-panic (slice? (list user user user user user user user user user user) u0 (len collateral-prices))))
         (total-max-ltv (fold + (map iterate-collateral-value (get position-collaterals remove-user-collateral-info) collateral-prices user-list) u0))
@@ -271,12 +271,12 @@
   (as-max-len? (append collaterals-list collateral) u10)
 )
 
-(define-private (remove-user-collateral (prev-amount uint) (amount uint) (collateral principal) (debt-shares uint) (position-collaterals (list 10 principal)) (borrowed-amount uint) (borrowed-block uint))
+(define-private (remove-user-collateral (user principal) (prev-amount uint) (amount uint) (collateral principal) (debt-shares uint) (position-collaterals (list 10 principal)) (borrowed-amount uint) (borrowed-block uint))
   (let ((remaining-amount (unwrap! (contract-call? .math-v1 sub prev-amount amount) ERR-INSUFFICIENT-BALANCE)))
     (if (is-eq remaining-amount u0)
       (let ((updated-position-collaterals (contract-call? .state-v1 remove-item position-collaterals collateral)))
         ;; remove the collateral since there is no user collateral left
-        (try! (contract-call? .state-v1 update-remove-collateral contract-caller collateral debt-shares (get new-list updated-position-collaterals) borrowed-amount borrowed-block))
+        (try! (contract-call? .state-v1 update-remove-collateral user collateral debt-shares (get new-list updated-position-collaterals) borrowed-amount borrowed-block))
         (ok {
           remaining-amount: remaining-amount,
           position-collaterals: (get new-list updated-position-collaterals),
@@ -284,7 +284,7 @@
       )
       (begin
         ;; decrease the amount of collateral deposited by the user
-        (try! (contract-call? .state-v1 update-user-collateral contract-caller collateral remaining-amount))
+        (try! (contract-call? .state-v1 update-user-collateral user collateral remaining-amount))
         (ok {
           remaining-amount: remaining-amount,
           position-collaterals: position-collaterals,

@@ -152,7 +152,12 @@ export const remove_collateral = (
   const response = simnet.callPublicFn(
     "borrower-v1",
     "remove-collateral",
-    [Cl.none(), Cl.contractPrincipal(deployer, collateral), Cl.uint(amount)],
+    [
+      Cl.none(),
+      Cl.contractPrincipal(deployer, collateral),
+      Cl.uint(amount),
+      Cl.none(),
+    ],
     user
   );
   expect(response.result).toBeOk(Cl.bool(true));

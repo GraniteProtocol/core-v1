@@ -324,7 +324,7 @@ describe("withdrawal caps tests", () => {
     let resp = simnet.callPublicFn(
       "borrower-v1",
       "remove-collateral",
-      [Cl.none(), btcCV, Cl.uint(700_000_000_0)],
+      [Cl.none(), btcCV, Cl.uint(700_000_000_0), Cl.none()],
       depositor
     ).result;
     expect(resp).toBeErr(Cl.uint(120004));
@@ -333,7 +333,7 @@ describe("withdrawal caps tests", () => {
     resp = simnet.callPublicFn(
       "borrower-v1",
       "remove-collateral",
-      [Cl.none(), btcCV, Cl.uint(500_000_000_0)],
+      [Cl.none(), btcCV, Cl.uint(500_000_000_0), Cl.none()],
       depositor
     ).result;
     expect(resp).toBeOk(Cl.bool(true));
@@ -350,7 +350,7 @@ describe("withdrawal caps tests", () => {
     resp = simnet.callPublicFn(
       "borrower-v1",
       "remove-collateral",
-      [Cl.none(), btcCV, Cl.uint(100_000_000_0)],
+      [Cl.none(), btcCV, Cl.uint(100_000_000_0), Cl.none()],
       depositor
     ).result;
     expect(resp).toBeOk(Cl.bool(true));
@@ -367,7 +367,7 @@ describe("withdrawal caps tests", () => {
     resp = simnet.callPublicFn(
       "borrower-v1",
       "remove-collateral",
-      [Cl.none(), btcCV, Cl.uint(41_000_000_0)],
+      [Cl.none(), btcCV, Cl.uint(41_000_000_0), Cl.none()],
       depositor
     ).result;
     expect(resp).toBeErr(Cl.uint(120004));
@@ -381,7 +381,7 @@ describe("withdrawal caps tests", () => {
     resp = simnet.callPublicFn(
       "borrower-v1",
       "remove-collateral",
-      [Cl.none(), btcCV, Cl.uint(41_000_000_0)],
+      [Cl.none(), btcCV, Cl.uint(41_000_000_0), Cl.none()],
       depositor
     ).result;
     expect(resp).toBeOk(Cl.bool(true));

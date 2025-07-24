@@ -77,7 +77,12 @@ describe("Borrower User flow tests", () => {
     let response = simnet.callPublicFn(
       "borrower-v1",
       "remove-collateral",
-      [Cl.none(), Cl.contractPrincipal(deployer, "mock-btc"), Cl.uint(40)],
+      [
+        Cl.none(),
+        Cl.contractPrincipal(deployer, "mock-btc"),
+        Cl.uint(40),
+        Cl.none(),
+      ],
       borrower1
     );
     expect(response.result).toBeOk(Cl.bool(true));
@@ -85,7 +90,12 @@ describe("Borrower User flow tests", () => {
     response = simnet.callPublicFn(
       "borrower-v1",
       "remove-collateral",
-      [Cl.none(), Cl.contractPrincipal(deployer, "mock-eth"), Cl.uint(490)],
+      [
+        Cl.none(),
+        Cl.contractPrincipal(deployer, "mock-eth"),
+        Cl.uint(490),
+        Cl.none(),
+      ],
       borrower1
     );
     expect(response.result).toBeOk(Cl.bool(true));
@@ -114,7 +124,12 @@ describe("Borrower User flow tests", () => {
     response = simnet.callPublicFn(
       "borrower-v1",
       "remove-collateral",
-      [Cl.none(), Cl.contractPrincipal(deployer, "mock-btc"), Cl.uint(60)],
+      [
+        Cl.none(),
+        Cl.contractPrincipal(deployer, "mock-btc"),
+        Cl.uint(60),
+        Cl.none(),
+      ],
       borrower1
     );
     expect(response.result).toBeOk(Cl.bool(true));
@@ -122,7 +137,12 @@ describe("Borrower User flow tests", () => {
     response = simnet.callPublicFn(
       "borrower-v1",
       "remove-collateral",
-      [Cl.none(), Cl.contractPrincipal(deployer, "mock-eth"), Cl.uint(1000)],
+      [
+        Cl.none(),
+        Cl.contractPrincipal(deployer, "mock-eth"),
+        Cl.uint(1000),
+        Cl.none(),
+      ],
       borrower1
     );
     expect(response.result).toBeOk(Cl.bool(true));
@@ -230,7 +250,12 @@ describe("Borrower User flow tests", () => {
     let response = simnet.callPublicFn(
       "borrower-v1",
       "remove-collateral",
-      [Cl.none(), Cl.contractPrincipal(deployer, "mock-btc"), Cl.uint(100)],
+      [
+        Cl.none(),
+        Cl.contractPrincipal(deployer, "mock-btc"),
+        Cl.uint(100),
+        Cl.none(),
+      ],
       borrower1
     );
     expect(response.result).toBeOk(Cl.bool(true));
@@ -238,7 +263,12 @@ describe("Borrower User flow tests", () => {
     response = simnet.callPublicFn(
       "borrower-v1",
       "remove-collateral",
-      [Cl.none(), Cl.contractPrincipal(deployer, "mock-eth"), Cl.uint(744)],
+      [
+        Cl.none(),
+        Cl.contractPrincipal(deployer, "mock-eth"),
+        Cl.uint(744),
+        Cl.none(),
+      ],
       borrower1
     );
     expect(response.result).toBeOk(Cl.bool(true));

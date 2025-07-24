@@ -7,3 +7,7 @@
 (define-public (add-collateral (collateral <token-trait>) (amount uint))
     (contract-call? .borrower-v1 add-collateral collateral amount (some tx-sender))
 )
+
+(define-public (remove-collateral (pyth-price-feed-data (optional (buff 8192))) (collateral <token-trait>) (amount uint))
+    (contract-call? .borrower-v1 remove-collateral pyth-price-feed-data collateral amount (some tx-sender))
+)
