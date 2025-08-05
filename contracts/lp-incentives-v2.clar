@@ -49,9 +49,8 @@
 (define-constant ERR-ZERO-REWARDS (err u100007))
 (define-constant ERR-NO-USER-REWARDS (err u100008))
 (define-constant ERR-USER-REWARDS-CLAIMED (err u100009))
-(define-constant ERR-FAILED-TO-GET-LP-BALANCE (err u100010))
-(define-constant ERR-REWARDS-NOT-CLAIMED (err u100011))
-(define-constant ERR-INVALID-SNAPSHOT-TIME (err u100012))
+(define-constant ERR-REWARDS-NOT-CLAIMED (err u100010))
+(define-constant ERR-INVALID-SNAPSHOT-TIME (err u100011))
 
 ;; Read-only functions
 (define-read-only (get-epoch-details)
@@ -128,7 +127,7 @@
     (try! (ensure-epoch-closed))
     (asserts! (not (get claimed-rewards rewards)) ERR-USER-REWARDS-CLAIMED)
     (if (> reward-amount u0) 
-      (as-contract (try! (contract-call? .state-v1 transfer reward-amount (as-contract contract-caller) user none)))
+      (as-contract (try! (stx-transfer? reward-amount (as-contract contract-caller) user)))
       true
     )
     (map-set user-rewards user {
@@ -144,15 +143,15 @@
     SUCCESS
 ))
 
-(define-public (transfer-remaining-lp-tokens (recipient principal))
-  (let ((balance (unwrap! (contract-call? .state-v1 get-balance (as-contract contract-caller)) ERR-FAILED-TO-GET-LP-BALANCE)))
+(define-public (transfer-remaining-stx (recipient principal))
+  (let ((balance (stx-get-balance (as-contract contract-caller))))
     (try! (ensure-snapshot-uploader))
     (try! (ensure-epoch-closed))
     (asserts! (is-eq (var-get unclaimed-user-reward-count) u0) ERR-REWARDS-NOT-CLAIMED)
     (asserts! (> balance u0) ERR-ZERO-REWARDS)
-    (as-contract (try! (contract-call? .state-v1 transfer balance (as-contract contract-caller) recipient none)))
+    (as-contract (try! (stx-transfer? balance (as-contract contract-caller) recipient)))
     (print {
-      action: "transfer-remaining-lp-tokens",
+      action: "transfer-remaining-stx-tokens",
       balance: balance,
       recipient: recipient
     })
