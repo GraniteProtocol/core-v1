@@ -1,15 +1,5 @@
 import { beforeEach, describe, expect, it } from "vitest";
-import { Cl, ClarityValue, SomeCV, UIntCV } from "@stacks/transactions";
-import {
-  deposit,
-  set_allowed_contracts,
-  initialize_ir,
-  mint_token,
-  set_asset_cap,
-  initialize_staking_reward,
-  transfer_token,
-} from "./utils";
-import { init_pyth, set_initial_price, set_pyth_time_delta } from "./pyth";
+import { Cl, SomeCV, UIntCV } from "@stacks/transactions";
 
 const accounts = simnet.getAccounts();
 const depositor = accounts.get("wallet_1")!;
@@ -20,6 +10,8 @@ const user4 = accounts.get("wallet_6")!;
 const user5 = accounts.get("wallet_7")!;
 const user6 = accounts.get("wallet_8")!;
 const deployer = accounts.get("deployer")!;
+const faucet = accounts.get("faucet")!;
+const lpIncentivesContract = `${deployer}.lp-incentives-v2`;
 
 function initiate_epoch(details: any) {
   const res = simnet.callPublicFn(
@@ -52,15 +44,11 @@ function check_closed_epoch() {
   expect(res.result.value.data["epoch-completed"]).toStrictEqual(Cl.bool(true));
 }
 
-const getUserLpBalance = (user: ClarityValue) => {
-  const result = simnet.callReadOnlyFn(
-    "state-v1",
-    "get-balance",
-    [user],
-    deployer
+const getUserStxBalance = (user: string) => {
+  const result = Cl.deserialize(
+    simnet.runSnippet(`(stx-get-balance '${user})`)
   );
-
-  return result.result.value.value;
+  return result.value;
 };
 
 const getUnclaimedUserCount = () => {
@@ -78,8 +66,8 @@ const expectUnclaimedUserCount = (amount: bigint) => {
   expect(getUnclaimedUserCount()).toBe(amount);
 };
 
-const expectUserLpBalance = (user: ClarityValue, amount: bigint) => {
-  expect(getUserLpBalance(user)).toBe(amount);
+const expectUserStxBalance = (user: string, amount: bigint) => {
+  expect(getUserStxBalance(user)).toStrictEqual(amount);
 };
 
 function getTimeForBlock(block: `u${number}`): bigint {
@@ -163,10 +151,10 @@ function claimRewards(sender: string, onBehalfOf?: string) {
   expect(res.result).toBeOk(Cl.bool(true));
 }
 
-function transferRemainingLpTokens(recepient: string) {
+function transferRemainingStx(recepient: string) {
   const res = simnet.callPublicFn(
     "lp-incentives-v2",
-    "transfer-remaining-lp-tokens",
+    "transfer-remaining-stx",
     [Cl.principal(recepient)],
     deployer
   );
@@ -175,15 +163,12 @@ function transferRemainingLpTokens(recepient: string) {
 
 describe("LP incentives tests", () => {
   beforeEach(async () => {
-    init_pyth(deployer);
-    set_pyth_time_delta(100000, deployer);
-    set_allowed_contracts(deployer);
-    set_asset_cap(deployer, 10000000000000n); // 100k USDC
-    initialize_ir(deployer);
-    initialize_staking_reward(deployer);
-    await set_initial_price("mock-usdc", 1n, deployer);
-    await set_initial_price("mock-btc", 1n, deployer);
-    await set_initial_price("mock-eth", 1n, deployer);
+    const users = [user1, user2, user3, user4, user5, user6];
+    users.forEach((user) => {
+      const userBalance = getUserStxBalance(user);
+      const res = simnet.transferSTX(userBalance, faucet, user);
+      expect(res.result).toBeOk(Cl.bool(true));
+    });
   });
 
   it("test initiating epoch", async () => {
@@ -247,7 +232,7 @@ describe("LP incentives tests", () => {
       [Cl.tuple(snapshotDetails), payload],
       deployer
     );
-    expect(res.result).toBeErr(Cl.uint(100012)); // ERR-INVALID-SNAPSHOT-TIME
+    expect(res.result).toBeErr(Cl.uint(100011)); // ERR-INVALID-SNAPSHOT-TIME
 
     initiate_epoch({
       "epoch-start-time": Cl.uint(0),
@@ -281,7 +266,7 @@ describe("LP incentives tests", () => {
       [Cl.tuple(snapshotDetails), payload],
       deployer
     );
-    expect(res.result).toBeErr(Cl.uint(100012)); // ERR-INVALID-SNAPSHOT-TIME
+    expect(res.result).toBeErr(Cl.uint(100011)); // ERR-INVALID-SNAPSHOT-TIME
 
     // initiating new snapshot should not work when epoch is closed
     snapshotDetails["snapshot-time"] = Cl.uint(101);
@@ -291,7 +276,7 @@ describe("LP incentives tests", () => {
       [Cl.tuple(snapshotDetails), payload],
       deployer
     );
-    expect(res.result).toBeErr(Cl.uint(100012)); // ERR-INVALID-SNAPSHOT-TIME
+    expect(res.result).toBeErr(Cl.uint(100011)); // ERR-INVALID-SNAPSHOT-TIME
 
     close_epoch();
     check_closed_epoch();
@@ -319,39 +304,27 @@ describe("LP incentives tests", () => {
     close_epoch();
     check_closed_epoch();
 
-    mint_token("mock-usdc", 100, depositor);
-    deposit(100, depositor);
-    expectUserLpBalance(Cl.principal(depositor), 100n);
-
-    // transfer lp tokens to lp-incentives contract
-    transfer_token(
-      "state-v1",
-      100,
-      depositor,
-      Cl.contractPrincipal(deployer, "lp-incentives-v2")
-    );
-
-    expectUserLpBalance(Cl.principal(depositor), 0n);
-    expectUserLpBalance(
-      Cl.contractPrincipal(deployer, "lp-incentives-v2"),
-      100n
-    );
+    // transfer lp tokens to stx contract
+    const res = simnet.transferSTX(100, lpIncentivesContract, depositor);
+    expect(res.result).toBeOk(Cl.bool(true));
+    expectUserStxBalance(depositor, 99999999999900n);
+    expectUserStxBalance(lpIncentivesContract, 100n);
 
     // claim user 1 rewards themselves
     claimRewards(user1);
-    expectUserLpBalance(Cl.principal(user1), 60n);
-    expectUserLpBalance(Cl.principal(user2), 0n);
+    expectUserStxBalance(user1, 60n);
+    expectUserStxBalance(user2, 0n);
     expectUnclaimedUserCount(1n);
 
     // claim user2 rewards through user1
     claimRewards(user1, user2);
-    expectUserLpBalance(Cl.principal(user1), 60n);
-    expectUserLpBalance(Cl.principal(user2), 40n);
+    expectUserStxBalance(user1, 60n);
+    expectUserStxBalance(user2, 40n);
     expectUnclaimedUserCount(0n);
 
     // remaing balance should be zero
-    expectUserLpBalance(Cl.contractPrincipal(deployer, "lp-incentives-v2"), 0n);
-    expectUserLpBalance(Cl.principal(depositor), 0n);
+    expectUserStxBalance(lpIncentivesContract, 0n);
+    expectUserStxBalance(depositor, 99999999999900n);
   });
 
   it("test upload multi snapshot", async () => {
@@ -430,23 +403,10 @@ describe("LP incentives tests", () => {
     // unclaimed user count should be 6
     expectUnclaimedUserCount(6n);
 
-    mint_token("mock-usdc", 1000, depositor);
-    deposit(1000, depositor);
-    expectUserLpBalance(Cl.principal(depositor), 1000n);
-
-    // transfer lp tokens to lp-incentives contract
-    transfer_token(
-      "state-v1",
-      1000,
-      depositor,
-      Cl.contractPrincipal(deployer, "lp-incentives-v2")
-    );
-
-    expectUserLpBalance(Cl.principal(depositor), 0n);
-    expectUserLpBalance(
-      Cl.contractPrincipal(deployer, "lp-incentives-v2"),
-      1000n
-    );
+    // transfer stx to lp-incentives contract
+    simnet.transferSTX(1000, lpIncentivesContract, depositor);
+    expectUserStxBalance(depositor, 99999999999000n);
+    expectUserStxBalance(lpIncentivesContract, 1000n);
 
     // check close epoch
     close_epoch();
@@ -461,23 +421,20 @@ describe("LP incentives tests", () => {
     claimRewards(user6);
 
     // check rewards
-    expectUserLpBalance(Cl.principal(user1), 444n);
-    expectUserLpBalance(Cl.principal(user2), 314n);
-    expectUserLpBalance(Cl.principal(user3), 77n);
-    expectUserLpBalance(Cl.principal(user4), 77n);
-    expectUserLpBalance(Cl.principal(user5), 61n);
-    expectUserLpBalance(Cl.principal(user6), 17n);
+    expectUserStxBalance(user1, 444n);
+    expectUserStxBalance(user2, 314n);
+    expectUserStxBalance(user3, 77n);
+    expectUserStxBalance(user4, 77n);
+    expectUserStxBalance(user5, 61n);
+    expectUserStxBalance(user6, 17n);
     expectUnclaimedUserCount(0n);
 
     // transfer remaing balance to depositor
-    expectUserLpBalance(
-      Cl.contractPrincipal(deployer, "lp-incentives-v2"),
-      10n
-    );
-    expectUserLpBalance(Cl.principal(depositor), 0n);
-    transferRemainingLpTokens(depositor);
-    expectUserLpBalance(Cl.contractPrincipal(deployer, "lp-incentives-v2"), 0n);
-    expectUserLpBalance(Cl.principal(depositor), 10n);
+    expectUserStxBalance(lpIncentivesContract, 10n);
+    expectUserStxBalance(depositor, 99999999999000n);
+    transferRemainingStx(depositor);
+    expectUserStxBalance(lpIncentivesContract, 0n);
+    expectUserStxBalance(depositor, 99999999999010n);
   });
 
   it("test upload multi snapshot with multi batch", async () => {
@@ -584,23 +541,10 @@ describe("LP incentives tests", () => {
     // unclaimed user count should be 6
     expectUnclaimedUserCount(6n);
 
-    mint_token("mock-usdc", 1000, depositor);
-    deposit(1000, depositor);
-    expectUserLpBalance(Cl.principal(depositor), 1000n);
-
-    // transfer lp tokens to lp-incentives contract
-    transfer_token(
-      "state-v1",
-      1000,
-      depositor,
-      Cl.contractPrincipal(deployer, "lp-incentives-v2")
-    );
-
-    expectUserLpBalance(Cl.principal(depositor), 0n);
-    expectUserLpBalance(
-      Cl.contractPrincipal(deployer, "lp-incentives-v2"),
-      1000n
-    );
+    // transfer stx to lp-incentives contract
+    simnet.transferSTX(1000, lpIncentivesContract, depositor);
+    expectUserStxBalance(depositor, 99999999999000n);
+    expectUserStxBalance(lpIncentivesContract, 1000n);
 
     // check close epoch
     close_epoch();
@@ -615,22 +559,19 @@ describe("LP incentives tests", () => {
     claimRewards(user6);
 
     // check rewards
-    expectUserLpBalance(Cl.principal(user1), 444n);
-    expectUserLpBalance(Cl.principal(user2), 314n);
-    expectUserLpBalance(Cl.principal(user3), 77n);
-    expectUserLpBalance(Cl.principal(user4), 77n);
-    expectUserLpBalance(Cl.principal(user5), 61n);
-    expectUserLpBalance(Cl.principal(user6), 17n);
+    expectUserStxBalance(user1, 444n);
+    expectUserStxBalance(user2, 314n);
+    expectUserStxBalance(user3, 77n);
+    expectUserStxBalance(user4, 77n);
+    expectUserStxBalance(user5, 61n);
+    expectUserStxBalance(user6, 17n);
     expectUnclaimedUserCount(0n);
 
     // transfer remaing balance to depositor
-    expectUserLpBalance(
-      Cl.contractPrincipal(deployer, "lp-incentives-v2"),
-      10n
-    );
-    expectUserLpBalance(Cl.principal(depositor), 0n);
-    transferRemainingLpTokens(depositor);
-    expectUserLpBalance(Cl.contractPrincipal(deployer, "lp-incentives-v2"), 0n);
-    expectUserLpBalance(Cl.principal(depositor), 10n);
+    expectUserStxBalance(lpIncentivesContract, 10n);
+    expectUserStxBalance(depositor, 99999999999000n);
+    transferRemainingStx(depositor);
+    expectUserStxBalance(lpIncentivesContract, 0n);
+    expectUserStxBalance(depositor, 99999999999010n);
   });
 });
