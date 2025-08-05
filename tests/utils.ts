@@ -112,7 +112,7 @@ export const borrow = (amount: number, user: any) => {
   const response = simnet.callPublicFn(
     "borrower-v1",
     "borrow",
-    [Cl.none(), Cl.uint(amount)],
+    [Cl.none(), Cl.uint(amount), Cl.none()],
     user
   );
   expect(response.result).toBeOk(Cl.bool(true));
@@ -137,7 +137,7 @@ export const add_collateral = (
   const response = simnet.callPublicFn(
     "borrower-v1",
     "add-collateral",
-    [Cl.contractPrincipal(deployer, collateral), Cl.uint(amount)],
+    [Cl.contractPrincipal(deployer, collateral), Cl.uint(amount), Cl.none()],
     user
   );
   expect(response.result).toBeOk(Cl.bool(true));
@@ -152,7 +152,12 @@ export const remove_collateral = (
   const response = simnet.callPublicFn(
     "borrower-v1",
     "remove-collateral",
-    [Cl.none(), Cl.contractPrincipal(deployer, collateral), Cl.uint(amount)],
+    [
+      Cl.none(),
+      Cl.contractPrincipal(deployer, collateral),
+      Cl.uint(amount),
+      Cl.none(),
+    ],
     user
   );
   expect(response.result).toBeOk(Cl.bool(true));
@@ -298,7 +303,7 @@ export const deposit_and_borrow = (
   const borrow = simnet.callPublicFn(
     "borrower-v1",
     "borrow",
-    [Cl.none(), Cl.uint(borrow_amount)],
+    [Cl.none(), Cl.uint(borrow_amount), Cl.none()],
     borrower
   );
   expect(borrow.result).toBeOk(Cl.bool(true));

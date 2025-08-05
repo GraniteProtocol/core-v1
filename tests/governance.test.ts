@@ -159,7 +159,7 @@ describe("governance tests", () => {
     response = simnet.callPublicFn(
       "borrower-v1",
       "add-collateral",
-      [Cl.contractPrincipal(deployer, "mock-btc"), Cl.uint(1)],
+      [Cl.contractPrincipal(deployer, "mock-btc"), Cl.uint(1), Cl.none()],
       governance_account
     );
     expect(response.result).toBeErr(Cl.uint(102));
@@ -186,7 +186,12 @@ describe("governance tests", () => {
     response = simnet.callPublicFn(
       "borrower-v1",
       "remove-collateral",
-      [Cl.none(), Cl.contractPrincipal(deployer, "mock-btc"), Cl.uint(1)],
+      [
+        Cl.none(),
+        Cl.contractPrincipal(deployer, "mock-btc"),
+        Cl.uint(1),
+        Cl.none(),
+      ],
       governance_account
     );
     expect(response.result).toBeErr(Cl.uint(102));
@@ -1852,7 +1857,7 @@ describe("governance tests", () => {
     let borrow = simnet.callPublicFn(
       "borrower-v1",
       "borrow",
-      [Cl.none(), Cl.uint(10000000000)],
+      [Cl.none(), Cl.uint(10000000000), Cl.none()],
       borrower1
     );
     expect(borrow.result).toBeOk(Cl.bool(true));
@@ -1903,6 +1908,7 @@ describe("governance tests", () => {
         Cl.none(),
         Cl.contractPrincipal(deployer, "mock-btc"),
         Cl.uint(10000000000),
+        Cl.none(),
       ],
       borrower1
     );
@@ -1935,6 +1941,7 @@ describe("governance tests", () => {
         Cl.none(),
         Cl.contractPrincipal(deployer, "mock-btc"),
         Cl.uint(20000000000),
+        Cl.none(),
       ],
       borrower1
     );
