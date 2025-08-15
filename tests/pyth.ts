@@ -4,10 +4,10 @@ import { pyth } from "../contracts/pyth/unit-tests/pyth/helpers";
 import { wormhole } from "../contracts/pyth/unit-tests/wormhole/helpers";
 import { scalingFactor } from "./utils";
 
-export const pythDecoderPnauContractName = "pyth-pnau-decoder-v2";
-export const pythGovernanceContractName = "pyth-governance-v2";
-export const pythStorageContractName = "pyth-storage-ve";
-export const wormholeCoreContractName = "wormhole-core-v3";
+export const pythDecoderPnauContractName = "pyth-pnau-decoder-v3";
+export const pythGovernanceContractName = "pyth-governance-v3";
+export const pythStorageContractName = "pyth-storage-v4";
+export const wormholeCoreContractName = "wormhole-core-v4";
 export const guardianSet = wormhole.generateGuardianSetKeychain(19);
 
 export const init_pyth = (sender: any) => {
