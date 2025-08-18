@@ -7,25 +7,25 @@
 (define-constant ERR-INVALID-MAX-CONFIDENCE-RATIO (err u80003))
 (define-constant ERR-PRICE-CONFIDENCE-LOW (err u80004))
 
-(define-constant STACKS_BLOCK_TIME (contract-call? .constants-v1 get-stacks-block-time ))
+(define-constant STACKS_BLOCK_TIME (contract-call? 'SP35E2BBMDT2Y1HB0NTK139YBGYV3PAPK3WA8BRNA.constants-v1 get-stacks-block-time ))
 ;; Minimum time delta of 1 minute.
 (define-constant MINIMUM_TIME_DELTA u60)
 ;; Confidence ratio scaling factor  = 100% confidence
 (define-constant CONFIDENCE_SCALING_FACTOR u10000)
 ;; Price scaling factor decimals
-(define-constant PRICE_DECIMALS (to-int (contract-call? .constants-v2 get-price-decimals)))
+(define-constant PRICE_DECIMALS (to-int (contract-call? 'SP3BJR4P3W2Y9G22HA595Z59VHBC9EQYRFWSKG743.constants-v2 get-price-decimals)))
 
 ;; price feeds can be found in https://pyth.network/developers/price-feed-ids
 (define-map price-feeds principal {
   feed-id: (buff 32),
   max-confidence-ratio: uint
 })
-(define-data-var time-delta uint u1800)
+(define-data-var time-delta uint u300)
 
 ;; admin-level maintenance functions
 (define-public (update-price-feed-id (token principal) (new-feed-id (buff 32)) (max-confidence-ratio uint))
   (begin 
-    (asserts! (is-eq (contract-call? .state-v1 get-governance) contract-caller) ERR-NOT-AUTHORIZED)
+    (asserts! (is-eq (contract-call? 'SP35E2BBMDT2Y1HB0NTK139YBGYV3PAPK3WA8BRNA.state-v1 get-governance) contract-caller) ERR-NOT-AUTHORIZED)
     (asserts! (<= max-confidence-ratio CONFIDENCE_SCALING_FACTOR) ERR-INVALID-MAX-CONFIDENCE-RATIO)
     (map-set price-feeds token {
       feed-id: new-feed-id,
@@ -43,7 +43,7 @@
 
 (define-public (update-time-delta (delta uint))
   (begin 
-    (asserts! (is-eq (contract-call? .state-v1 get-governance) contract-caller) ERR-NOT-AUTHORIZED)
+    (asserts! (is-eq (contract-call? 'SP35E2BBMDT2Y1HB0NTK139YBGYV3PAPK3WA8BRNA.state-v1 get-governance) contract-caller) ERR-NOT-AUTHORIZED)
     (print  {
       event-type: "update-time-delta",
       old-val: (var-get time-delta),
@@ -67,7 +67,7 @@
       (pyth-feed-data (unwrap! (map-get? price-feeds token) ERR-UNSUPPORTED-ASSET))
       (pyth-record 
           (try! (contract-call? 
-            .pyth-storage-v4
+            'SP1CGXWEAMG6P6FT04W66NVGJ7PQWMDAC19R7PJ0Y.pyth-storage-v4
             get-price
             (get feed-id pyth-feed-data)
           ))
@@ -81,12 +81,12 @@
   (match maybe-vaa-buffer vaa-buffer
     (begin
       (try! 
-        (contract-call? .pyth-oracle-v4 verify-and-update-price-feeds 
+        (contract-call? 'SP1CGXWEAMG6P6FT04W66NVGJ7PQWMDAC19R7PJ0Y.pyth-oracle-v4 verify-and-update-price-feeds 
           vaa-buffer
           {
-            pyth-storage-contract: .pyth-storage-v4,
-            pyth-decoder-contract: .pyth-pnau-decoder-v3,
-            wormhole-core-contract: .wormhole-core-v4
+            pyth-storage-contract: 'SP1CGXWEAMG6P6FT04W66NVGJ7PQWMDAC19R7PJ0Y.pyth-storage-v4,
+            pyth-decoder-contract: 'SP1CGXWEAMG6P6FT04W66NVGJ7PQWMDAC19R7PJ0Y.pyth-pnau-decoder-v3,
+            wormhole-core-contract: 'SP1CGXWEAMG6P6FT04W66NVGJ7PQWMDAC19R7PJ0Y.wormhole-core-v4
           }) 
       )
       SUCCESS
@@ -153,3 +153,13 @@
         (if (> diff 0) (* price (pow 10 diff)) (/ price (pow 10 (abs diff))))
     ))
 ))
+
+(map-set price-feeds 'SP3Y2ZSH8P7D50B0VBTSX11S7XSG24M1VB9YFQA4K.token-aeusdc {
+  feed-id: 0xeaa020c61cc479712813461ce153894a96a6c00b21ed0cfc2798d1f9a9e9c94a,
+  max-confidence-ratio: u100
+})
+
+(map-set price-feeds 'SM3VDXK3WZZSA84XXFKAFAF15NNZX32CTSG82JFQ4.sbtc-token {
+  feed-id: 0xe62df6c8b4a85fe1a67db44dc12de5db330f7ac66b72dc658afedf0f4a415b43,
+  max-confidence-ratio: u500
+})

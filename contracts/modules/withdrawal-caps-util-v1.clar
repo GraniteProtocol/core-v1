@@ -34,7 +34,7 @@
     (
       (time-now (get-time-now))
       (last-ts (contract-call? .withdrawal-caps-v1 get-last-lp-bucket-update))
-      (total-liquidity (unwrap! (contract-call? .mock-usdc get-balance .state-v1) ERR-FAILED-TO-GET-BALANCE))
+      (total-liquidity (unwrap! (contract-call? 'SP3Y2ZSH8P7D50B0VBTSX11S7XSG24M1VB9YFQA4K.token-aeusdc get-balance 'SP35E2BBMDT2Y1HB0NTK139YBGYV3PAPK3WA8BRNA.state-v1) ERR-FAILED-TO-GET-BALANCE))
       (max-lp-bucket (/ (* total-liquidity (contract-call? .withdrawal-caps-v1 get-lp-cap-factor)) SCALING-FACTOR))
       (current-bucket (contract-call? .withdrawal-caps-v1 get-lp-bucket))
       (new-bucket-value (if (>= current-bucket max-lp-bucket) 
@@ -54,7 +54,7 @@
     (
       (time-now (get-time-now))
       (last-ts (contract-call? .withdrawal-caps-v1 get-last-debt-bucket-update))
-      (total-liquidity (contract-call? .state-v1 get-borrowable-balance))
+      (total-liquidity (contract-call? 'SP35E2BBMDT2Y1HB0NTK139YBGYV3PAPK3WA8BRNA.state-v1 get-borrowable-balance))
       (max-debt-bucket (/ (* total-liquidity (contract-call? .withdrawal-caps-v1 get-debt-cap-factor)) SCALING-FACTOR))
       (current-bucket (contract-call? .withdrawal-caps-v1 get-debt-bucket))
       (new-bucket-value (if (>= current-bucket max-debt-bucket) 
@@ -73,9 +73,9 @@
   (let
     (
       (time-now (get-time-now))
-      (collateral-token .mock-btc)
+      (collateral-token 'SM3VDXK3WZZSA84XXFKAFAF15NNZX32CTSG82JFQ4.sbtc-token)
       (last-ts (contract-call? .withdrawal-caps-v1 get-last-collateral-bucket-update collateral-token))
-      (total-liquidity (unwrap! (contract-call? .mock-btc get-balance .state-v1) ERR-FAILED-TO-GET-BALANCE))
+      (total-liquidity (unwrap! (contract-call? 'SM3VDXK3WZZSA84XXFKAFAF15NNZX32CTSG82JFQ4.sbtc-token get-balance 'SP35E2BBMDT2Y1HB0NTK139YBGYV3PAPK3WA8BRNA.state-v1) ERR-FAILED-TO-GET-BALANCE))
       (max-collateral-bucket (/ (* total-liquidity (contract-call? .withdrawal-caps-v1 get-collateral-cap-factor collateral-token)) SCALING-FACTOR))
       (current-bucket (contract-call? .withdrawal-caps-v1 get-collateral-bucket collateral-token))
       (new-bucket-value (if (>= current-bucket max-collateral-bucket) 

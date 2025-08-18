@@ -22,21 +22,21 @@
 
 ;; VARIABLES
 
-;; refill time window of 24 hrs
+;; refill time window of 10 hrs
 ;; updatable through governance
-(define-data-var refill-time-window uint u86400)
+(define-data-var refill-time-window uint u36000)
 
 ;; decay time window of 3 hrs
 ;; updatable through governance
 (define-data-var decay-time-window uint u10800)
 
 ;; LP
-(define-data-var lp-cap-factor uint u0)
+(define-data-var lp-cap-factor uint u20000000)
 (define-data-var last-lp-bucket-update uint u0)
 (define-data-var lp-bucket uint u0) ;; current available lp withdrawal credit
 
 ;; Debt
-(define-data-var debt-cap-factor uint u0)
+(define-data-var debt-cap-factor uint u20000000)
 (define-data-var last-debt-bucket-update uint u0)
 (define-data-var debt-bucket uint u0) ;; current available debt borrowing credit
 
@@ -95,7 +95,7 @@
     (
       (time-now (get-time-now))
       (last-ts (var-get last-lp-bucket-update))
-      (total-liquidity (unwrap! (contract-call? .mock-usdc get-balance .state-v1) ERR-FAILED-TO-GET-BALANCE))
+      (total-liquidity (unwrap! (contract-call? 'SP3Y2ZSH8P7D50B0VBTSX11S7XSG24M1VB9YFQA4K.token-aeusdc get-balance 'SP35E2BBMDT2Y1HB0NTK139YBGYV3PAPK3WA8BRNA.state-v1) ERR-FAILED-TO-GET-BALANCE))
       (max-lp-bucket (/ (* total-liquidity (var-get lp-cap-factor)) SCALING-FACTOR))
       (current-bucket (var-get lp-bucket))
       (new-bucket-value (if (>= current-bucket max-lp-bucket) 
@@ -121,7 +121,7 @@
     (
       (time-now (get-time-now))
       (last-ts (var-get last-debt-bucket-update))
-      (total-liquidity (contract-call? .state-v1 get-borrowable-balance))
+      (total-liquidity (contract-call? 'SP35E2BBMDT2Y1HB0NTK139YBGYV3PAPK3WA8BRNA.state-v1 get-borrowable-balance))
       (max-debt-bucket (/ (* total-liquidity (var-get debt-cap-factor)) SCALING-FACTOR))
       (current-bucket (var-get debt-bucket))
       (new-bucket-value (if (>= current-bucket max-debt-bucket) 
@@ -147,7 +147,7 @@
       (time-now (get-time-now))
       (collateral-token (contract-of collateral))
       (last-ts (default-to u0 (map-get? last-collateral-bucket-update collateral-token)))
-      (total-liquidity (unwrap! (contract-call? collateral get-balance .state-v1) ERR-FAILED-TO-GET-BALANCE))
+      (total-liquidity (unwrap! (contract-call? collateral get-balance 'SP35E2BBMDT2Y1HB0NTK139YBGYV3PAPK3WA8BRNA.state-v1) ERR-FAILED-TO-GET-BALANCE))
       (max-collateral-bucket (/ (* total-liquidity (default-to u0 (map-get? collateral-cap-factor collateral-token))) SCALING-FACTOR))
       (current-bucket (default-to u0 (map-get? collateral-bucket collateral-token)))
       (new-bucket-value (if (>= current-bucket max-collateral-bucket) 
@@ -168,7 +168,7 @@
 )
 
 (define-private (is-governance)
-  (is-eq (contract-call? .state-v1 get-governance) contract-caller)
+  (is-eq (contract-call? 'SP35E2BBMDT2Y1HB0NTK139YBGYV3PAPK3WA8BRNA.state-v1 get-governance) contract-caller)
 )
 
 ;; PUBLIC FUNCTIONS
@@ -315,3 +315,5 @@
     SUCCESS
   )
 )
+
+(map-set collateral-cap-factor 'SM3VDXK3WZZSA84XXFKAFAF15NNZX32CTSG82JFQ4.sbtc-token u20000000)
