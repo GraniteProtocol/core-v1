@@ -67,7 +67,7 @@
       (pyth-feed-data (unwrap! (map-get? price-feeds token) ERR-UNSUPPORTED-ASSET))
       (pyth-record 
           (try! (contract-call? 
-            .pyth-storage-v3
+            .pyth-storage-v4
             get-price
             (get feed-id pyth-feed-data)
           ))
@@ -81,12 +81,12 @@
   (match maybe-vaa-buffer vaa-buffer
     (begin
       (try! 
-        (contract-call? .pyth-oracle-v3 verify-and-update-price-feeds 
+        (contract-call? .pyth-oracle-v4 verify-and-update-price-feeds 
           vaa-buffer
           {
-            pyth-storage-contract: .pyth-storage-v3,
-            pyth-decoder-contract: .pyth-pnau-decoder-v2,
-            wormhole-core-contract: .wormhole-core-v3
+            pyth-storage-contract: .pyth-storage-v4,
+            pyth-decoder-contract: .pyth-pnau-decoder-v3,
+            wormhole-core-contract: .wormhole-core-v4
           }) 
       )
       SUCCESS
