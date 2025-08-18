@@ -1,8 +1,8 @@
 ;; SPDX-License-Identifier: BUSL-1.1
 
 ;; TRAITS
-(impl-trait .trait-sip-010.sip-010-trait)
-(use-trait token-trait .trait-sip-010.sip-010-trait)
+(impl-trait 'SP3FBR2AGK5H9QBDH3EEN6DF8EK8JY7RX8QJ5SVTE.sip-010-trait-ft-standard.sip-010-trait)
+(use-trait token-trait 'SP3FBR2AGK5H9QBDH3EEN6DF8EK8JY7RX8QJ5SVTE.sip-010-trait-ft-standard.sip-010-trait)
 
 ;; TOKENS
 (define-fungible-token lp-token)

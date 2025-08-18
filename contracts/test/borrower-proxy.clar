@@ -1,4 +1,4 @@
-(use-trait token-trait .trait-sip-010.sip-010-trait)
+(use-trait token-trait 'SP3FBR2AGK5H9QBDH3EEN6DF8EK8JY7RX8QJ5SVTE.sip-010-trait-ft-standard.sip-010-trait)
 
 (define-public (borrow (pyth-price-feed-data (optional (buff 8192))) (amount uint))
     (contract-call? .borrower-v1 borrow pyth-price-feed-data amount (some tx-sender))

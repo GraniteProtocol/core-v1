@@ -5,181 +5,178 @@ authors = []
 telemetry = true
 cache_dir = './.cache'
 
+[[project.requirements]]
+contract_id = 'SP3FBR2AGK5H9QBDH3EEN6DF8EK8JY7RX8QJ5SVTE.sip-010-trait-ft-standard'
+[contracts.borrower-proxy]
+
+path = 'contracts/test/borrower-proxy.clar'
+clarity_version = 3
+epoch = '3.0'
+
 [contracts.borrower-v1]
 path = 'contracts/borrower-v1.clar'
 clarity_version = 3
-epoch = 3.0
+epoch = '3.0'
 
 [contracts.constants-v1]
 path = 'contracts/constants-v1.clar'
 clarity_version = 3
-epoch = 3.0
+epoch = '3.0'
 
 [contracts.constants-v2]
 path = 'contracts/constants-v2.clar'
 clarity_version = 3
-epoch = 3.0
+epoch = '3.0'
 
 [contracts.faucet]
 path = 'contracts/test/faucet.clar'
 clarity_version = 3
-epoch = 3.0
-
-[contracts.governance-v1]
-path = 'contracts/governance-v1.clar'
-clarity_version = 3
-epoch = 3.0
-
-[contracts.linear-kinked-ir-v1]
-path = 'contracts/modules/linear-kinked-ir-v1.clar'
-clarity_version = 3
-epoch = 3.0
-
-[contracts.liquidator-v1]
-path = 'contracts/liquidator-v1.clar'
-clarity_version = 3
-epoch = 3.0
-
-[contracts.liquidity-provider-v1]
-path = 'contracts/liquidity-provider-v1.clar'
-clarity_version = 3
-epoch = 3.0
-
-[contracts.math-v1]
-path = 'contracts/modules/math-v1.clar'
-clarity_version = 3
-epoch = 3.0
-
-[contracts.meta-governance-v1]
-path = 'contracts/meta-governance-v1.clar'
-clarity_version = 3
-epoch = 3.0
-
-[contracts.withdrawal-caps-v1]
-path = 'contracts/modules/withdrawal-caps-v1.clar'
-clarity_version = 3
-epoch = 3.0
-
-[contracts.withdrawal-caps-util-v1]
-path = 'contracts/modules/withdrawal-caps-util-v1.clar'
-clarity_version = 3
-epoch = 3.0
-
-[contracts.mock-btc]
-path = 'contracts/test/mock-btc.clar'
-clarity_version = 3
-epoch = 3.0
-
-[contracts.mock-eth]
-path = 'contracts/test/mock-eth.clar'
-clarity_version = 3
-epoch = 3.0
-
-[contracts.mock-usdc]
-path = 'contracts/test/mock-usdc.clar'
-clarity_version = 3
-epoch = 3.0
-
-[contracts.pyth-governance-v3]
-path = 'contracts/pyth/contracts/pyth-governance-v3.clar'
-clarity_version = 3
-epoch = 3.0
-
-[contracts.pyth-adapter-v1]
-path = 'contracts/modules/pyth-adapter-v1.clar'
-clarity_version = 3
-epoch = 3.0
-
-[contracts.pyth-oracle-v4]
-path = 'contracts/pyth/contracts/pyth-oracle-v4.clar'
-clarity_version = 3
-epoch = 3.0
-
-[contracts.pyth-pnau-decoder-v3]
-path = 'contracts/pyth/contracts/pyth-pnau-decoder-v3.clar'
-clarity_version = 3
-epoch = 3.0
-
-[contracts.pyth-storage-v4]
-path = 'contracts/pyth/contracts/pyth-storage-v4.clar'
-clarity_version = 3
-epoch = 3.0
-
-[contracts.pyth-traits-v2]
-path = 'contracts/pyth/contracts/pyth-traits-v2.clar'
-clarity_version = 3
-epoch = 3.0
-
-[contracts.staking-v1]
-path = 'contracts/staking-v1.clar'
-clarity_version = 3
-epoch = 3.0
-
-[contracts.staking-reward-v1]
-path = 'contracts/modules/staking-reward-v1.clar'
-clarity_version = 3
-epoch = 3.0
-
-[contracts.state-v1]
-path = 'contracts/state-v1.clar'
-clarity_version = 3
-epoch = 3.0
-
-[contracts.test-gifter]
-path = 'contracts/test/gifter.clar'
-clarity_version = 3
-epoch = 3.0
-
-[contracts.trait-sip-010]
-path = 'contracts/traits/trait-sip-010.clar'
-clarity_version = 3
-epoch = 3.0
-
-[contracts.utility]
-path = 'contracts/modules/utility.clar'
-clarity_version = 3
-epoch = 3.0
-
-[contracts.wormhole-core-v4]
-path = 'contracts/pyth/contracts/wormhole/wormhole-core-v4.clar'
-clarity_version = 3
-epoch = 3.0
-
-[contracts.wormhole-traits-v2]
-path = 'contracts/pyth/contracts/wormhole/wormhole-traits-v2.clar'
-clarity_version = 3
-epoch = 3.0
-
-[contracts.lp-incentives-v2]
-path = 'contracts/lp-incentives-v2.clar'
-clarity_version = 3
-epoch = 3.0
-
-[contracts.trait-flash-loan-v1]
-path = 'contracts/traits/trait-flash-loan-v1.clar'
-clarity_version = 3
-epoch = 3.0
+epoch = '3.0'
 
 [contracts.flash-loan-v1]
 path = 'contracts/flash-loan-v1.clar'
 clarity_version = 3
-epoch = 3.0
+epoch = '3.0'
+
+[contracts.governance-v1]
+path = 'contracts/governance-v1.clar'
+clarity_version = 3
+epoch = '3.0'
+
+[contracts.linear-kinked-ir-v1]
+path = 'contracts/modules/linear-kinked-ir-v1.clar'
+clarity_version = 3
+epoch = '3.0'
+
+[contracts.liquidator-v1]
+path = 'contracts/liquidator-v1.clar'
+clarity_version = 3
+epoch = '3.0'
+
+[contracts.liquidity-provider-v1]
+path = 'contracts/liquidity-provider-v1.clar'
+clarity_version = 3
+epoch = '3.0'
+
+[contracts.lp-incentives-v2]
+path = 'contracts/lp-incentives-v2.clar'
+clarity_version = 3
+epoch = '3.0'
+
+[contracts.math-v1]
+path = 'contracts/modules/math-v1.clar'
+clarity_version = 3
+epoch = '3.0'
+
+[contracts.meta-governance-v1]
+path = 'contracts/meta-governance-v1.clar'
+clarity_version = 3
+epoch = '3.0'
+
+[contracts.mock-btc]
+path = 'contracts/test/mock-btc.clar'
+clarity_version = 3
+epoch = '3.0'
+
+[contracts.mock-eth]
+path = 'contracts/test/mock-eth.clar'
+clarity_version = 3
+epoch = '3.0'
 
 [contracts.mock-flash-loan-callback]
 path = 'contracts/test/mock-flash-loan-callback.clar'
 clarity_version = 3
-epoch = 3.0
+epoch = '3.0'
 
 [contracts.mock-liquidator-with-flash-loan]
 path = 'contracts/test/mock-liquidator-with-flash-loan.clar'
 clarity_version = 3
-epoch = 3.0
+epoch = '3.0'
 
-[contracts.borrower-proxy]
-path = 'contracts/test/borrower-proxy.clar'
+[contracts.mock-usdc]
+path = 'contracts/test/mock-usdc.clar'
 clarity_version = 3
-epoch = 3.0
+epoch = '3.0'
 
+[contracts.pyth-adapter-v1]
+path = 'contracts/modules/pyth-adapter-v1.clar'
+clarity_version = 3
+epoch = '3.0'
+
+[contracts.pyth-governance-v3]
+path = 'contracts/pyth/contracts/pyth-governance-v3.clar'
+clarity_version = 3
+epoch = '3.0'
+
+[contracts.pyth-oracle-v4]
+path = 'contracts/pyth/contracts/pyth-oracle-v4.clar'
+clarity_version = 3
+epoch = '3.0'
+
+[contracts.pyth-pnau-decoder-v3]
+path = 'contracts/pyth/contracts/pyth-pnau-decoder-v3.clar'
+clarity_version = 3
+epoch = '3.0'
+
+[contracts.pyth-storage-v4]
+path = 'contracts/pyth/contracts/pyth-storage-v4.clar'
+clarity_version = 3
+epoch = '3.0'
+
+[contracts.pyth-traits-v2]
+path = 'contracts/pyth/contracts/pyth-traits-v2.clar'
+clarity_version = 3
+epoch = '3.0'
+
+[contracts.staking-reward-v1]
+path = 'contracts/modules/staking-reward-v1.clar'
+clarity_version = 3
+epoch = '3.0'
+
+[contracts.staking-v1]
+path = 'contracts/staking-v1.clar'
+clarity_version = 3
+epoch = '3.0'
+
+[contracts.state-v1]
+path = 'contracts/state-v1.clar'
+clarity_version = 3
+epoch = '3.0'
+
+[contracts.test-gifter]
+path = 'contracts/test/gifter.clar'
+clarity_version = 3
+epoch = '3.0'
+
+[contracts.trait-flash-loan-v1]
+path = 'contracts/traits/trait-flash-loan-v1.clar'
+clarity_version = 3
+epoch = '3.0'
+
+[contracts.utility]
+path = 'contracts/modules/utility.clar'
+clarity_version = 3
+epoch = '3.0'
+
+[contracts.withdrawal-caps-util-v1]
+path = 'contracts/modules/withdrawal-caps-util-v1.clar'
+clarity_version = 3
+epoch = '3.0'
+
+[contracts.withdrawal-caps-v1]
+path = 'contracts/modules/withdrawal-caps-v1.clar'
+clarity_version = 3
+epoch = '3.0'
+
+[contracts.wormhole-core-v4]
+path = 'contracts/pyth/contracts/wormhole/wormhole-core-v4.clar'
+clarity_version = 3
+epoch = '3.0'
+
+[contracts.wormhole-traits-v2]
+path = 'contracts/pyth/contracts/wormhole/wormhole-traits-v2.clar'
+clarity_version = 3
+epoch = '3.0'
 [repl.analysis]
 passes = []
 
@@ -188,3 +185,7 @@ strict = false
 trusted_sender = false
 trusted_caller = false
 callee_filter = false
+
+[repl.remote_data]
+enabled = false
+api_url = 'https://api.hiro.so'
