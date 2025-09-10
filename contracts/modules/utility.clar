@@ -10,7 +10,7 @@
 
 
 ;; read-only functions
-(define-read-only (get-accrue-interest)
+(define-read-only (get-market-state)
   (let (
     (accrue-interest-params (unwrap! (contract-call? .state-v1 get-accrue-interest-params) ERR-INTEREST-PARAMS))
     (accrued-interest (try! (contract-call? .linear-kinked-ir-v1 accrue-interest
@@ -21,8 +21,17 @@
       (get protocol-interest accrue-interest-params)
       (get protocol-reserve-percentage accrue-interest-params)
       (get total-assets accrue-interest-params)))
+    )
+    (reserve-balance (contract-call? .state-v1 get-reserve-balance ))
+    (asset-cap (contract-call? .state-v1 get-asset-cap ))
+    (borrowable-balance (contract-call? .state-v1 get-borrowable-balance )))
+    (ok (merge accrued-interest {
+        last-accrued-block-time: (get last-accrued-block-time accrue-interest-params),
+        reserve-balance: reserve-balance,
+        asset-cap: asset-cap,
+        borrowable-balance: borrowable-balance
+      }
     ))
-    (ok accrued-interest)
 ))
 
 (define-read-only (get-withdrawal-caps (inflow uint))
