@@ -9,9 +9,9 @@ plan:
     - id: 0
       transactions:
         - contract-publish:
-            contract-name: utility-v2
-            expected-sender: SP3TXZAH78EAYRD2GY5X4CT1ZC5K7ZC7NZ8CHMGVT
-            cost: 2760
+            contract-name: utility
+            expected-sender: SPGDA8DQ1RTGSAMZ82B5Y5YTCQTG3CQ8RW65AXY1
+            cost: 6534
             path: contracts/modules/utility.clar
             anchor-block-only: true
             clarity-version: 3
