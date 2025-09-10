@@ -60,11 +60,6 @@ path = 'contracts/modules/withdrawal-caps-v1.clar'
 clarity_version = 3
 epoch = 3.0
 
-[contracts.withdrawal-caps-util-v1]
-path = 'contracts/modules/withdrawal-caps-util-v1.clar'
-clarity_version = 3
-epoch = 3.0
-
 [contracts.mock-btc]
 path = 'contracts/test/mock-btc.clar'
 clarity_version = 3
