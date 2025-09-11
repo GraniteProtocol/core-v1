@@ -9,9 +9,9 @@ plan:
     - id: 0
       transactions:
         - contract-publish:
-            contract-name: utility-production-v1
+            contract-name: utility-staging-v2
             expected-sender: SPGDA8DQ1RTGSAMZ82B5Y5YTCQTG3CQ8RW65AXY1
-            cost: 7096
+            cost: 7899
             path: contracts/modules/utility.clar
             anchor-block-only: true
             clarity-version: 3

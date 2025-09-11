@@ -24,12 +24,20 @@
     )
     (reserve-balance (contract-call? .state-v1 get-reserve-balance ))
     (asset-cap (contract-call? .state-v1 get-asset-cap ))
-    (borrowable-balance (contract-call? .state-v1 get-borrowable-balance )))
+    (borrowable-balance (contract-call? .state-v1 get-borrowable-balance ))
+    (total-debt-shares (get total-debt-shares (contract-call? .state-v1 get-debt-params )))
+    (market-token-balance (unwrap-panic (contract-call? .mock-usdc get-balance .state-v1)))
+    (sbtc-balance (unwrap-panic (contract-call? .mock-btc get-balance .state-v1)))
+    (total-lp-shares (unwrap! (contract-call? .state-v1 get-total-supply ) ERR-FAILED-TO-GET-BALANCE)))
     (ok (merge accrued-interest {
         last-accrued-block-time: (get last-accrued-block-time accrue-interest-params),
         reserve-balance: reserve-balance,
         asset-cap: asset-cap,
-        borrowable-balance: borrowable-balance
+        borrowable-balance: borrowable-balance,
+        total-debt-shares: total-debt-shares,
+        total-lp-shares: total-lp-shares,
+        market-token-balance: market-token-balance,
+        sbtc-balance: sbtc-balance
       }
     ))
 ))
