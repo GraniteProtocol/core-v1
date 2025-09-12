@@ -9,7 +9,7 @@ plan:
     - id: 0
       transactions:
         - contract-publish:
-            contract-name: utility-staging-v2
+            contract-name: utility-staging-v3
             expected-sender: SPGDA8DQ1RTGSAMZ82B5Y5YTCQTG3CQ8RW65AXY1
             cost: 7899
             path: contracts/modules/utility.clar
