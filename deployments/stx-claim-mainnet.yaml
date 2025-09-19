@@ -1,0 +1,18 @@
+---
+id: 0
+name: Mainnet deployment V1
+network: mainnet
+stacks-node: "https://api.hiro.so"
+bitcoin-node: "http://blockstack:blockstacksystem@bitcoin.blockstack.com:8332"
+plan:
+  batches:
+    - id: 0
+      transactions:
+        - contract-publish:
+            contract-name: stx-claim-v1
+            expected-sender: SPGDA8DQ1RTGSAMZ82B5Y5YTCQTG3CQ8RW65AXY1
+            cost: 1589
+            path: contracts/stx-claim.clar
+            anchor-block-only: true
+            clarity-version: 3
+      epoch: "3.0"
