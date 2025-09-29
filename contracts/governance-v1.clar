@@ -385,10 +385,30 @@
     ERR-INVALID-ACTION
 ))
 
+(define-private (add-guardian (guardian principal))
+  (begin
+    (map-set guardians guardian true)
+    (print {
+      action: "add-guardian",
+      guardian: guardian
+    })
+    SUCCESS
+))
+
+(define-private (remove-guardian (guardian principal))
+  (begin
+    (map-delete guardians guardian)
+    (print {
+      action: "remove-guardian",
+      guardian: guardian
+    })
+    SUCCESS
+))
+
 (define-private (execute-update-guardian (proposal-id (buff 32)) (action uint))
   (let ((guardian (unwrap-panic (map-get? update-guardians-proposal-data proposal-id))))
-    (asserts! (not (is-eq action ACTION_ADD_GUARDIAN)) (ok (map-set guardians guardian true)))
-    (asserts! (not (is-eq action ACTION_REMOVE_GUARDIAN)) (ok (map-delete guardians guardian)))
+    (asserts! (not (is-eq action ACTION_ADD_GUARDIAN)) (add-guardian guardian))
+    (asserts! (not (is-eq action ACTION_REMOVE_GUARDIAN)) (remove-guardian guardian))
     ERR-INVALID-ACTION
 ))
 
@@ -463,14 +483,12 @@
 (define-private (execute-set-lp-cap (proposal-id (buff 32)))
   (let ((data (unwrap-panic (map-get? cap-data proposal-id))))
     (contract-call? .withdrawal-caps-v1 set-lp-cap (get factor data))
-  )
-)
+))
 
 (define-private (execute-set-debt-cap (proposal-id (buff 32)))
   (let ((data (unwrap-panic (map-get? cap-data proposal-id))))
     (contract-call? .withdrawal-caps-v1 set-debt-cap (get factor data))
-  )
-)
+))
 
 (define-private (execute-set-collateral-cap (proposal-id (buff 32)))
   (let (
@@ -479,44 +497,37 @@
       (factor (get factor data))
     )
     (contract-call? .withdrawal-caps-v1 set-collateral-cap collateral factor)
-  )
-)
+))
 
 (define-private (execute-set-refill-time-window (proposal-id (buff 32)))
   (let ((data (unwrap-panic (map-get? cap-data proposal-id))))
     (contract-call? .withdrawal-caps-v1 set-refill-time-window (get factor data))
-  )
-)
+))
 
 (define-private (execute-set-decay-time-window (proposal-id (buff 32)))
   (let ((data (unwrap-panic (map-get? cap-data proposal-id))))
     (contract-call? .withdrawal-caps-v1 set-decay-time-window (get factor data))
-  )
-)
+))
 
 (define-private (execute-update-flash-loan-fee (proposal-id (buff 32)))
   (let ((data (unwrap-panic (map-get? flash-loan-fee-update proposal-id))))
     (contract-call? .flash-loan-v1 update-fee data)
-  )
-)
+))
 
 (define-private (execute-add-flash-loan-contract (proposal-id (buff 32)))
   (let ((data (unwrap-panic (map-get? flash-loan-contract-update proposal-id))))
     (contract-call? .flash-loan-v1 set-allowed-contract data)
-  )
-)
+))
 
 (define-private (execute-remove-flash-loan-contract (proposal-id (buff 32)))
   (let ((data (unwrap-panic (map-get? flash-loan-contract-update proposal-id))))
     (contract-call? .flash-loan-v1 remove-allowed-contract data)
-  )
-)
+))
 
 (define-private (execute-allow-any-contract-flash-loan (proposal-id (buff 32)))
   (let ((data (unwrap-panic (map-get? flash-allow-disable-contract-update proposal-id))))
     (contract-call? .flash-loan-v1 update-allow-any-contract data)
-  )
-)
+))
 
 (define-private (approve-threshold-met (proposal-id (buff 32)))
   (let (
@@ -615,7 +626,6 @@
       )
       SUCCESS
     )
-
 ))
 
 (define-private (deny-proposal-if-deny-threshold-met (proposal-id (buff 32)))
@@ -643,7 +653,7 @@
 
 (define-private (set-guardians (maybe-account (optional principal)))
   (match maybe-account 
-    account (begin (map-set guardians account true) SUCCESS)
+    account (add-guardian account)
     SUCCESS
 ))
 
@@ -1265,6 +1275,10 @@
     (asserts! (is-eq contract-caller contract-deployer) ERR-NOT-CONTRACT-DEPLOYER)
     (var-set governance-initialized true)
     (map set-guardians guardians-addrs)
+    (print {
+      action: "meta-governance",
+      meta-governance: .meta-governance-v1
+    })
     SUCCESS
 ))
 

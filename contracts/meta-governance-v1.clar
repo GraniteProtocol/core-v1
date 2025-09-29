@@ -125,7 +125,7 @@
     (if (is-eq action ACTION_ADD_GOVERNANCE_MULTISIG) 
       (begin
         (asserts! (not (is-already-member governance)) ERR-ALREADY-GOVERNANCE-MEMBER)
-        (map-set governance-accounts governance true)
+        (add-governance-multisig governance)
         (var-set governance-accounts-count (+ (var-get governance-accounts-count) u1))
         SUCCESS
       )
@@ -133,7 +133,7 @@
         (begin
           (asserts! (is-already-member governance) ERR-NOT-GOVERNANCE-MEMBER)
           (asserts! (>= (- (var-get governance-accounts-count) u1) u1) ERR-ZERO-GOVERNANCE)
-          (map-delete governance-accounts governance)
+          (remove-governance-multisig governance)
           (var-set governance-accounts-count (- (var-get governance-accounts-count) u1))
           SUCCESS
         )
@@ -198,10 +198,28 @@
     (default-to false (map-get? proposal-denied-members {proposal-id: proposal-id, member: contract-caller}))
 ))
 
+(define-private (add-governance-multisig (governance principal))
+  (begin
+    (map-set governance-accounts governance true)
+    (print {
+      action: "add-governance-multisig",
+      governance: governance
+    })
+))
+
+(define-private (remove-governance-multisig (governance principal))
+  (begin
+    (map-delete governance-accounts governance)
+    (print {
+      action: "remove-governance-multisig",
+      governance: governance
+    })
+))
+
 (define-private (set-governance-multisig (maybe-account (optional principal)))
   (match maybe-account 
     account (begin
-      (map-set governance-accounts account true)
+      (add-governance-multisig account)
       (var-set governance-accounts-count (+ (var-get governance-accounts-count) u1))
       SUCCESS
     )

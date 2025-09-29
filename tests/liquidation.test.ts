@@ -15,6 +15,7 @@ import {
   expectUserUSDCBalance,
   mint_token_to_contract,
   expectUserBTCBalance,
+  state_set_governance_contract,
 } from "./utils";
 import { tx } from "@hirosystems/clarinet-sdk";
 import {
@@ -1487,6 +1488,7 @@ describe("liquidation tests", () => {
       deployer
     );
 
+    state_set_governance_contract(deployer);
     let liquidate = simnet.callPublicFn(
       "mock-liquidator-with-flash-loan",
       "liquidate-collateral",
