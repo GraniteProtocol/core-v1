@@ -1,6 +1,6 @@
 ---
 id: 0
-name: Mainnet deployment
+name: Mainnet staging deployment
 network: mainnet
 stacks-node: "https://api.hiro.so"
 bitcoin-node: "http://blockstack:blockstacksystem@bitcoin.blockstack.com:8332"
