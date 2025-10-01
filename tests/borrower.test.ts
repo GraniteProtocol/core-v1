@@ -1119,7 +1119,7 @@ describe("borrower tests", () => {
       let borrowResult = simnet.callPublicFn(
         "borrower-v1",
         "borrow",
-        [Cl.none(), Cl.uint(1)],
+        [Cl.none(), Cl.uint(1), Cl.none()],
         borrower1
       ); // Borrow the 1 wei
       expect(borrowResult.result).toBeOk(Cl.bool(true));
