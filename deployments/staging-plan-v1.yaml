@@ -1,0 +1,291 @@
+---
+id: 0
+name: Mainnet staging deployment
+network: mainnet
+stacks-node: "https://api.hiro.so"
+bitcoin-node: "http://blockstack:blockstacksystem@bitcoin.blockstack.com:8332"
+plan:
+  batches:
+    - id: 0
+      transactions:
+        - contract-publish:
+            contract-name: constants-v1
+            expected-sender: SP3Y6GFKWN50HPA8RKRXMY0EXAJR9VXPY899P88JN
+            cost: 100000
+            path: contracts/constants-v1.clar
+            anchor-block-only: true
+            clarity-version: 3
+        - contract-publish:
+            contract-name: constants-v2
+            expected-sender: SP3Y6GFKWN50HPA8RKRXMY0EXAJR9VXPY899P88JN
+            cost: 100000
+            path: contracts/constants-v2.clar
+            anchor-block-only: true
+            clarity-version: 3
+        - contract-publish:
+            contract-name: math-v1
+            expected-sender: SP3Y6GFKWN50HPA8RKRXMY0EXAJR9VXPY899P88JN
+            cost: 100000
+            path: contracts/modules/math-v1.clar
+            anchor-block-only: true
+            clarity-version: 3
+        - contract-publish:
+            contract-name: state-v1
+            expected-sender: SP3Y6GFKWN50HPA8RKRXMY0EXAJR9VXPY899P88JN
+            cost: 100000
+            path: contracts/state-v1.clar
+            anchor-block-only: true
+            clarity-version: 3
+        - contract-publish:
+            contract-name: linear-kinked-ir-v1
+            expected-sender: SP3Y6GFKWN50HPA8RKRXMY0EXAJR9VXPY899P88JN
+            cost: 100000
+            path: contracts/modules/linear-kinked-ir-v1.clar
+            anchor-block-only: true
+            clarity-version: 3
+        - contract-publish:
+            contract-name: pyth-adapter-v1
+            expected-sender: SP3Y6GFKWN50HPA8RKRXMY0EXAJR9VXPY899P88JN
+            cost: 100000
+            path: contracts/modules/pyth-adapter-v1.clar
+            anchor-block-only: true
+            clarity-version: 3
+        - contract-publish:
+            contract-name: staking-reward-v1
+            expected-sender: SP3Y6GFKWN50HPA8RKRXMY0EXAJR9VXPY899P88JN
+            cost: 100000
+            path: contracts/modules/staking-reward-v1.clar
+            anchor-block-only: true
+            clarity-version: 3
+        - contract-publish:
+            contract-name: staking-v1
+            expected-sender: SP3Y6GFKWN50HPA8RKRXMY0EXAJR9VXPY899P88JN
+            cost: 100000
+            path: contracts/staking-v1.clar
+            anchor-block-only: true
+            clarity-version: 3
+        - contract-publish:
+            contract-name: withdrawal-caps-v1
+            expected-sender: SP3Y6GFKWN50HPA8RKRXMY0EXAJR9VXPY899P88JN
+            cost: 100000
+            path: contracts/modules/withdrawal-caps-v1.clar
+            anchor-block-only: true
+            clarity-version: 3
+        - contract-publish:
+            contract-name: borrower-v1
+            expected-sender: SP3Y6GFKWN50HPA8RKRXMY0EXAJR9VXPY899P88JN
+            cost: 100000
+            path: contracts/borrower-v1.clar
+            anchor-block-only: true
+            clarity-version: 3
+        - contract-publish:
+            contract-name: trait-flash-loan-v1
+            expected-sender: SP3Y6GFKWN50HPA8RKRXMY0EXAJR9VXPY899P88JN
+            cost: 100000
+            path: contracts/traits/trait-flash-loan-v1.clar
+            anchor-block-only: true
+            clarity-version: 3
+        - contract-publish:
+            contract-name: flash-loan-v1
+            expected-sender: SP3Y6GFKWN50HPA8RKRXMY0EXAJR9VXPY899P88JN
+            cost: 100000
+            path: contracts/flash-loan-v1.clar
+            anchor-block-only: true
+            clarity-version: 3
+      epoch: "3.0"
+    - id: 1
+      transactions:
+        - contract-publish:
+            contract-name: meta-governance-v1
+            expected-sender: SP3Y6GFKWN50HPA8RKRXMY0EXAJR9VXPY899P88JN
+            cost: 100000
+            path: contracts/meta-governance-v1.clar
+            anchor-block-only: true
+            clarity-version: 3
+        - contract-publish:
+            contract-name: governance-v1
+            expected-sender: SP3Y6GFKWN50HPA8RKRXMY0EXAJR9VXPY899P88JN
+            cost: 100000
+            path: contracts/governance-v1.clar
+            anchor-block-only: true
+            clarity-version: 3
+        - contract-publish:
+            contract-name: liquidator-v1
+            expected-sender: SP3Y6GFKWN50HPA8RKRXMY0EXAJR9VXPY899P88JN
+            cost: 100000
+            path: contracts/liquidator-v1.clar
+            anchor-block-only: true
+            clarity-version: 3
+        - contract-publish:
+            contract-name: liquidity-provider-v1
+            expected-sender: SP3Y6GFKWN50HPA8RKRXMY0EXAJR9VXPY899P88JN
+            cost: 100000
+            path: contracts/liquidity-provider-v1.clar
+            anchor-block-only: true
+            clarity-version: 3
+        - contract-publish:
+            contract-name: utility
+            expected-sender: SP3Y6GFKWN50HPA8RKRXMY0EXAJR9VXPY899P88JN
+            cost: 100000
+            path: contracts/modules/utility.clar
+            anchor-block-only: true
+            clarity-version: 3
+        - contract-publish:
+            contract-name: withdrawal-caps-util-v1
+            expected-sender: SP3Y6GFKWN50HPA8RKRXMY0EXAJR9VXPY899P88JN
+            cost: 100000
+            path: contracts/modules/withdrawal-caps-util-v1.clar
+            anchor-block-only: true
+            clarity-version: 3
+      epoch: "3.0"
+    - id: 2
+      transactions:
+        - contract-call:
+            contract-id: SP3Y6GFKWN50HPA8RKRXMY0EXAJR9VXPY899P88JN.linear-kinked-ir-v1
+            expected-sender: SP3Y6GFKWN50HPA8RKRXMY0EXAJR9VXPY899P88JN
+            method: update-ir-params
+            parameters:
+              - u130000000000
+              - u2000000000000
+              - u700000000000
+              - u3000000000000
+            cost: 50000
+        - contract-call:
+            contract-id: SP3Y6GFKWN50HPA8RKRXMY0EXAJR9VXPY899P88JN.staking-reward-v1
+            expected-sender: SP3Y6GFKWN50HPA8RKRXMY0EXAJR9VXPY899P88JN
+            method: update-reward-params
+            parameters:
+              - 0
+              - -1
+              - u99999999
+              - u0
+            cost: 50000
+        - contract-call:
+            contract-id: SP3Y6GFKWN50HPA8RKRXMY0EXAJR9VXPY899P88JN.state-v1
+            expected-sender: SP3Y6GFKWN50HPA8RKRXMY0EXAJR9VXPY899P88JN
+            method: set-allowed-contract
+            parameters:
+              - "'SP3Y6GFKWN50HPA8RKRXMY0EXAJR9VXPY899P88JN.liquidity-provider-v1"
+            cost: 50000
+        - contract-call:
+            contract-id: SP3Y6GFKWN50HPA8RKRXMY0EXAJR9VXPY899P88JN.state-v1
+            expected-sender: SP3Y6GFKWN50HPA8RKRXMY0EXAJR9VXPY899P88JN
+            method: set-allowed-contract
+            parameters:
+              - "'SP3Y6GFKWN50HPA8RKRXMY0EXAJR9VXPY899P88JN.borrower-v1"
+            cost: 50000
+        - contract-call:
+            contract-id: SP3Y6GFKWN50HPA8RKRXMY0EXAJR9VXPY899P88JN.state-v1
+            expected-sender: SP3Y6GFKWN50HPA8RKRXMY0EXAJR9VXPY899P88JN
+            method: set-allowed-contract
+            parameters:
+              - "'SP3Y6GFKWN50HPA8RKRXMY0EXAJR9VXPY899P88JN.liquidator-v1"
+            cost: 50000
+        - contract-call:
+            contract-id: SP3Y6GFKWN50HPA8RKRXMY0EXAJR9VXPY899P88JN.state-v1
+            expected-sender: SP3Y6GFKWN50HPA8RKRXMY0EXAJR9VXPY899P88JN
+            method: set-allowed-contract
+            parameters:
+              - "'SP3Y6GFKWN50HPA8RKRXMY0EXAJR9VXPY899P88JN.staking-v1"
+            cost: 50000
+        - contract-call:
+            contract-id: SP3Y6GFKWN50HPA8RKRXMY0EXAJR9VXPY899P88JN.state-v1
+            expected-sender: SP3Y6GFKWN50HPA8RKRXMY0EXAJR9VXPY899P88JN
+            method: set-allowed-contract
+            parameters:
+              - "'SP3Y6GFKWN50HPA8RKRXMY0EXAJR9VXPY899P88JN.flash-loan-v1"
+            cost: 50000
+        - contract-call:
+            contract-id: SP3Y6GFKWN50HPA8RKRXMY0EXAJR9VXPY899P88JN.state-v1
+            expected-sender: SP3Y6GFKWN50HPA8RKRXMY0EXAJR9VXPY899P88JN
+            method: update-collateral-settings
+            parameters:
+              - "'SM3VDXK3WZZSA84XXFKAFAF15NNZX32CTSG82JFQ4.sbtc-token"
+              - u45000000
+              - u45000001
+              - u10000000
+              - u8
+            cost: 50000
+        - contract-call:
+            contract-id: SP3Y6GFKWN50HPA8RKRXMY0EXAJR9VXPY899P88JN.state-v1
+            expected-sender: SP3Y6GFKWN50HPA8RKRXMY0EXAJR9VXPY899P88JN
+            method: update-asset-cap
+            parameters:
+              - u25000000000000
+            cost: 50000
+        - contract-call:
+            contract-id: SP3Y6GFKWN50HPA8RKRXMY0EXAJR9VXPY899P88JN.state-v1
+            expected-sender: SP3Y6GFKWN50HPA8RKRXMY0EXAJR9VXPY899P88JN
+            method: set-protocol-reserve-percentage
+            parameters:
+              - u25000000
+            cost: 50000
+        - contract-call:
+            contract-id: SP3Y6GFKWN50HPA8RKRXMY0EXAJR9VXPY899P88JN.pyth-adapter-v1
+            expected-sender: SP3Y6GFKWN50HPA8RKRXMY0EXAJR9VXPY899P88JN
+            method: update-price-feed-id
+            parameters:
+              - "'SP3Y2ZSH8P7D50B0VBTSX11S7XSG24M1VB9YFQA4K.token-aeusdc"
+              - "0xeaa020c61cc479712813461ce153894a96a6c00b21ed0cfc2798d1f9a9e9c94a"
+              - u100
+            cost: 50000
+        - contract-call:
+            contract-id: SP3Y6GFKWN50HPA8RKRXMY0EXAJR9VXPY899P88JN.pyth-adapter-v1
+            expected-sender: SP3Y6GFKWN50HPA8RKRXMY0EXAJR9VXPY899P88JN
+            method: update-price-feed-id
+            parameters:
+              - "'SM3VDXK3WZZSA84XXFKAFAF15NNZX32CTSG82JFQ4.sbtc-token"
+              - "0xe62df6c8b4a85fe1a67db44dc12de5db330f7ac66b72dc658afedf0f4a415b43"
+              - u500
+            cost: 50000
+        - contract-call:
+            contract-id: SP3Y6GFKWN50HPA8RKRXMY0EXAJR9VXPY899P88JN.pyth-adapter-v1
+            expected-sender: SP3Y6GFKWN50HPA8RKRXMY0EXAJR9VXPY899P88JN
+            method: update-price-feed-id
+            parameters:
+              - "'SM3VDXK3WZZSA84XXFKAFAF15NNZX32CTSG82JFQ4.sbtc-token"
+              - "0xe62df6c8b4a85fe1a67db44dc12de5db330f7ac66b72dc658afedf0f4a415b43"
+              - u500
+            cost: 50000
+        - contract-call:
+            contract-id: SP3Y6GFKWN50HPA8RKRXMY0EXAJR9VXPY899P88JN.pyth-adapter-v1
+            expected-sender: SP3Y6GFKWN50HPA8RKRXMY0EXAJR9VXPY899P88JN
+            method: update-time-delta
+            parameters:
+              - u300
+            cost: 50000
+        - contract-call:
+            contract-id: SP3Y6GFKWN50HPA8RKRXMY0EXAJR9VXPY899P88JN.flash-loan-v1
+            expected-sender: SP3Y6GFKWN50HPA8RKRXMY0EXAJR9VXPY899P88JN
+            method: update-fee
+            parameters:
+              - u10
+            cost: 50000
+        - contract-call:
+            contract-id: SP3Y6GFKWN50HPA8RKRXMY0EXAJR9VXPY899P88JN.flash-loan-v1
+            expected-sender: SP3Y6GFKWN50HPA8RKRXMY0EXAJR9VXPY899P88JN
+            method: update-allow-any-contract
+            parameters:
+              - true
+            cost: 50000
+        - contract-call:
+            contract-id: SP3Y6GFKWN50HPA8RKRXMY0EXAJR9VXPY899P88JN.meta-governance-v1
+            expected-sender: SP3Y6GFKWN50HPA8RKRXMY0EXAJR9VXPY899P88JN
+            method: initialize-governance
+            parameters:
+              - "(list (some 'SPTXMEW26M54HX1ZXF6VN7QKK4XES1038ERD40T5) (some 'SP3ZPYKVNAQK52YDSQKEHZ3MZQ5MFFZ52E0TH7TJ1) (some 'SP3XD84X3PE79SHJAZCDW1V5E9EA8JSKRBPEKAEK7))"
+            cost: 50000
+        - contract-call:
+            contract-id: SP3Y6GFKWN50HPA8RKRXMY0EXAJR9VXPY899P88JN.governance-v1
+            expected-sender: SP3Y6GFKWN50HPA8RKRXMY0EXAJR9VXPY899P88JN
+            method: initialize-governance
+            parameters:
+              - "(list (some 'SPTXMEW26M54HX1ZXF6VN7QKK4XES1038ERD40T5) (some 'SP3ZPYKVNAQK52YDSQKEHZ3MZQ5MFFZ52E0TH7TJ1) (some 'SP3XD84X3PE79SHJAZCDW1V5E9EA8JSKRBPEKAEK7))"
+            cost: 50000
+        - contract-call:
+            contract-id: SP3Y6GFKWN50HPA8RKRXMY0EXAJR9VXPY899P88JN.state-v1
+            expected-sender: SP3Y6GFKWN50HPA8RKRXMY0EXAJR9VXPY899P88JN
+            method: update-governance
+            parameters:
+              - "'SP3Y6GFKWN50HPA8RKRXMY0EXAJR9VXPY899P88JN.governance-v1"
+            cost: 50000
