@@ -7,6 +7,7 @@ import {
   mint_token,
   set_asset_cap,
   initialize_staking_reward,
+  state_set_governance_contract,
 } from "./utils";
 
 const accounts = simnet.getAccounts();
@@ -92,6 +93,7 @@ describe("Flash loan tests", () => {
   it("Successful flash loan", async () => {
     const amount = 100000 * Math.pow(10, 8);
     setCallbackAllowed();
+    state_set_governance_contract(deployer);
 
     mint_token("mock-usdc", amount, depositor);
     deposit(amount, depositor);
@@ -201,6 +203,7 @@ describe("Flash loan tests", () => {
   it("Successful flash loan with one unit fee", async () => {
     const amount = 10000;
     setCallbackAllowed();
+    state_set_governance_contract(deployer);
 
     mint_token("mock-usdc", amount, depositor);
     deposit(amount, depositor);

@@ -91,7 +91,7 @@
     (try! (contract-call? .state-v1 transfer-to .mock-usdc caller amount))
     (try! (contract-call? callback on-granite-flash-loan amount flash-loan-fee data))
     (try! (contract-call? .state-v1 transfer-from .mock-usdc caller amount))
-    (try! (contract-call? .mock-usdc transfer flash-loan-fee caller .governance-v1 none))
+    (try! (contract-call? .mock-usdc transfer flash-loan-fee caller (contract-call? .state-v1 get-governance) none))
     (print {
       action: "flash-loan",
       amount: amount,
