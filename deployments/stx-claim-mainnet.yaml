@@ -9,10 +9,10 @@ plan:
     - id: 0
       transactions:
         - contract-publish:
-            contract-name: utility-staging-v3
+            contract-name: stx-claim-v1
             expected-sender: SPGDA8DQ1RTGSAMZ82B5Y5YTCQTG3CQ8RW65AXY1
-            cost: 7899
-            path: contracts/modules/utility.clar
+            cost: 1589
+            path: contracts/stx-claim.clar
             anchor-block-only: true
             clarity-version: 3
       epoch: "3.0"
