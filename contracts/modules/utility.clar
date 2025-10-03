@@ -31,7 +31,6 @@
     (total-lp-shares (unwrap! (contract-call? .state-v1 get-total-supply ) ERR-FAILED-TO-GET-BALANCE))
     (total-staked-shares (unwrap! (contract-call? .staking-v1 get-total-supply ) ERR-FAILED-TO-GET-BALANCE)))
     (ok (merge accrued-interest {
-        last-accrued-block-time: (get last-accrued-block-time accrue-interest-params),
         reserve-balance: reserve-balance,
         asset-cap: asset-cap,
         borrowable-balance: borrowable-balance,
@@ -39,7 +38,8 @@
         total-lp-shares: total-lp-shares,
         market-token-balance: market-token-balance,
         sbtc-balance: sbtc-balance,
-        total-staked-balance: total-staked-shares
+        total-staked-balance: total-staked-shares,
+        on-chain-accrue-params: accrue-interest-params
       }
     ))
 ))
