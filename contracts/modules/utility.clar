@@ -29,7 +29,9 @@
     (market-token-balance (unwrap-panic (contract-call? .mock-usdc get-balance .state-v1)))
     (sbtc-balance (unwrap-panic (contract-call? .mock-btc get-balance .state-v1)))
     (total-lp-shares (unwrap! (contract-call? .state-v1 get-total-supply ) ERR-FAILED-TO-GET-BALANCE))
-    (total-staked-shares (unwrap! (contract-call? .staking-v1 get-total-supply ) ERR-FAILED-TO-GET-BALANCE)))
+    (total-staked-shares (unwrap! (contract-call? .staking-v1 get-total-supply ) ERR-FAILED-TO-GET-BALANCE))
+    (active-staked-lp-tokens (contract-call? .staking-v1 get-active-staked-lp-tokens ))
+    (total-staked-lp-tokens (contract-call? .staking-v1 get-total-staked-lp-tokens )))
     (ok (merge accrued-interest {
         reserve-balance: reserve-balance,
         asset-cap: asset-cap,
@@ -38,8 +40,12 @@
         total-lp-shares: total-lp-shares,
         market-token-balance: market-token-balance,
         sbtc-balance: sbtc-balance,
-        total-staked-balance: total-staked-shares,
-        on-chain-accrue-params: accrue-interest-params
+        on-chain-accrue-params: accrue-interest-params,
+        staking: {
+          total-staked-tokens: total-staked-shares,
+          active-staked-lp-tokens: active-staked-lp-tokens,
+          total-staked-lp-tokens: total-staked-lp-tokens
+        }
       }
     ))
 ))

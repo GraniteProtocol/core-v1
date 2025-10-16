@@ -9,9 +9,9 @@ plan:
     - id: 0
       transactions:
         - contract-publish:
-            contract-name: utility-production-v5
+            contract-name: utility-production-v6
             expected-sender: SPGDA8DQ1RTGSAMZ82B5Y5YTCQTG3CQ8RW65AXY1
-            cost: 8070
+            cost: 8477
             path: contracts/modules/utility.clar
             anchor-block-only: true
             clarity-version: 3
