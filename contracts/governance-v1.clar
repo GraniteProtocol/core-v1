@@ -355,8 +355,12 @@
 
 (define-private (execute-state-set-market-flag (proposal-id (buff 32)) (action uint))
   (let ((cooldown (unwrap-panic (map-get? unpause-market-data proposal-id))))
-    (asserts! (not (is-eq action ACTION_SET_MARKET_PAUSE_FLAG)) (contract-call? .state-v1 pause-market))
-    (asserts! (not (is-eq action ACTION_SET_MARKET_UNPAUSE_FLAG)) (contract-call? .state-v1 unpause-market cooldown))
+    (asserts! (not (is-eq action ACTION_SET_MARKET_PAUSE_FLAG)) (begin 
+      (try! (contract-call? .state-v1 pause-market)) 
+      (contract-call? .state-v1 set-staking-flag false)))
+    (asserts! (not (is-eq action ACTION_SET_MARKET_UNPAUSE_FLAG)) (begin 
+      (try! (contract-call? .state-v1 unpause-market cooldown))
+      (contract-call? .state-v1 set-staking-flag true)))
     ERR-INVALID-ACTION
 ))
 
