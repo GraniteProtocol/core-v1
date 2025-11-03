@@ -180,6 +180,11 @@ path = 'contracts/stx-claim.clar'
 clarity_version = 3
 epoch = 3.0
 
+[contracts.linear-linked-ir-utility]
+path = 'contracts/modules/linear-kinked-ir-utility.clar'
+clarity_version = 3
+epoch = 3.0
+
 [repl.analysis]
 passes = []
 
