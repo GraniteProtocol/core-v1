@@ -618,7 +618,7 @@
           SUCCESS
         )
 
-        ;; proposal will excuted after time-lock
+        ;; proposal will executed after time-lock
         (begin
           (map-set governance-proposal proposal-id (merge proposal {
             ;; bump expires at for time locked proposals
@@ -1291,8 +1291,9 @@
     (var-set governance-initialized true)
     (map set-guardians guardians-addrs)
     (print {
-      action: "meta-governance",
-      meta-governance: .meta-governance-v1
+      action: "initialize-governance",
+      meta-governance: .meta-governance-v1,
+      guardians: guardians-addrs
     })
     SUCCESS
 ))

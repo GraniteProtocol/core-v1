@@ -367,5 +367,9 @@
     (asserts! (is-eq contract-caller contract-deployer) ERR-NOT-CONTRACT-DEPLOYER)
     (var-set governance-initialized true)
     (map set-governance-multisig governance-multisigs)
+    (print {
+      action: "initialize-governance",
+      governance-multisigs: governance-multisigs
+    })
     SUCCESS
 ))
