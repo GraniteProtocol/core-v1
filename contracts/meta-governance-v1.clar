@@ -123,20 +123,9 @@
 (define-private (execute-update-governance-multisig (proposal-id (buff 32)) (action uint))
   (let ((governance (unwrap-panic (map-get? update-governance-multisig-proposal-data proposal-id))))
     (if (is-eq action ACTION_ADD_GOVERNANCE_MULTISIG) 
-      (begin
-        (asserts! (not (is-already-member governance)) ERR-ALREADY-GOVERNANCE-MEMBER)
-        (add-governance-multisig governance)
-        (var-set governance-accounts-count (+ (var-get governance-accounts-count) u1))
-        SUCCESS
-      )
+      (add-governance-multisig governance)
       (if (is-eq action ACTION_REMOVE_GOVERNANCE_MULTISIG)
-        (begin
-          (asserts! (is-already-member governance) ERR-NOT-GOVERNANCE-MEMBER)
-          (asserts! (>= (- (var-get governance-accounts-count) u1) u1) ERR-ZERO-GOVERNANCE)
-          (remove-governance-multisig governance)
-          (var-set governance-accounts-count (- (var-get governance-accounts-count) u1))
-          SUCCESS
-        )
+        (remove-governance-multisig governance)
         ERR-INVALID-ACTION
       )
     )
@@ -200,29 +189,32 @@
 
 (define-private (add-governance-multisig (governance principal))
   (begin
+    (asserts! (not (is-already-member governance)) ERR-ALREADY-GOVERNANCE-MEMBER)
     (map-set governance-accounts governance true)
+    (var-set governance-accounts-count (+ (var-get governance-accounts-count) u1))
     (print {
       action: "add-governance-multisig",
       governance: governance
     })
+    SUCCESS
 ))
 
 (define-private (remove-governance-multisig (governance principal))
   (begin
+    (asserts! (is-already-member governance) ERR-NOT-GOVERNANCE-MEMBER)
+    (asserts! (>= (- (var-get governance-accounts-count) u1) u1) ERR-ZERO-GOVERNANCE)
     (map-delete governance-accounts governance)
+    (var-set governance-accounts-count (- (var-get governance-accounts-count) u1))
     (print {
       action: "remove-governance-multisig",
       governance: governance
     })
+    SUCCESS
 ))
 
 (define-private (set-governance-multisig (maybe-account (optional principal)))
   (match maybe-account 
-    account (begin
-      (add-governance-multisig account)
-      (var-set governance-accounts-count (+ (var-get governance-accounts-count) u1))
-      SUCCESS
-    )
+    account (add-governance-multisig account)
     SUCCESS
 ))
 
