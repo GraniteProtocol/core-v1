@@ -212,11 +212,12 @@
     SUCCESS
 ))
 
-(define-private (set-governance-multisig (maybe-account (optional principal)))
-  (match maybe-account 
-    account (add-governance-multisig account)
-    SUCCESS
-))
+(define-private (set-governance-multisig (maybe-account (optional principal)) (res (response bool uint)))
+  (if (is-err res) 
+    res
+    (match maybe-account account (add-governance-multisig account) res)
+  )
+)
 
 (define-private (is-already-member (account principal))
   (default-to false (map-get? governance-accounts account))
@@ -366,7 +367,8 @@
     (asserts! (not (var-get governance-initialized)) ERR-CONTRACT-ALREADY-INITIALIZED)
     (asserts! (is-eq contract-caller contract-deployer) ERR-NOT-CONTRACT-DEPLOYER)
     (var-set governance-initialized true)
-    (map set-governance-multisig governance-multisigs)
+    (try! (fold set-governance-multisig governance-multisigs SUCCESS))
+    (asserts! (>= (var-get governance-accounts-count) u1) ERR-ZERO-GOVERNANCE)
     (print {
       action: "initialize-governance",
       governance-multisigs: governance-multisigs
