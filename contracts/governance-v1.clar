@@ -662,10 +662,10 @@
     )
 ))
 
-(define-private (set-guardians (maybe-account (optional principal)))
-  (match maybe-account 
-    account (add-guardian account)
-    SUCCESS
+(define-private (set-guardians (maybe-account (optional principal)) (res (response bool uint)))
+  (if (is-err res) 
+    res
+    (match maybe-account account (add-guardian account) res)
 ))
 
 (define-private (accrue-interest)
@@ -1289,7 +1289,7 @@
     (asserts! (not (var-get governance-initialized)) ERR-CONTRACT-ALREADY-INITIALIZED)
     (asserts! (is-eq contract-caller contract-deployer) ERR-NOT-CONTRACT-DEPLOYER)
     (var-set governance-initialized true)
-    (map set-guardians guardians-addrs)
+    (try! (fold set-guardians guardians-addrs SUCCESS))
     (print {
       action: "initialize-governance",
       meta-governance: .meta-governance-v1,
