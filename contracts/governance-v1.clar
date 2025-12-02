@@ -618,7 +618,7 @@
           SUCCESS
         )
 
-        ;; proposal will executed after time-lock
+        ;; proposal will be executed after time-lock
         (begin
           (map-set governance-proposal proposal-id (merge proposal {
             ;; bump expires at for time locked proposals
