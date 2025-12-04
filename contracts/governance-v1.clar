@@ -160,6 +160,7 @@
 (define-constant ERR-PROPOSAL-TIME-LOCKED (err u40017))
 (define-constant ERR-PROPOSAL-NOT-TIME-LOCKED (err u40018))
 (define-constant ERR-CANNOT-VOTE (err u40019))
+(define-constant ERR-ALREADY-GUARDIAN (err u40020))
 
 ;; DATA VARS
 
@@ -389,8 +390,13 @@
     ERR-INVALID-ACTION
 ))
 
+(define-private (is-already-guardian (account principal))
+  (default-to false (map-get? guardians account))
+)
+
 (define-private (add-guardian (guardian principal))
   (begin
+    (asserts! (not (is-already-guardian guardian)) ERR-ALREADY-GUARDIAN)
     (map-set guardians guardian true)
     (print {
       action: "add-guardian",
@@ -401,6 +407,7 @@
 
 (define-private (remove-guardian (guardian principal))
   (begin
+    (asserts! (is-already-guardian guardian) ERR-NOT-GUARDIAN)
     (map-delete guardians guardian)
     (print {
       action: "remove-guardian",
@@ -611,7 +618,7 @@
           SUCCESS
         )
 
-        ;; proposal will excuted after time-lock
+        ;; proposal will be executed after time-lock
         (begin
           (map-set governance-proposal proposal-id (merge proposal {
             ;; bump expires at for time locked proposals
@@ -655,10 +662,10 @@
     )
 ))
 
-(define-private (set-guardians (maybe-account (optional principal)))
-  (match maybe-account 
-    account (add-guardian account)
-    SUCCESS
+(define-private (set-guardians (maybe-account (optional principal)) (res (response bool uint)))
+  (if (is-err res) 
+    res
+    (match maybe-account account (add-guardian account) res)
 ))
 
 (define-private (accrue-interest)
@@ -883,6 +890,10 @@
       }) ERR-FAILED-TO-GENERATE-PROPOSAL-ID)))
     )
     (asserts! (and (>= action ACTION_ADD_GUARDIAN) (<= action ACTION_REMOVE_GUARDIAN)) ERR-INVALID-ACTION)
+    (if (is-eq action ACTION_ADD_GUARDIAN)
+      (asserts! (not (is-already-guardian guardian)) ERR-ALREADY-GUARDIAN)
+      (asserts! (is-already-guardian guardian) ERR-NOT-GUARDIAN)
+    )
     (try! (create-proposal proposal-id action expires-in))
     (map-set update-guardians-proposal-data proposal-id guardian)
     ;; try to execute the proposal if threshold is met
@@ -1278,10 +1289,11 @@
     (asserts! (not (var-get governance-initialized)) ERR-CONTRACT-ALREADY-INITIALIZED)
     (asserts! (is-eq contract-caller contract-deployer) ERR-NOT-CONTRACT-DEPLOYER)
     (var-set governance-initialized true)
-    (map set-guardians guardians-addrs)
+    (try! (fold set-guardians guardians-addrs SUCCESS))
     (print {
-      action: "meta-governance",
-      meta-governance: .meta-governance-v1
+      action: "initialize-governance",
+      meta-governance: .meta-governance-v1,
+      guardians: guardians-addrs
     })
     SUCCESS
 ))
