@@ -1,0 +1,41 @@
+---
+id: 0
+name: Mainnet staging deployment
+network: mainnet
+stacks-node: "https://api.hiro.so"
+bitcoin-node: "http://blockstack:blockstacksystem@bitcoin.blockstack.com:8332"
+plan:
+  batches:
+    - id: 0
+      transactions:
+        - contract-publish:
+            contract-name: meta-governance-v1
+            expected-sender: SPRM0XG4P6PSVR7XQ7BA65Q2FPM3TBAX9RBT9RVC
+            cost: 13537
+            path: contracts/meta-governance-v1.clar
+            anchor-block-only: true
+            clarity-version: 3
+        - contract-publish:
+            contract-name: governance-v1
+            expected-sender: SPRM0XG4P6PSVR7XQ7BA65Q2FPM3TBAX9RBT9RVC
+            cost: 55138
+            path: contracts/governance-v1.clar
+            anchor-block-only: true
+            clarity-version: 3
+      epoch: "3.0"
+    - id: 1
+      transactions:
+        - contract-call:
+            contract-id: SPRM0XG4P6PSVR7XQ7BA65Q2FPM3TBAX9RBT9RVC.meta-governance-v1
+            expected-sender: SPRM0XG4P6PSVR7XQ7BA65Q2FPM3TBAX9RBT9RVC
+            method: initialize-governance
+            parameters:
+              - "(list (some 'SPTXMEW26M54HX1ZXF6VN7QKK4XES1038ERD40T5) (some 'SP3ZPYKVNAQK52YDSQKEHZ3MZQ5MFFZ52E0TH7TJ1) (some 'SP3XD84X3PE79SHJAZCDW1V5E9EA8JSKRBPEKAEK7))"
+            cost: 256
+        - contract-call:
+            contract-id: SPRM0XG4P6PSVR7XQ7BA65Q2FPM3TBAX9RBT9RVC.governance-v1
+            expected-sender: SPRM0XG4P6PSVR7XQ7BA65Q2FPM3TBAX9RBT9RVC
+            method: initialize-governance
+            parameters:
+              - "(list (some 'SPTXMEW26M54HX1ZXF6VN7QKK4XES1038ERD40T5) (some 'SP3ZPYKVNAQK52YDSQKEHZ3MZQ5MFFZ52E0TH7TJ1) (some 'SP3XD84X3PE79SHJAZCDW1V5E9EA8JSKRBPEKAEK7))"
+            cost: 251
