@@ -1,7 +1,7 @@
 ;; SPDX-License-Identifier: BUSL-1.1
 
 ;; TRAITS
-(use-trait token-trait .trait-sip-010.sip-010-trait)
+(use-trait token-trait 'SP3FBR2AGK5H9QBDH3EEN6DF8EK8JY7RX8QJ5SVTE.sip-010-trait-ft-standard.sip-010-trait)
 
 ;; CONSTANTS
 
@@ -463,7 +463,7 @@
 
 (define-private (execute-transfer-funds (proposal-id (buff 32)))
   (let ((transfer-funds-data (unwrap-panic (map-get? transfer-funds proposal-id))))
-    (as-contract (try! (contract-call? .mock-usdc transfer (get amount transfer-funds-data) (as-contract contract-caller) (get account transfer-funds-data) none)))
+    (as-contract (try! (contract-call? 'SP120SBRBQJ00MCWS7TM5R8WJNTTKD5K0HFRC2CNE.usdcx transfer (get amount transfer-funds-data) (as-contract contract-caller) (get account transfer-funds-data) none)))
     SUCCESS
 ))
 
@@ -1284,7 +1284,7 @@
     (ok proposal-id)
 ))
 
-(define-public (initialize-governance (guardians-addrs (list 5 (optional principal))))
+(define-public (initialize-governance (guardians-addrs (list 6 (optional principal))))
   (begin
     (asserts! (not (var-get governance-initialized)) ERR-CONTRACT-ALREADY-INITIALIZED)
     (asserts! (is-eq contract-caller contract-deployer) ERR-NOT-CONTRACT-DEPLOYER)

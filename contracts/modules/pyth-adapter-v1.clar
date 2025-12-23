@@ -20,7 +20,8 @@
   feed-id: (buff 32),
   max-confidence-ratio: uint
 })
-(define-data-var time-delta uint u1800)
+
+(define-data-var time-delta uint u300)
 
 ;; admin-level maintenance functions
 (define-public (update-price-feed-id (token principal) (new-feed-id (buff 32)) (max-confidence-ratio uint))
@@ -67,7 +68,7 @@
       (pyth-feed-data (unwrap! (map-get? price-feeds token) ERR-UNSUPPORTED-ASSET))
       (pyth-record 
           (try! (contract-call? 
-            .pyth-storage-v4
+            'SP1CGXWEAMG6P6FT04W66NVGJ7PQWMDAC19R7PJ0Y.pyth-storage-v4
             get-price
             (get feed-id pyth-feed-data)
           ))
@@ -81,12 +82,12 @@
   (match maybe-vaa-buffer vaa-buffer
     (begin
       (try! 
-        (contract-call? .pyth-oracle-v4 verify-and-update-price-feeds 
+        (contract-call? 'SP1CGXWEAMG6P6FT04W66NVGJ7PQWMDAC19R7PJ0Y.pyth-oracle-v4 verify-and-update-price-feeds 
           vaa-buffer
           {
-            pyth-storage-contract: .pyth-storage-v4,
-            pyth-decoder-contract: .pyth-pnau-decoder-v3,
-            wormhole-core-contract: .wormhole-core-v4
+            pyth-storage-contract: 'SP1CGXWEAMG6P6FT04W66NVGJ7PQWMDAC19R7PJ0Y.pyth-storage-v4,
+            pyth-decoder-contract: 'SP1CGXWEAMG6P6FT04W66NVGJ7PQWMDAC19R7PJ0Y.pyth-pnau-decoder-v3,
+            wormhole-core-contract: 'SP1CGXWEAMG6P6FT04W66NVGJ7PQWMDAC19R7PJ0Y.wormhole-core-v4
           }) 
       )
       SUCCESS

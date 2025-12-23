@@ -20,7 +20,7 @@
 (define-constant SCALING-FACTOR u100000000)
 
 ;; lp-token
-(define-constant token-prefix "gusdc")
+(define-constant token-prefix "gusdcx")
 
 ;; staking storages
 (define-data-var withdrawal-finalization-period uint u100)

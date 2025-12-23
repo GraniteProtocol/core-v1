@@ -1,7 +1,7 @@
 ;; SPDX-License-Identifier: BUSL-1.1
 
 ;; TRAITS
-(use-trait token-trait .trait-sip-010.sip-010-trait)
+(use-trait token-trait 'SP3FBR2AGK5H9QBDH3EEN6DF8EK8JY7RX8QJ5SVTE.sip-010-trait-ft-standard.sip-010-trait)
 
 ;; ERRORS
 (define-constant ERR-INTEREST-PARAMS (err u20000))
@@ -45,7 +45,7 @@
         (user-list (unwrap-panic (slice? (list user user user user user user user user user user) u0 (len collateral-prices))))
         (total-max-ltv (fold + (map iterate-collateral-value position-collaterals collateral-prices user-list) u0))
         (new-current-debt (+ amount current-debt))
-        (market-asset-price (unwrap! (contract-call? .pyth-adapter-v1 read-price .mock-usdc) ERR-MISSING-MARKET-PRICE))
+        (market-asset-price (unwrap! (contract-call? .pyth-adapter-v1 read-price 'SP120SBRBQJ00MCWS7TM5R8WJNTTKD5K0HFRC2CNE.usdcx) ERR-MISSING-MARKET-PRICE))
         (new-current-debt-adjusted (contract-call? .math-v1 get-market-asset-value market-asset-price new-current-debt))
       )
       (asserts! (<= new-current-debt-adjusted total-max-ltv) ERR-MAX-LTV)
@@ -189,7 +189,7 @@
         (total-max-ltv (fold + (map iterate-collateral-value (get position-collaterals remove-user-collateral-info) collateral-prices user-list) u0))
         (debt-params (contract-call? .state-v1 get-debt-params))
         (current-debt (contract-call? .math-v1 convert-to-debt-assets debt-params (get debt-shares position) true))
-        (market-asset-price (unwrap! (contract-call? .pyth-adapter-v1 read-price .mock-usdc) ERR-MISSING-MARKET-PRICE))
+        (market-asset-price (unwrap! (contract-call? .pyth-adapter-v1 read-price 'SP120SBRBQJ00MCWS7TM5R8WJNTTKD5K0HFRC2CNE.usdcx) ERR-MISSING-MARKET-PRICE))
         (current-debt-adjusted (contract-call? .math-v1 get-market-asset-value market-asset-price current-debt))
       )
       (asserts! (<= current-debt-adjusted total-max-ltv) ERR-MAX-LTV)

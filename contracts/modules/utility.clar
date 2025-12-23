@@ -26,8 +26,8 @@
     (asset-cap (contract-call? .state-v1 get-asset-cap ))
     (borrowable-balance (contract-call? .state-v1 get-borrowable-balance ))
     (total-debt-shares (get total-debt-shares (contract-call? .state-v1 get-debt-params )))
-    (market-token-balance (unwrap-panic (contract-call? .mock-usdc get-balance .state-v1)))
-    (sbtc-balance (unwrap-panic (contract-call? .mock-btc get-balance .state-v1)))
+    (market-token-balance (unwrap-panic (contract-call? 'SP120SBRBQJ00MCWS7TM5R8WJNTTKD5K0HFRC2CNE.usdcx get-balance .state-v1)))
+    (sbtc-balance (unwrap-panic (contract-call? 'SM3VDXK3WZZSA84XXFKAFAF15NNZX32CTSG82JFQ4.sbtc-token  get-balance .state-v1)))
     (total-lp-shares (unwrap! (contract-call? .state-v1 get-total-supply ) ERR-FAILED-TO-GET-BALANCE))
     (total-staked-shares (unwrap! (contract-call? .staking-v1 get-total-supply ) ERR-FAILED-TO-GET-BALANCE))
     (active-staked-lp-tokens (contract-call? .staking-v1 get-active-staked-lp-tokens ))
@@ -91,7 +91,7 @@
     (
       (time-now (get-time-now))
       (last-ts (contract-call? .withdrawal-caps-v1 get-last-lp-bucket-update))
-      (total-liquidity (unwrap! (contract-call? .mock-usdc get-balance .state-v1) ERR-FAILED-TO-GET-BALANCE))
+      (total-liquidity (unwrap! (contract-call? 'SP120SBRBQJ00MCWS7TM5R8WJNTTKD5K0HFRC2CNE.usdcx get-balance .state-v1) ERR-FAILED-TO-GET-BALANCE))
       (lp-cap-factor (contract-call? .withdrawal-caps-v1 get-lp-cap-factor))
       (max-lp-bucket (/ (* total-liquidity lp-cap-factor) SCALING-FACTOR))
       (current-bucket (contract-call? .withdrawal-caps-v1 get-lp-bucket))
@@ -134,9 +134,9 @@
   (let
     (
       (time-now (get-time-now))
-      (collateral-token .mock-btc)
+      (collateral-token 'SM3VDXK3WZZSA84XXFKAFAF15NNZX32CTSG82JFQ4.sbtc-token )
       (last-ts (contract-call? .withdrawal-caps-v1 get-last-collateral-bucket-update collateral-token))
-      (total-liquidity (unwrap! (contract-call? .mock-btc get-balance .state-v1) ERR-FAILED-TO-GET-BALANCE))
+      (total-liquidity (unwrap! (contract-call? 'SM3VDXK3WZZSA84XXFKAFAF15NNZX32CTSG82JFQ4.sbtc-token  get-balance .state-v1) ERR-FAILED-TO-GET-BALANCE))
       (collateral-cap-factor (contract-call? .withdrawal-caps-v1 get-collateral-cap-factor collateral-token))
       (max-collateral-bucket (/ (* total-liquidity collateral-cap-factor) SCALING-FACTOR))
       (current-bucket (contract-call? .withdrawal-caps-v1 get-collateral-bucket collateral-token))
