@@ -1,0 +1,27 @@
+---
+id: 0
+name: Mainnet aeUSDC deployment
+network: mainnet
+stacks-node: "https://api.hiro.so"
+bitcoin-node: "http://blockstack:blockstacksystem@bitcoin.blockstack.com:8332"
+plan:
+  batches:
+    - id: 0
+      transactions:
+        - contract-publish:
+            contract-name: governance-v1
+            expected-sender: SP2TRSJJMSX0J0GDBNCEG0Y1AQW26G3HYM9K4WCJG
+            cost: 100000
+            path: contracts/governance-v1.clar
+            anchor-block-only: true
+            clarity-version: 3
+      epoch: "3.0"
+    - id: 1
+      transactions:
+        - contract-call:
+            contract-id: SP2TRSJJMSX0J0GDBNCEG0Y1AQW26G3HYM9K4WCJG.governance-v1
+            expected-sender: SP2TRSJJMSX0J0GDBNCEG0Y1AQW26G3HYM9K4WCJG
+            method: initialize-governance
+            parameters:
+              - "(list (some 'SP1ABZHX4VKG0BTQ8NTBJ591W7AK67C33KR76QD27) (some 'SPTXMEW26M54HX1ZXF6VN7QKK4XES1038ERD40T5) (some 'SP2G62YGCCMWS4PAN54ZYT2G9TCJRGBSKQ679M96Q) (some 'SP2EBZVFF99Q97GJXGTRT3Y0M7N6G7XJAKMNVGFK) (some 'SP298TX7MBC848DGTXYP0594AGSHJAKBFZE3VH1E9) (some 'SP2A7DWZMPQAQC0W941VA8RYJNX56A2WJ0GP1RS3E))"
+            cost: 50000
