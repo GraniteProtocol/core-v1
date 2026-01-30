@@ -1,0 +1,272 @@
+---
+id: 0
+name: Mainnet USDCx deployment
+network: mainnet
+stacks-node: "https://api.hiro.so"
+bitcoin-node: "http://blockstack:blockstacksystem@bitcoin.blockstack.com:8332"
+plan:
+  batches:
+    - id: 0
+      transactions:
+        - contract-publish:
+            contract-name: constants-v1
+            expected-sender: SP3M2BYF7RGF8WKW5FVDNJ6WR8D7AR9BHDXAKPXZE
+            cost: 100000
+            path: contracts/constants-v1.clar
+            anchor-block-only: true
+            clarity-version: 3
+        - contract-publish:
+            contract-name: constants-v2
+            expected-sender: SP3M2BYF7RGF8WKW5FVDNJ6WR8D7AR9BHDXAKPXZE
+            cost: 100000
+            path: contracts/constants-v2.clar
+            anchor-block-only: true
+            clarity-version: 3
+        - contract-publish:
+            contract-name: math-v1
+            expected-sender: SP3M2BYF7RGF8WKW5FVDNJ6WR8D7AR9BHDXAKPXZE
+            cost: 100000
+            path: contracts/modules/math-v1.clar
+            anchor-block-only: true
+            clarity-version: 3
+        - contract-publish:
+            contract-name: state-v1
+            expected-sender: SP3M2BYF7RGF8WKW5FVDNJ6WR8D7AR9BHDXAKPXZE
+            cost: 100000
+            path: contracts/state-v1.clar
+            anchor-block-only: true
+            clarity-version: 3
+        - contract-publish:
+            contract-name: linear-kinked-ir-v1
+            expected-sender: SP3M2BYF7RGF8WKW5FVDNJ6WR8D7AR9BHDXAKPXZE
+            cost: 100000
+            path: contracts/modules/linear-kinked-ir-v1.clar
+            anchor-block-only: true
+            clarity-version: 3
+        - contract-publish:
+            contract-name: pyth-adapter-v1
+            expected-sender: SP3M2BYF7RGF8WKW5FVDNJ6WR8D7AR9BHDXAKPXZE
+            cost: 100000
+            path: contracts/modules/pyth-adapter-v1.clar
+            anchor-block-only: true
+            clarity-version: 3
+        - contract-publish:
+            contract-name: staking-reward-v1
+            expected-sender: SP3M2BYF7RGF8WKW5FVDNJ6WR8D7AR9BHDXAKPXZE
+            cost: 100000
+            path: contracts/modules/staking-reward-v1.clar
+            anchor-block-only: true
+            clarity-version: 3
+        - contract-publish:
+            contract-name: staking-v1
+            expected-sender: SP3M2BYF7RGF8WKW5FVDNJ6WR8D7AR9BHDXAKPXZE
+            cost: 100000
+            path: contracts/staking-v1.clar
+            anchor-block-only: true
+            clarity-version: 3
+        - contract-publish:
+            contract-name: withdrawal-caps-v1
+            expected-sender: SP3M2BYF7RGF8WKW5FVDNJ6WR8D7AR9BHDXAKPXZE
+            cost: 100000
+            path: contracts/modules/withdrawal-caps-v1.clar
+            anchor-block-only: true
+            clarity-version: 3
+        - contract-publish:
+            contract-name: borrower-v1
+            expected-sender: SP3M2BYF7RGF8WKW5FVDNJ6WR8D7AR9BHDXAKPXZE
+            cost: 100000
+            path: contracts/borrower-v1.clar
+            anchor-block-only: true
+            clarity-version: 3
+        - contract-publish:
+            contract-name: trait-flash-loan-v1
+            expected-sender: SP3M2BYF7RGF8WKW5FVDNJ6WR8D7AR9BHDXAKPXZE
+            cost: 100000
+            path: contracts/traits/trait-flash-loan-v1.clar
+            anchor-block-only: true
+            clarity-version: 3
+        - contract-publish:
+            contract-name: flash-loan-v1
+            expected-sender: SP3M2BYF7RGF8WKW5FVDNJ6WR8D7AR9BHDXAKPXZE
+            cost: 100000
+            path: contracts/flash-loan-v1.clar
+            anchor-block-only: true
+            clarity-version: 3
+        - contract-publish:
+            contract-name: meta-governance-v1
+            expected-sender: SP3M2BYF7RGF8WKW5FVDNJ6WR8D7AR9BHDXAKPXZE
+            cost: 100000
+            path: contracts/meta-governance-v1.clar
+            anchor-block-only: true
+            clarity-version: 3
+        - contract-publish:
+            contract-name: governance-v1
+            expected-sender: SP3M2BYF7RGF8WKW5FVDNJ6WR8D7AR9BHDXAKPXZE
+            cost: 100000
+            path: contracts/governance-v1.clar
+            anchor-block-only: true
+            clarity-version: 3
+        - contract-publish:
+            contract-name: linear-kinked-ir-utility
+            expected-sender: SP3M2BYF7RGF8WKW5FVDNJ6WR8D7AR9BHDXAKPXZE
+            cost: 100000
+            path: contracts/modules/linear-kinked-ir-utility.clar
+            anchor-block-only: true
+            clarity-version: 3
+        - contract-publish:
+            contract-name: liquidator-v1
+            expected-sender: SP3M2BYF7RGF8WKW5FVDNJ6WR8D7AR9BHDXAKPXZE
+            cost: 100000
+            path: contracts/liquidator-v1.clar
+            anchor-block-only: true
+            clarity-version: 3
+        - contract-publish:
+            contract-name: liquidity-provider-v1
+            expected-sender: SP3M2BYF7RGF8WKW5FVDNJ6WR8D7AR9BHDXAKPXZE
+            cost: 100000
+            path: contracts/liquidity-provider-v1.clar
+            anchor-block-only: true
+            clarity-version: 3
+        - contract-publish:
+            contract-name: utility
+            expected-sender: SP3M2BYF7RGF8WKW5FVDNJ6WR8D7AR9BHDXAKPXZE
+            cost: 100000
+            path: contracts/modules/utility.clar
+            anchor-block-only: true
+            clarity-version: 3
+      epoch: "3.0"
+    - id: 1
+      transactions:
+        - contract-call:
+            contract-id: SP3M2BYF7RGF8WKW5FVDNJ6WR8D7AR9BHDXAKPXZE.linear-kinked-ir-v1
+            expected-sender: SP3M2BYF7RGF8WKW5FVDNJ6WR8D7AR9BHDXAKPXZE
+            method: update-ir-params
+            parameters:
+              - u40000000000
+              - u3100000000000
+              - u850000000000
+              - u5000000000
+            cost: 50000
+        - contract-call:
+            contract-id: SP3M2BYF7RGF8WKW5FVDNJ6WR8D7AR9BHDXAKPXZE.staking-reward-v1
+            expected-sender: SP3M2BYF7RGF8WKW5FVDNJ6WR8D7AR9BHDXAKPXZE
+            method: update-reward-params
+            parameters:
+              - 0
+              - -1
+              - u99999999
+              - u0
+            cost: 50000
+        - contract-call:
+            contract-id: SP3M2BYF7RGF8WKW5FVDNJ6WR8D7AR9BHDXAKPXZE.state-v1
+            expected-sender: SP3M2BYF7RGF8WKW5FVDNJ6WR8D7AR9BHDXAKPXZE
+            method: set-allowed-contract
+            parameters:
+              - "'SP3M2BYF7RGF8WKW5FVDNJ6WR8D7AR9BHDXAKPXZE.liquidity-provider-v1"
+            cost: 50000
+        - contract-call:
+            contract-id: SP3M2BYF7RGF8WKW5FVDNJ6WR8D7AR9BHDXAKPXZE.state-v1
+            expected-sender: SP3M2BYF7RGF8WKW5FVDNJ6WR8D7AR9BHDXAKPXZE
+            method: set-allowed-contract
+            parameters:
+              - "'SP3M2BYF7RGF8WKW5FVDNJ6WR8D7AR9BHDXAKPXZE.borrower-v1"
+            cost: 50000
+        - contract-call:
+            contract-id: SP3M2BYF7RGF8WKW5FVDNJ6WR8D7AR9BHDXAKPXZE.state-v1
+            expected-sender: SP3M2BYF7RGF8WKW5FVDNJ6WR8D7AR9BHDXAKPXZE
+            method: set-allowed-contract
+            parameters:
+              - "'SP3M2BYF7RGF8WKW5FVDNJ6WR8D7AR9BHDXAKPXZE.liquidator-v1"
+            cost: 50000
+        - contract-call:
+            contract-id: SP3M2BYF7RGF8WKW5FVDNJ6WR8D7AR9BHDXAKPXZE.state-v1
+            expected-sender: SP3M2BYF7RGF8WKW5FVDNJ6WR8D7AR9BHDXAKPXZE
+            method: set-allowed-contract
+            parameters:
+              - "'SP3M2BYF7RGF8WKW5FVDNJ6WR8D7AR9BHDXAKPXZE.staking-v1"
+            cost: 50000
+        - contract-call:
+            contract-id: SP3M2BYF7RGF8WKW5FVDNJ6WR8D7AR9BHDXAKPXZE.state-v1
+            expected-sender: SP3M2BYF7RGF8WKW5FVDNJ6WR8D7AR9BHDXAKPXZE
+            method: set-allowed-contract
+            parameters:
+              - "'SP3M2BYF7RGF8WKW5FVDNJ6WR8D7AR9BHDXAKPXZE.flash-loan-v1"
+            cost: 50000
+        - contract-call:
+            contract-id: SP3M2BYF7RGF8WKW5FVDNJ6WR8D7AR9BHDXAKPXZE.state-v1
+            expected-sender: SP3M2BYF7RGF8WKW5FVDNJ6WR8D7AR9BHDXAKPXZE
+            method: update-collateral-settings
+            parameters:
+              - "'SM3VDXK3WZZSA84XXFKAFAF15NNZX32CTSG82JFQ4.sbtc-token"
+              - u50000000
+              - u65000000
+              - u10000000
+              - u8
+            cost: 50000
+        - contract-call:
+            contract-id: SP3M2BYF7RGF8WKW5FVDNJ6WR8D7AR9BHDXAKPXZE.state-v1
+            expected-sender: SP3M2BYF7RGF8WKW5FVDNJ6WR8D7AR9BHDXAKPXZE
+            method: update-asset-cap
+            parameters:
+              - u20000000000000
+            cost: 50000
+        - contract-call:
+            contract-id: SP3M2BYF7RGF8WKW5FVDNJ6WR8D7AR9BHDXAKPXZE.state-v1
+            expected-sender: SP3M2BYF7RGF8WKW5FVDNJ6WR8D7AR9BHDXAKPXZE
+            method: set-protocol-reserve-percentage
+            parameters:
+              - u25000000
+            cost: 50000
+        - contract-call:
+            contract-id: SP3M2BYF7RGF8WKW5FVDNJ6WR8D7AR9BHDXAKPXZE.pyth-adapter-v1
+            expected-sender: SP3M2BYF7RGF8WKW5FVDNJ6WR8D7AR9BHDXAKPXZE
+            method: update-price-feed-id
+            parameters:
+              - "'SP120SBRBQJ00MCWS7TM5R8WJNTTKD5K0HFRC2CNE.usdcx"
+              - "0xeaa020c61cc479712813461ce153894a96a6c00b21ed0cfc2798d1f9a9e9c94a"
+              - u100
+            cost: 50000
+        - contract-call:
+            contract-id: SP3M2BYF7RGF8WKW5FVDNJ6WR8D7AR9BHDXAKPXZE.pyth-adapter-v1
+            expected-sender: SP3M2BYF7RGF8WKW5FVDNJ6WR8D7AR9BHDXAKPXZE
+            method: update-price-feed-id
+            parameters:
+              - "'SM3VDXK3WZZSA84XXFKAFAF15NNZX32CTSG82JFQ4.sbtc-token"
+              - "0xe62df6c8b4a85fe1a67db44dc12de5db330f7ac66b72dc658afedf0f4a415b43"
+              - u500
+            cost: 50000
+        - contract-call:
+            contract-id: SP3M2BYF7RGF8WKW5FVDNJ6WR8D7AR9BHDXAKPXZE.pyth-adapter-v1
+            expected-sender: SP3M2BYF7RGF8WKW5FVDNJ6WR8D7AR9BHDXAKPXZE
+            method: update-time-delta
+            parameters:
+              - u300
+            cost: 50000
+        - contract-call:
+            contract-id: SP3M2BYF7RGF8WKW5FVDNJ6WR8D7AR9BHDXAKPXZE.flash-loan-v1
+            expected-sender: SP3M2BYF7RGF8WKW5FVDNJ6WR8D7AR9BHDXAKPXZE
+            method: update-fee
+            parameters:
+              - u10000
+            cost: 50000
+        - contract-call:
+            contract-id: SP3M2BYF7RGF8WKW5FVDNJ6WR8D7AR9BHDXAKPXZE.meta-governance-v1
+            expected-sender: SP3M2BYF7RGF8WKW5FVDNJ6WR8D7AR9BHDXAKPXZE
+            method: initialize-governance
+            parameters:
+              - "(list (some 'SP1ABZHX4VKG0BTQ8NTBJ591W7AK67C33KR76QD27) (some 'SPTXMEW26M54HX1ZXF6VN7QKK4XES1038ERD40T5) (some 'SP2G62YGCCMWS4PAN54ZYT2G9TCJRGBSKQ679M96Q) (some 'SP2EBZVFF99Q97GJXGTRT3Y0M7N6G7XJAKMNVGFK))"
+            cost: 50000
+        - contract-call:
+            contract-id: SP3M2BYF7RGF8WKW5FVDNJ6WR8D7AR9BHDXAKPXZE.governance-v1
+            expected-sender: SP3M2BYF7RGF8WKW5FVDNJ6WR8D7AR9BHDXAKPXZE
+            method: initialize-governance
+            parameters:
+              - "(list (some 'SP1ABZHX4VKG0BTQ8NTBJ591W7AK67C33KR76QD27) (some 'SPTXMEW26M54HX1ZXF6VN7QKK4XES1038ERD40T5) (some 'SP2G62YGCCMWS4PAN54ZYT2G9TCJRGBSKQ679M96Q) (some 'SP2EBZVFF99Q97GJXGTRT3Y0M7N6G7XJAKMNVGFK) (some 'SP298TX7MBC848DGTXYP0594AGSHJAKBFZE3VH1E9) (some 'SP2A7DWZMPQAQC0W941VA8RYJNX56A2WJ0GP1RS3E))"
+            cost: 50000
+        - contract-call:
+            contract-id: SP3M2BYF7RGF8WKW5FVDNJ6WR8D7AR9BHDXAKPXZE.state-v1
+            expected-sender: SP3M2BYF7RGF8WKW5FVDNJ6WR8D7AR9BHDXAKPXZE
+            method: update-governance
+            parameters:
+              - "'SP3M2BYF7RGF8WKW5FVDNJ6WR8D7AR9BHDXAKPXZE.governance-v1"
+            cost: 50000
