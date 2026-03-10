@@ -165,24 +165,26 @@
 
 ;; Public functions
 (define-public (stake (lp-tokens uint))
-  (let (
-      (staking-enabled (try! (check-staking-enabled)))
-      (staked-lp-tokens-to-mint (convert-to-staked-lp-tokens lp-tokens false))
-    )
+  (begin
+    (try! (check-staking-enabled))
     (try! (accrue-interest))
-    (asserts! (> lp-tokens u0) ERR-ZERO-LP-TOKEN-STAKE)
-    ;; transfer lp-tokens to staking contract and mint staked lp tokens to user
-    (try! (contract-call? .state-v1 transfer lp-tokens contract-caller (as-contract contract-caller) none))
-    (try! (ft-mint? staked-lp-token staked-lp-tokens-to-mint contract-caller))
-    (var-set total-lp-tokens-staked (+ (var-get total-lp-tokens-staked) lp-tokens))
-    (print {
-      sender: contract-caller,
-      lp-tokens: lp-tokens,
-      staked-lp-tokens: staked-lp-tokens-to-mint,
-      action: "lp-token-staked"
-    })
-    SUCCESS
-))
+    (let (
+        (staked-lp-tokens-to-mint (convert-to-staked-lp-tokens lp-tokens false))
+      )
+      (asserts! (> lp-tokens u0) ERR-ZERO-LP-TOKEN-STAKE)
+      (try! (contract-call? .state-v1 transfer lp-tokens contract-caller (as-contract contract-caller) none))
+      (try! (ft-mint? staked-lp-token staked-lp-tokens-to-mint contract-caller))
+      (var-set total-lp-tokens-staked (+ (var-get total-lp-tokens-staked) lp-tokens))
+      (print {
+        sender: contract-caller,
+        lp-tokens: lp-tokens,
+        staked-lp-tokens: staked-lp-tokens-to-mint,
+        action: "lp-token-staked"
+      })
+      SUCCESS
+    )
+  )
+)
 
 (define-public (increase-lp-staked-balance (lp-tokens uint))
   (begin
@@ -259,39 +261,43 @@
 )
 
 (define-public (initiate-unstake (staked-lp-tokens uint))
-  (let (
-      (staking-enabled (try! (check-staking-enabled)))
-      (user contract-caller)
-      (user-total-balance (ft-get-balance staked-lp-token user))
-      (withdrawal-index (default-to u0 (map-get? user-withdrawal-index user)))
-      (finalization-at (+ stacks-block-height (var-get withdrawal-finalization-period)))
-      (lp-tokens-to-return (convert-to-lp-tokens staked-lp-tokens false))
-      (withdraw-shares (convert-to-withdrawal-shares lp-tokens-to-return))
-      (unfinalized-withdrawal-info (var-get unfinalized-withdrawals))
-    )
+  (begin
+    (try! (check-staking-enabled))
     (try! (accrue-interest))
-    (asserts! (> staked-lp-tokens u0) ERR-ZERO-STAKED-LP-TOKEN-UNSTAKE)
-    (asserts! (>= user-total-balance staked-lp-tokens) ERR-STAKED-LP-TOKEN-USER-NOT-ENOUGH-BALANCE)
-    (map-set user-withdrawal-index user (+ withdrawal-index u1))
-    (try! (ft-burn? staked-lp-token staked-lp-tokens user))
-    (map-set user-withdrawals {user: user, index: withdrawal-index} {withdrawal-shares: withdraw-shares, finalization-at: finalization-at})
-    (var-set total-lp-tokens-staked (- (var-get total-lp-tokens-staked) lp-tokens-to-return))
-    (var-set unfinalized-withdrawals {
-      lp-tokens: (+ (get lp-tokens unfinalized-withdrawal-info) lp-tokens-to-return),
-      shares: (+ (get shares unfinalized-withdrawal-info) withdraw-shares),
-    })
-    (print {
-      sender: user,
-      index: withdrawal-index,
-      amount: staked-lp-tokens,
-      action: "initiated-unstake"
-    })
-    (ok withdrawal-index)
-))
+    (let (
+        (user contract-caller)
+        (user-total-balance (ft-get-balance staked-lp-token user))
+        (withdrawal-index (default-to u0 (map-get? user-withdrawal-index user)))
+        (finalization-at (+ stacks-block-height (var-get withdrawal-finalization-period)))
+        (lp-tokens-to-return (convert-to-lp-tokens staked-lp-tokens false))
+        (withdraw-shares (convert-to-withdrawal-shares lp-tokens-to-return))
+        (unfinalized-withdrawal-info (var-get unfinalized-withdrawals))
+      )
+      (asserts! (> staked-lp-tokens u0) ERR-ZERO-STAKED-LP-TOKEN-UNSTAKE)
+      (asserts! (>= user-total-balance staked-lp-tokens) ERR-STAKED-LP-TOKEN-USER-NOT-ENOUGH-BALANCE)
+      (map-set user-withdrawal-index user (+ withdrawal-index u1))
+      (try! (ft-burn? staked-lp-token staked-lp-tokens user))
+      (map-set user-withdrawals {user: user, index: withdrawal-index} {withdrawal-shares: withdraw-shares, finalization-at: finalization-at})
+      (var-set total-lp-tokens-staked (- (var-get total-lp-tokens-staked) lp-tokens-to-return))
+      (var-set unfinalized-withdrawals {
+        lp-tokens: (+ (get lp-tokens unfinalized-withdrawal-info) lp-tokens-to-return),
+        shares: (+ (get shares unfinalized-withdrawal-info) withdraw-shares),
+      })
+      (print {
+        sender: user,
+        index: withdrawal-index,
+        amount: staked-lp-tokens,
+        action: "initiated-unstake"
+      })
+      (ok withdrawal-index)
+    )
+  )
+)
 
+;; No staking-enabled check: users must always be able to finalize
+;; pending withdrawals, even if staking has been disabled or wiped out.
 (define-public (finalize-unstake (index uint))
   (let (
-      (staking-enabled (try! (check-staking-enabled)))
       (user contract-caller)
       (unfinalized-withdrawal-info (var-get unfinalized-withdrawals))
       (withdrawal (unwrap! (map-get? user-withdrawals {user: user, index: index}) ERR-MISSING-WITHDRAWAL))
@@ -304,10 +310,13 @@
       (as-contract (contract-call? .state-v1 transfer lp-tokens-to-return (as-contract contract-caller) user none))
       SUCCESS
     ))
-    (var-set unfinalized-withdrawals {
-      lp-tokens: (- (get lp-tokens unfinalized-withdrawal-info) lp-tokens-to-return),
-      shares: (- (get shares unfinalized-withdrawal-info) withdraw-shares),
-    })
+    (if (not (var-get staking-wiped-out))
+      (var-set unfinalized-withdrawals {
+        lp-tokens: (- (get lp-tokens unfinalized-withdrawal-info) lp-tokens-to-return),
+        shares: (- (get shares unfinalized-withdrawal-info) withdraw-shares),
+      })
+      true
+    )
     (map-delete user-withdrawals {user: user, index: index})
      (print {
       sender: user,

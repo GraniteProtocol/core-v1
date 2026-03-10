@@ -274,7 +274,7 @@ describe("staking tests", () => {
     expect(result.result).toBeErr(Cl.uint(60009));
   });
 
-  it("should not finalize lp-tokens when disabled", async () => {
+  it("should finalize lp-tokens even when staking is disabled (H-5)", async () => {
     // Mint asset tokens for depositor1
     mint_token("mock-usdc", 1000, depositor1);
 
@@ -299,8 +299,8 @@ describe("staking tests", () => {
     // user should also have zero lp token during finalization
     expectUserLpBalance(Cl.principal(depositor1), 0n);
 
-    // mint empty blocks
-    simnet.mineEmptyBlocks(115 - simnet.blockHeight);
+    // mint empty blocks past finalization period
+    simnet.mineEmptyBlocks(finalizationPeriod + 1 - simnet.blockHeight);
     expectUserLpBalance(Cl.contractPrincipal(deployer, "staking-v1"), 1000n);
 
     let result = simnet.callPublicFn(
@@ -311,7 +311,7 @@ describe("staking tests", () => {
     );
     expect(result.result).toBeOk(Cl.bool(true));
 
-    // finalization should be successful
+    // finalization should succeed even when staking is disabled
     result = simnet.callPublicFn(
       "staking-v1",
       "finalize-unstake",
@@ -319,7 +319,9 @@ describe("staking tests", () => {
       depositor1
     );
 
-    expect(result.result).toBeErr(Cl.uint(60009));
+    expect(result.result).toBeOk(Cl.bool(true));
+    // user should get their LP tokens back
+    expectUserLpBalance(Cl.principal(depositor1), 1000n);
   });
 
   it("should unstake in multiple withdrawals", async () => {
@@ -1403,6 +1405,274 @@ describe("staking tests", () => {
       Cl.contractPrincipal(deployer, "staking-v1"),
       expectedWithdrawalTokens
     );
+  });
+
+  it("should finalize unstake when staking is wiped out (H-5)", async () => {
+    await set_initial_price("mock-eth", 1n, deployer);
+    await set_price("mock-btc", 100n, deployer);
+    await set_price("mock-eth", 100n, deployer);
+    deposit_and_borrow(2000, depositor1, 10, 700, borrower1, deployer);
+
+    stakeLpTokens(depositor1, 500n);
+
+    // initiate unstake before wipe-out
+    let currentBlockHeight = simnet.stacksBlockHeight;
+    const finalizationPeriod = currentBlockHeight + 100 + 1;
+    initiateUnstake(depositor1, 500n, 0);
+
+    const withdrawal = getUserWithdrawal(depositor1, 0);
+    expect(withdrawal.data["withdrawal-shares"]).toEqual(Cl.uint(500));
+    expect(withdrawal.data["finalization-at"]).toEqual(
+      Cl.uint(finalizationPeriod)
+    );
+
+    // accrue interest
+    simnet.mineEmptyBlocks(5);
+
+    update_supported_collateral(
+      "mock-eth",
+      70000000,
+      80000000,
+      10000000,
+      8,
+      deployer
+    );
+    mint_token("mock-eth", 10, borrower1);
+    add_collateral("mock-eth", 10, deployer, borrower1);
+
+    borrow(686, borrower1);
+
+    // reduce collateral settings to trigger liquidation
+    await set_price("mock-btc", 10n, deployer);
+    await set_price("mock-eth", 65n, deployer);
+
+    mint_token("mock-usdc", 5000, depositor1);
+
+    // first liquidation
+    let liquidate = simnet.callPublicFn(
+      "liquidator-v1",
+      "liquidate-collateral",
+      [
+        Cl.none(),
+        Cl.contractPrincipal(deployer, "mock-eth"),
+        Cl.principal(borrower1),
+        Cl.uint(1000),
+        Cl.uint(1),
+      ],
+      depositor1
+    );
+    expect(liquidate.result).toBeOk(Cl.bool(true));
+
+    // deposit to reserve to allow full wipe-out
+    mint_token("mock-usdc", 100, deployer);
+    const depositToReserve = simnet.callPublicFn(
+      "state-v1",
+      "deposit-to-reserve",
+      [Cl.uint(100)],
+      deployer
+    );
+    expect(depositToReserve.result).toBeOk(Cl.bool(true));
+
+    // second liquidation triggers full wipe-out
+    liquidate = simnet.callPublicFn(
+      "liquidator-v1",
+      "liquidate-collateral",
+      [
+        Cl.none(),
+        Cl.contractPrincipal(deployer, "mock-btc"),
+        Cl.principal(borrower1),
+        Cl.uint(1000),
+        Cl.uint(1),
+      ],
+      depositor1
+    );
+    expect(liquidate.result).toBeOk(Cl.bool(true));
+
+    // verify staking is wiped out
+    let stakingStatus = simnet.callReadOnlyFn(
+      "staking-v1",
+      "is-staking-wiped-out",
+      [],
+      deployer
+    );
+    expect(stakingStatus.result).toStrictEqual(Cl.bool(true));
+
+    // staking should also be disabled in state-v1
+    stakingStatus = simnet.callReadOnlyFn(
+      "state-v1",
+      "is-staking-enabled",
+      [],
+      deployer
+    );
+    expect(stakingStatus.result).toStrictEqual(Cl.bool(false));
+
+    // staking contract should have 0 LP tokens (all slashed)
+    expectUserLpBalance(Cl.contractPrincipal(deployer, "staking-v1"), 0n);
+
+    // mine blocks past finalization period
+    simnet.mineEmptyBlocks(finalizationPeriod + 10 - simnet.blockHeight);
+
+    // record LP balance before finalization
+    const lpBalanceBefore = getUserLpBalance(Cl.principal(depositor1));
+
+    // finalize-unstake should succeed even when wiped out
+    const result = simnet.callPublicFn(
+      "staking-v1",
+      "finalize-unstake",
+      [Cl.uint(0)],
+      depositor1
+    );
+    expect(result.result).toBeOk(Cl.bool(true));
+
+    // user receives 0 additional LP tokens (slashed to 0)
+    expectUserLpBalance(Cl.principal(depositor1), lpBalanceBefore);
+
+    // withdrawal record should be cleaned up
+    const withdrawalAfter = simnet.callReadOnlyFn(
+      "staking-v1",
+      "get-withdrawal",
+      [Cl.principal(depositor1), Cl.uint(0)],
+      deployer
+    );
+    expect(withdrawalAfter.result).toEqual(Cl.none());
+  });
+
+  it("should finalize unstake for multiple users when staking is wiped out (H-5)", async () => {
+    await set_initial_price("mock-eth", 1n, deployer);
+    await set_price("mock-btc", 100n, deployer);
+    await set_price("mock-eth", 100n, deployer);
+
+    // depositor1 deposits 2000 via helper (sets up mock-btc collateral for borrower)
+    deposit_and_borrow(2000, depositor1, 10, 700, borrower1, deployer);
+
+    // transfer some LP tokens to depositor2 so both can stake (keeps pool size at 2000)
+    transfer_token("state-v1", 500, depositor1, Cl.principal(depositor2));
+
+    // both users stake 250 each (total staked: 500, same as single-user test)
+    stakeLpTokens(depositor1, 250n);
+    stakeLpTokens(depositor2, 250n);
+
+    // both users initiate unstake
+    let currentBlockHeight = simnet.stacksBlockHeight;
+    const finalizationPeriod = currentBlockHeight + 100 + 1;
+    initiateUnstake(depositor1, 250n, 0);
+    initiateUnstake(depositor2, 250n, 0);
+
+    // accrue interest
+    simnet.mineEmptyBlocks(5);
+
+    update_supported_collateral(
+      "mock-eth",
+      70000000,
+      80000000,
+      10000000,
+      8,
+      deployer
+    );
+    mint_token("mock-eth", 10, borrower1);
+    add_collateral("mock-eth", 10, deployer, borrower1);
+    borrow(686, borrower1);
+
+    // crash collateral prices to trigger liquidation
+    await set_price("mock-btc", 10n, deployer);
+    await set_price("mock-eth", 65n, deployer);
+
+    mint_token("mock-usdc", 5000, depositor1);
+
+    // first liquidation
+    let liquidate = simnet.callPublicFn(
+      "liquidator-v1",
+      "liquidate-collateral",
+      [
+        Cl.none(),
+        Cl.contractPrincipal(deployer, "mock-eth"),
+        Cl.principal(borrower1),
+        Cl.uint(1000),
+        Cl.uint(1),
+      ],
+      depositor1
+    );
+    expect(liquidate.result).toBeOk(Cl.bool(true));
+
+    // deposit to reserve to allow full wipe-out
+    mint_token("mock-usdc", 100, deployer);
+    const depositToReserve = simnet.callPublicFn(
+      "state-v1",
+      "deposit-to-reserve",
+      [Cl.uint(100)],
+      deployer
+    );
+    expect(depositToReserve.result).toBeOk(Cl.bool(true));
+
+    // second liquidation triggers full wipe-out
+    liquidate = simnet.callPublicFn(
+      "liquidator-v1",
+      "liquidate-collateral",
+      [
+        Cl.none(),
+        Cl.contractPrincipal(deployer, "mock-btc"),
+        Cl.principal(borrower1),
+        Cl.uint(1000),
+        Cl.uint(1),
+      ],
+      depositor1
+    );
+    expect(liquidate.result).toBeOk(Cl.bool(true));
+
+    // verify staking is wiped out
+    const stakingStatus = simnet.callReadOnlyFn(
+      "staking-v1",
+      "is-staking-wiped-out",
+      [],
+      deployer
+    );
+    expect(stakingStatus.result).toStrictEqual(Cl.bool(true));
+
+    // mine blocks past finalization period
+    simnet.mineEmptyBlocks(finalizationPeriod + 10 - simnet.blockHeight);
+
+    // record LP balances before finalization
+    const lp1Before = getUserLpBalance(Cl.principal(depositor1));
+    const lp2Before = getUserLpBalance(Cl.principal(depositor2));
+
+    // first user finalizes — should succeed
+    let result = simnet.callPublicFn(
+      "staking-v1",
+      "finalize-unstake",
+      [Cl.uint(0)],
+      depositor1
+    );
+    expect(result.result).toBeOk(Cl.bool(true));
+
+    // second user finalizes — should also succeed (no underflow)
+    result = simnet.callPublicFn(
+      "staking-v1",
+      "finalize-unstake",
+      [Cl.uint(0)],
+      depositor2
+    );
+    expect(result.result).toBeOk(Cl.bool(true));
+
+    // both users receive 0 additional LP tokens (all slashed)
+    expectUserLpBalance(Cl.principal(depositor1), lp1Before);
+    expectUserLpBalance(Cl.principal(depositor2), lp2Before);
+
+    // both withdrawal records cleaned up
+    let withdrawal = simnet.callReadOnlyFn(
+      "staking-v1",
+      "get-withdrawal",
+      [Cl.principal(depositor1), Cl.uint(0)],
+      deployer
+    );
+    expect(withdrawal.result).toEqual(Cl.none());
+
+    withdrawal = simnet.callReadOnlyFn(
+      "staking-v1",
+      "get-withdrawal",
+      [Cl.principal(depositor2), Cl.uint(0)],
+      deployer
+    );
+    expect(withdrawal.result).toEqual(Cl.none());
   });
 
   it("Full liquidation and reserve and staked lp is wiped and spill over to unstaked lp", async () => {
