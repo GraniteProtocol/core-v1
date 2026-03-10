@@ -10,7 +10,26 @@ export const pythStorageContractName = "pyth-storage-v4";
 export const wormholeCoreContractName = "wormhole-core-v4";
 export const guardianSet = wormhole.generateGuardianSetKeychain(19);
 
+// Monotonically increasing publish time counter to ensure unique timestamps
+let lastPublishTime = 0n;
+
+/**
+ * Returns the current simnet block time by reading the faucet helper.
+ * This is aligned with the simnet's internal clock, not wall-clock time.
+ */
+const getSimnetBlockTime = (): bigint => {
+  const r = simnet.callReadOnlyFn(
+    "faucet",
+    "get-block-time",
+    [],
+    "ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM"
+  );
+  return r.result.value as bigint;
+};
+
 export const init_pyth = (sender: any) => {
+  lastPublishTime = 0n;
+
   wormhole.applyGuardianSetUpdate(
     guardianSet,
     1,
@@ -85,6 +104,17 @@ export const set_pyth_time_delta = async (delta: number, deployer: any) => {
   expect(result.result).toBeOk(Cl.bool(true));
 };
 
+/**
+ * Returns a publish time aligned with simnet block time.
+ * Ensures monotonically increasing timestamps for pyth updates.
+ */
+const getPublishTime = (): bigint => {
+  const blockTime = getSimnetBlockTime();
+  const publishTime = blockTime > lastPublishTime ? blockTime : lastPublishTime + 1n;
+  lastPublishTime = publishTime;
+  return publishTime;
+};
+
 export const set_price = async (
   token: string,
   price: bigint,
@@ -93,8 +123,7 @@ export const set_price = async (
   prevPublishTime?: bigint
 ): Promise<bigint> => {
   const feed = get_token_feed(token);
-  await sleep(800);
-  const publishTime = pyth.timestampNow();
+  const publishTime = getPublishTime();
   let actualPricesUpdates = pyth.buildPriceUpdateBatch([
     [
       feed,
@@ -142,8 +171,7 @@ export const set_price_without_scaling = async (
   prevPublishTime?: bigint
 ): Promise<bigint> => {
   const feed = get_token_feed(token);
-  await sleep(800);
-  const publishTime = pyth.timestampNow();
+  const publishTime = getPublishTime();
   let actualPricesUpdates = pyth.buildPriceUpdateBatch([
     [feed, { price: price, expo, publishTime, prevPublishTime }],
   ]);
@@ -178,10 +206,4 @@ export const set_price_without_scaling = async (
   expect(res.result).toHaveClarityType(ClarityType.ResponseOk);
 
   return publishTime;
-};
-
-const sleep = async (ms: number) => {
-  return new Promise((resolve) => {
-    setTimeout(resolve, ms);
-  });
 };

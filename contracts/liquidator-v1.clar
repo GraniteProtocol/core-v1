@@ -492,13 +492,10 @@
 ))
 
 (define-private (ensure-non-zero-repay-amount (amount uint) (collateral-price uint))
-  (if (<= collateral-price u0) 
-    ;; if collateral price is zero, we don't care about repay amount, anything is accepted
+  (if (> amount u0)
     SUCCESS
-    ;; if not zero, then amount must be > 0
-    (if (<= amount u0) ERR-NON-ZERO-REPAY-AMOUNT SUCCESS)
+    ERR-NON-ZERO-REPAY-AMOUNT
   )
-  
 )
 
 (define-private (socialize-bad-debt (bad-debt bool) (user principal))

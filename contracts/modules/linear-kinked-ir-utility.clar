@@ -29,7 +29,7 @@
     (ir-slope-1 uint) (ir-slope-2 uint) (utilization-kink uint) (base-ir uint)
   )
   (let (
-    (elapsed-block-time (- time-now last-accrued-block-time))
+    (elapsed-block-time (if (> time-now last-accrued-block-time) (- time-now last-accrued-block-time) u0))
     (premature-return (asserts!
       (not (is-eq u0 elapsed-block-time))
       (ok {
@@ -67,7 +67,7 @@
 ;; PRIVATE HELPER FUNCTIONS 
 ;; total-assets and open-interest are fixed to u8 precision
 (define-private (utilization-calc (total-assets uint) (open-interest uint))
-  (if (> (+ total-assets open-interest) u0) (/ (* open-interest one-12) total-assets) u0)
+  (if (> total-assets u0) (/ (* open-interest one-12) total-assets) u0)
 )
 
 (define-private (get-ir (total-assets uint) (open-interest uint) (ir-slope-1 uint) (ir-slope-2 uint) (utilization-kink uint) (base-ir uint))

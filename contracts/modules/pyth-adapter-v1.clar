@@ -6,10 +6,17 @@
 (define-constant ERR-PYTH-PRICE-STALE (err u80002))
 (define-constant ERR-INVALID-MAX-CONFIDENCE-RATIO (err u80003))
 (define-constant ERR-PRICE-CONFIDENCE-LOW (err u80004))
+(define-constant ERR-INVALID-PRICE (err u80005))
+(define-constant ERR-INVALID-EXPONENT (err u80006))
+(define-constant ERR-INVALID-TIME-DELTA (err u80007))
 
 (define-constant STACKS_BLOCK_TIME (contract-call? .constants-v1 get-stacks-block-time ))
 ;; Minimum time delta of 1 minute.
 (define-constant MINIMUM_TIME_DELTA u60)
+;; Maximum time delta of 2 hours.
+(define-constant MAXIMUM_TIME_DELTA u7200)
+;; Maximum future timestamp tolerance of 60 seconds.
+(define-constant FUTURE_TIMESTAMP_TOLERANCE u60)
 ;; Confidence ratio scaling factor  = 100% confidence
 (define-constant CONFIDENCE_SCALING_FACTOR u10000)
 ;; Price scaling factor decimals
@@ -44,6 +51,8 @@
 (define-public (update-time-delta (delta uint))
   (begin 
     (asserts! (is-eq (contract-call? .state-v1 get-governance) contract-caller) ERR-NOT-AUTHORIZED)
+    (asserts! (>= delta MINIMUM_TIME_DELTA) ERR-INVALID-TIME-DELTA)
+    (asserts! (<= delta MAXIMUM_TIME_DELTA) ERR-INVALID-TIME-DELTA)
     (print  {
       event-type: "update-time-delta",
       old-val: (var-get time-delta),
@@ -120,13 +129,15 @@
       (price-conf (get conf pyth-record))
       
     )
+    (asserts! (> price 0) ERR-INVALID-PRICE)
+    (asserts! (and (>= expo -18) (<= expo 18)) ERR-INVALID-EXPONENT)
     (asserts! (is-valid timestamp) ERR-PYTH-PRICE-STALE)
     (try! (check-confidence (to-uint price) price-conf max-confidence-ratio))
     (ok (to-uint (convert-res price expo PRICE_DECIMALS)))
 ))
 
 (define-private (check-confidence (price uint) (confidence uint) (max-confidence-ratio uint))
-  (if (or (is-eq u0 price) (<= confidence (/ (* price max-confidence-ratio) CONFIDENCE_SCALING_FACTOR)))
+  (if (<= confidence (/ (* price max-confidence-ratio) CONFIDENCE_SCALING_FACTOR))
     (ok true)
     ERR-PRICE-CONFIDENCE-LOW
   )
@@ -134,8 +145,8 @@
 
 (define-private (is-valid (timestamp uint))
   (let ((block-timestamp (+ (unwrap-panic (get-stacks-block-info? time (- stacks-block-height u1))) STACKS_BLOCK_TIME)))
-    (if (>= timestamp block-timestamp) 
-      true
+    (if (>= timestamp block-timestamp)
+      (<= timestamp (+ block-timestamp FUTURE_TIMESTAMP_TOLERANCE))
       (> timestamp (- block-timestamp (var-get time-delta))))
   )
 )

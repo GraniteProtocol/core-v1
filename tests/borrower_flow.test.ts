@@ -26,7 +26,7 @@ const borrower1 = accounts.get("wallet_2")!;
 describe("Borrower User flow tests", () => {
   beforeEach(async () => {
     init_pyth(deployer);
-    set_pyth_time_delta(100000, deployer);
+    set_pyth_time_delta(7200, deployer);
     set_allowed_contracts(deployer);
     set_asset_cap(deployer, 10000000000000n); // 100k USDC
     initialize_ir(deployer);
@@ -62,6 +62,11 @@ describe("Borrower User flow tests", () => {
 
     // accrue interest
     simnet.mineEmptyBlocks(5);
+
+    // refresh prices after mining blocks
+    await set_price("mock-usdc", 1n, deployer);
+    await set_price("mock-btc", 10n, deployer);
+    await set_price("mock-eth", 1n, deployer);
 
     // repay
     mint_token("mock-usdc", 693, borrower1);

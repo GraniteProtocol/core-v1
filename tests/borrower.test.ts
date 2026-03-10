@@ -32,7 +32,7 @@ const btc_collateral_contract = contractPrincipalCV(deployer, "mock-btc");
 describe("borrower tests", () => {
   beforeEach(async () => {
     init_pyth(deployer);
-    set_pyth_time_delta(100000, deployer);
+    set_pyth_time_delta(7200, deployer);
     set_allowed_contracts(deployer);
     set_asset_cap(deployer, 10000000000000n); // 100k USDC
     initialize_ir(deployer);

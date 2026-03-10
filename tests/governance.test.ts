@@ -55,7 +55,7 @@ function execute_proposal_failed(response: any, error: any) {
 describe("governance tests", () => {
   beforeEach(async () => {
     init_pyth(deployer);
-    await set_pyth_time_delta(100000000, deployer);
+    await set_pyth_time_delta(7200, deployer);
     set_allowed_contracts(deployer);
     set_asset_cap(deployer, 10000000000000n); // 100k USDC
     initialize_ir(deployer);
@@ -204,6 +204,10 @@ describe("governance tests", () => {
     );
     expect(response.result.type).toBe(ClarityType.ResponseOk);
     execute_proposal(response);
+
+    // refresh prices after mining blocks for governance proposals
+    await set_price("mock-usdc", 1n, deployer);
+    await set_price("mock-btc", 1n, deployer);
 
     remove_collateral("mock-btc", 1000, deployer, governance_account);
   });
@@ -1312,7 +1316,7 @@ describe("governance tests", () => {
       [],
       deployer
     );
-    expect(response.result).toEqual(Cl.uint(100000000));
+    expect(response.result).toEqual(Cl.uint(7200));
 
     response = simnet.callPublicFn(
       "governance-v1",

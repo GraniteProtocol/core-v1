@@ -35,6 +35,10 @@
   )
 )
 
+(define-read-only (get-block-time)
+  (+ (unwrap-panic (get-stacks-block-info? time (- stacks-block-height u1))) u5)
+)
+
 (define-public (get-mock-eth (amount uint))
   (let
     (

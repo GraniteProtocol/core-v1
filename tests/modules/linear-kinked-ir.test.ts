@@ -107,6 +107,21 @@ describe("linear kinked interest rate module tests", () => {
     );
   });
 
+  it("utilization with zero total-assets returns 0 (H-2 div-by-zero guard)", () => {
+    const totalAssets = Cl.uint(0);
+    const openInterest = Cl.uint(1000);
+
+    const args = [totalAssets, openInterest];
+    const ur = simnet.callReadOnlyFn(
+      "linear-kinked-ir-v1",
+      "utilization-calc",
+      args,
+      address1
+    );
+
+    expect(ur.result).toStrictEqual(Cl.uint(0));
+  });
+
   it("utilization should be 0 when 0 open interest", () => {
     const totalAssets = Cl.uint(50000000000); // 500 * 10^8 = 500 usd
     const openInterest = Cl.uint(0);
