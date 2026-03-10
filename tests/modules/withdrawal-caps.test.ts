@@ -47,7 +47,7 @@ function execute_proposal(response: any) {
 describe("withdrawal caps tests", () => {
   beforeEach(async () => {
     init_pyth(deployer);
-    set_pyth_time_delta(100000000, deployer);
+    set_pyth_time_delta(7200, deployer);
     set_allowed_contracts(deployer);
     set_asset_cap(deployer, 2n ** 128n - 1n);
     initialize_ir(deployer);
@@ -319,6 +319,10 @@ describe("withdrawal caps tests", () => {
     expect(collateral_bucket).toBeUint(8000000000);
 
     simnet.mineEmptyBlocks(20);
+
+    // refresh prices after mining blocks
+    await set_price("mock-usdc", 1n, deployer);
+    await set_price("mock-btc", 10n, deployer);
 
     // Remove 70 btc. It should be bloked
     let resp = simnet.callPublicFn(

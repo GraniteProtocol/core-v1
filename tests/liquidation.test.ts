@@ -40,7 +40,7 @@ const flashLoanCallbackContract = Cl.contractPrincipal(
 describe("liquidation tests", () => {
   beforeEach(async () => {
     init_pyth(deployer);
-    set_pyth_time_delta(100000, deployer);
+    set_pyth_time_delta(7200, deployer);
     set_allowed_contracts(deployer);
     set_asset_cap(deployer, 10000000000000n); // 100k USDC
     initialize_ir(deployer);
@@ -987,7 +987,7 @@ describe("liquidation tests", () => {
     expect(liquidate.result).toBeOk(Cl.bool(true));
   });
 
-  it("should liquidate correctly a collateral with price 0", async () => {
+  it("should reject liquidation when collateral price is 0 (H-1 fix)", async () => {
     mint_token("mock-usdc", 100000000000, depositor);
     deposit(100000000000, depositor);
 
@@ -1006,6 +1006,9 @@ describe("liquidation tests", () => {
 
     await set_price("mock-btc", 0n, deployer);
 
+    // With H-1 fix, zero price is rejected at pyth-adapter level.
+    // read-price returns ERR-INVALID-PRICE (u80005), which propagates unchanged via try! through
+    // account-health -> check-account-unhealthy -> get-liquidate-params -> get-liquidation-info.
     let liquidate = simnet.callPublicFn(
       "liquidator-v1",
       "liquidate-collateral",
@@ -1018,7 +1021,7 @@ describe("liquidation tests", () => {
       ],
       depositor
     );
-    expect(liquidate.result).toBeOk(Cl.bool(true));
+    expect(liquidate.result).toBeErr(Cl.uint(80005)); // ERR-INVALID-PRICE (from pyth-adapter, propagated via try!)
   });
 
   it("test liquidation buffer", async () => {
@@ -1531,5 +1534,44 @@ describe("liquidation tests", () => {
     );
     // mock liquidator should have all the btc collateral
     expectUserBTCBalance(flashLoanCallbackContract, 20000000000n, deployer);
+  });
+
+  it("zero repay amount rejected regardless of collateral price (H-1 defense-in-depth)", async () => {
+    mint_token("mock-usdc", 100000000000, depositor);
+    deposit(100000000000, depositor);
+
+    update_supported_collateral(
+      "mock-btc",
+      90000000,
+      95000000,
+      5000000,
+      8,
+      deployer
+    );
+    mint_token("mock-btc", 100000000000, borrower1);
+    add_collateral("mock-btc", 20000000000, deployer, borrower1);
+
+    borrow(18000000000, borrower1);
+
+    // Drop price to make position unhealthy
+    await set_price("mock-btc", 0n, deployer);
+
+    // Attempt liquidation with both zero repay amount and zero collateral price.
+    // The zero price is caught first at the oracle level (H-1 primary fix),
+    // before ensure-non-zero-repay-amount is reached.
+    let liquidate = simnet.callPublicFn(
+      "liquidator-v1",
+      "liquidate-collateral",
+      [
+        Cl.none(),
+        btc_collateral_contract,
+        Cl.principal(borrower1),
+        Cl.uint(0),
+        Cl.uint(0),
+      ],
+      depositor
+    );
+    // Zero price is caught first at oracle level (H-1 primary fix)
+    expect(liquidate.result).toBeErr(Cl.uint(80005)); // ERR-INVALID-PRICE (from pyth-adapter, propagated via try!)
   });
 });

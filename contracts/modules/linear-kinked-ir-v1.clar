@@ -77,7 +77,7 @@
 (define-read-only (accrue-interest (last-accrued-block-time uint) (lp-open-interest uint) (staked-open-interest uint) (staking-reward-percentage uint) (protocol-open-interest uint) (protocol-reserve-percentage uint) (total-assets uint))
   (let (
     (time-now (+ (unwrap-panic (get-stacks-block-info? time (- stacks-block-height u1))) STACKS_BLOCK_TIME))
-    (elapsed-block-time (- time-now last-accrued-block-time))
+    (elapsed-block-time (if (> time-now last-accrued-block-time) (- time-now last-accrued-block-time) u0))
     (premature-return (asserts!
       (not (or (is-eq u0 elapsed-block-time) (not (contract-call? .state-v1 is-interest-accrual-enabled))))
       (ok {
@@ -114,7 +114,7 @@
 
 ;; total-assets and open-interest are fixed to u8 precision
 (define-read-only (utilization-calc (total-assets uint) (open-interest uint))
-  (if (> (+ total-assets open-interest) u0) (/ (* open-interest one-12) total-assets) u0)
+  (if (> total-assets u0) (/ (* open-interest one-12) total-assets) u0)
 )
 
 (define-read-only (get-ir (total-assets uint) (open-interest uint))
