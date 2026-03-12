@@ -19,6 +19,7 @@
 (define-constant ERR-WITHDRAWAL-COLLATERAL-CAP-EXCEEDED (err u120004))
 (define-constant ERR-INVALID-CAP-FACTOR (err u120005))
 (define-constant ERR-NOT-AUTHORIZED (err u120006))
+(define-constant ERR-SYNC-FAILED (err u120007))
 
 ;; VARIABLES
 
@@ -203,7 +204,7 @@
     (if (is-eq (var-get debt-cap-factor) u0)
       SUCCESS
       (begin
-        (unwrap-panic (sync-debt-bucket u0))
+        (unwrap! (sync-debt-bucket u0) ERR-SYNC-FAILED)
         (asserts! (<= amount (var-get debt-bucket)) ERR-WITHDRAWAL-DEBT-CAP-EXCEEDED)
         (var-set debt-bucket (- (var-get debt-bucket) amount))
         SUCCESS
