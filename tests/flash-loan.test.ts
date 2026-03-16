@@ -240,4 +240,8 @@ describe("Flash loan tests", () => {
 
     expectUserUSDCBalance(Cl.principal(user1), BigInt(0));
   });
+
+  // Note: Direct reentrancy of flash-loan is prevented by Clarity's VM-level circular reference
+  // protection. The flash-loan-in-progress guard (M-13) serves as defense-in-depth and primarily
+  // prevents protocol operations from reading inconsistent state during the callback window.
 });

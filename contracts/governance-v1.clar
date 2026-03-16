@@ -724,7 +724,8 @@
         expires-in: expires-in
       }) ERR-FAILED-TO-GENERATE-PROPOSAL-ID)))
     )
-    (asserts! (and (>= action ACTION_SET_DEPOSIT_ASSET_FLAG) (<= action ACTION_SET_INTEREST_ACCRUAL_FLAG)) ERR-INVALID-ACTION)
+    (asserts! (or (and (>= action ACTION_SET_DEPOSIT_ASSET_FLAG) (<= action ACTION_SET_LIQUIDATION_FLAG))
+                  (is-eq action ACTION_SET_INTEREST_ACCRUAL_FLAG)) ERR-INVALID-ACTION)
     (try! (create-proposal proposal-id action expires-in))
     (map-set set-market-feature-proposal-data proposal-id {
       flag: feature,
@@ -745,7 +746,7 @@
         expires-in: expires-in
       }) ERR-FAILED-TO-GENERATE-PROPOSAL-ID)))
     )
-    (asserts! (and (>= action ACTION_SET_MARKET_PAUSE_FLAG) (<= action ACTION_REMOVE_COLLATERAL)) ERR-INVALID-ACTION)
+    (asserts! (and (>= action ACTION_SET_MARKET_PAUSE_FLAG) (<= action ACTION_SET_MARKET_UNPAUSE_FLAG)) ERR-INVALID-ACTION)
     (map-set unpause-market-data proposal-id cooldown)
     (try! (create-proposal proposal-id action expires-in))
     ;; try to execute the proposal if threshold is met

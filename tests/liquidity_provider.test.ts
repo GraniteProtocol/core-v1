@@ -34,7 +34,7 @@ describe("liquidity-provider tests", () => {
       [Cl.uint(0), Cl.principal(depositor1)],
       depositor1
     );
-    expect(deposit.result).toBeErr(Cl.uint(101));
+    expect(deposit.result).toBeErr(Cl.uint(10001)); // ERR-ASSET-TOO-LOW (M-8 minimum deposit guard)
 
     // Attempt to withdraw 0 assets
     const withdraw = simnet.callPublicFn(
@@ -72,7 +72,7 @@ describe("liquidity-provider tests", () => {
     simnet.callPublicFn(
       "mock-usdc",
       "mint",
-      [Cl.uint(1000), Cl.principal(depositor1)],
+      [Cl.uint(2000), Cl.principal(depositor1)],
       depositor1
     );
 
@@ -80,7 +80,7 @@ describe("liquidity-provider tests", () => {
     const depositResult = simnet.callPublicFn(
       "liquidity-provider-v1",
       "deposit",
-      [Cl.uint(100), Cl.principal(depositor1)],
+      [Cl.uint(1000), Cl.principal(depositor1)],
       depositor1
     );
     expect(depositResult.result).toBeOk(Cl.bool(true));
@@ -92,22 +92,21 @@ describe("liquidity-provider tests", () => {
       [Cl.principal(depositor1)],
       depositor1
     );
-    // User should have 98 assets after deposit
-    expect(userBalancePostDeposit.result.value.value).toBe(900n);
+    expect(userBalancePostDeposit.result.value.value).toBe(1000n);
     const userLpBalancePostDeposit = simnet.callReadOnlyFn(
       "state-v1",
       "get-balance",
       [Cl.principal(depositor1)],
       depositor1
     );
-    // User should have 100 LP tokens after deposit
-    expect(userLpBalancePostDeposit.result.value.value).toBe(100n);
+    // User should have 1000 LP tokens after deposit
+    expect(userLpBalancePostDeposit.result.value.value).toBe(1000n);
 
     /* Withdrawal flow */
     const withdrawalResult = simnet.callPublicFn(
       "liquidity-provider-v1",
       "withdraw",
-      [Cl.uint(100), Cl.principal(depositor1)],
+      [Cl.uint(1000), Cl.principal(depositor1)],
       depositor1
     );
     expect(withdrawalResult.result).toBeOk(Cl.bool(true));
@@ -119,8 +118,7 @@ describe("liquidity-provider tests", () => {
       [Cl.principal(depositor1)],
       depositor1
     );
-    // User should have 99 assets after withdrawal
-    expect(userBalancePostWithdrawal.result.value.value).toBe(1000n);
+    expect(userBalancePostWithdrawal.result.value.value).toBe(2000n);
     const userLpBalancePostWithdrawal = simnet.callReadOnlyFn(
       "state-v1",
       "get-balance",
@@ -132,23 +130,23 @@ describe("liquidity-provider tests", () => {
   });
 
   it("should correctly handle deposits and withdrawals with multiple users", async () => {
-    // Mint asset tokens for all depositors
+    // Mint asset tokens for all depositors (scaled up to meet M-8 minimum initial deposit)
     simnet.callPublicFn(
       "mock-usdc",
       "mint",
-      [Cl.uint(50), Cl.principal(depositor1)],
+      [Cl.uint(1000), Cl.principal(depositor1)],
       depositor1
     );
     simnet.callPublicFn(
       "mock-usdc",
       "mint",
-      [Cl.uint(100), Cl.principal(depositor2)],
+      [Cl.uint(2000), Cl.principal(depositor2)],
       depositor2
     );
     simnet.callPublicFn(
       "mock-usdc",
       "mint",
-      [Cl.uint(150), Cl.principal(depositor3)],
+      [Cl.uint(3000), Cl.principal(depositor3)],
       depositor3
     );
 
@@ -156,24 +154,24 @@ describe("liquidity-provider tests", () => {
     simnet.callPublicFn(
       "liquidity-provider-v1",
       "deposit",
-      [Cl.uint(50), Cl.principal(depositor1)],
+      [Cl.uint(1000), Cl.principal(depositor1)],
       depositor1
     );
     simnet.callPublicFn(
       "liquidity-provider-v1",
       "deposit",
-      [Cl.uint(100), Cl.principal(depositor2)],
+      [Cl.uint(2000), Cl.principal(depositor2)],
       depositor2
     );
     simnet.callPublicFn(
       "liquidity-provider-v1",
       "deposit",
-      [Cl.uint(150), Cl.principal(depositor3)],
+      [Cl.uint(3000), Cl.principal(depositor3)],
       depositor3
     );
 
     // Gift assets
-    const interestAmount = Cl.uint(100);
+    const interestAmount = Cl.uint(2000);
     simnet.callPublicFn(
       "mock-usdc",
       "mint",
@@ -218,65 +216,65 @@ describe("liquidity-provider tests", () => {
       [Cl.principal(depositor1)],
       depositor1
     );
-    expect(lpBalanceAfterDeposit.result.value.value).toBe(50n);
+    expect(lpBalanceAfterDeposit.result.value.value).toBe(1000n);
     lpBalanceAfterDeposit = simnet.callReadOnlyFn(
       "state-v1",
       "get-balance",
       [Cl.principal(depositor2)],
       depositor2
     );
-    expect(lpBalanceAfterDeposit.result.value.value).toBe(100n);
+    expect(lpBalanceAfterDeposit.result.value.value).toBe(2000n);
     lpBalanceAfterDeposit = simnet.callReadOnlyFn(
       "state-v1",
       "get-balance",
       [Cl.principal(depositor3)],
       depositor3
     );
-    expect(lpBalanceAfterDeposit.result.value.value).toBe(150n);
+    expect(lpBalanceAfterDeposit.result.value.value).toBe(3000n);
 
     let redeemResult = simnet.callPublicFn(
       "liquidity-provider-v1",
       "redeem",
-      [Cl.uint(50), Cl.principal(depositor1)],
+      [Cl.uint(1000), Cl.principal(depositor1)],
       depositor1
     );
     expect(redeemResult.result).toBeOk(Cl.bool(true));
     redeemResult = simnet.callPublicFn(
       "liquidity-provider-v1",
       "redeem",
-      [Cl.uint(100), Cl.principal(depositor2)],
+      [Cl.uint(2000), Cl.principal(depositor2)],
       depositor2
     );
     expect(redeemResult.result).toBeOk(Cl.bool(true));
     redeemResult = simnet.callPublicFn(
       "liquidity-provider-v1",
       "redeem",
-      [Cl.uint(150), Cl.principal(depositor3)],
+      [Cl.uint(3000), Cl.principal(depositor3)],
       depositor3
     );
     expect(redeemResult.result).toBeOk(Cl.bool(true));
 
-    // Check redeeming shares brings profits to LPs
+    // Check redeeming shares brings profits to LPs (scaled 20x from original)
     let assetBalanceAfterWithdrawal = simnet.callReadOnlyFn(
       "mock-usdc",
       "get-balance",
       [Cl.principal(depositor1)],
       depositor1
     );
-    expect(assetBalanceAfterWithdrawal.result.value.value).toBe(66n);
+    expect(assetBalanceAfterWithdrawal.result.value.value).toBe(1333n);
     assetBalanceAfterWithdrawal = simnet.callReadOnlyFn(
       "mock-usdc",
       "get-balance",
       [Cl.principal(depositor2)],
       depositor2
     );
-    expect(assetBalanceAfterWithdrawal.result.value.value).toBe(133n);
+    expect(assetBalanceAfterWithdrawal.result.value.value).toBe(2666n);
     assetBalanceAfterWithdrawal = simnet.callReadOnlyFn(
       "mock-usdc",
       "get-balance",
       [Cl.principal(depositor3)],
       depositor3
     );
-    expect(assetBalanceAfterWithdrawal.result.value.value).toBe(201n);
+    expect(assetBalanceAfterWithdrawal.result.value.value).toBe(4001n);
   });
 });
