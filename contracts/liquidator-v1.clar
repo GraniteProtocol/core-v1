@@ -549,7 +549,7 @@
             updated-total-borrowed-amount: updated-total-borrowed-amount,
             burned-staking-lp-tokens: burned-staking-lp-tokens
           })
-          (asserts! (<= burned-staking-lp-tokens u0) (contract-call? .staking-v1 slash-total-staked-lp-tokens burned-staking-lp-tokens))
+          (if (> burned-staking-lp-tokens u0) (try! (contract-call? .staking-v1 slash-total-staked-lp-tokens burned-staking-lp-tokens)) true)
           SUCCESS
       ))
     )
