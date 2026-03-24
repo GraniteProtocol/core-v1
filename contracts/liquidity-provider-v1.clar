@@ -6,6 +6,7 @@
 
 ;; CONSTANTS
 (define-constant SUCCESS (ok true))
+(define-constant MINIMUM_INITIAL_DEPOSIT u1000) ;; 0.001 USDC (6 decimals) - enforced only on first deposit
 
 ;; PUBLIC FUNCTIONS
 (define-public (deposit (assets uint) (recipient principal))
@@ -16,7 +17,7 @@
         (total-assets (get total-assets lp-params))
         (shares (contract-call? .math-v1 convert-to-shares lp-params assets false))
       )
-      (try! (if (and (is-eq total-assets u0) (is-eq assets u1)) ERR-ASSET-TOO-LOW SUCCESS))
+      (try! (if (and (is-eq total-assets u0) (< assets MINIMUM_INITIAL_DEPOSIT)) ERR-ASSET-TOO-LOW SUCCESS))
       (try! (contract-call? .withdrawal-caps-v1 lp-deposit assets))
       (try! (contract-call? .state-v1 add-assets contract-caller recipient assets shares))
       (print { 

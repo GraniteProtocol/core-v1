@@ -223,10 +223,12 @@ describe("governance tests", () => {
     );
     expect(response.result.type).toBe(ClarityType.ResponseOk);
 
+    // Use amount >= MINIMUM_INITIAL_DEPOSIT (u1000) to bypass M-8 guard and test the deposit-disabled flag
+    mint_token("mock-usdc", 1000, governance_account);
     response = simnet.callPublicFn(
       "liquidity-provider-v1",
       "deposit",
-      [Cl.uint(0), Cl.principal(governance_account)],
+      [Cl.uint(1000), Cl.principal(governance_account)],
       governance_account
     );
     expect(response.result).toBeErr(Cl.uint(102));
@@ -289,6 +291,59 @@ describe("governance tests", () => {
       deployer
     );
     expect(response.result).toStrictEqual(Cl.bool(false));
+  });
+
+  it("should reject out-of-range actions for market feature proposals (M-18)", async () => {
+    state_set_governance_contract(deployer);
+
+    // Action u9 (market pause) is no longer valid for set-market-feature
+    let response = simnet.callPublicFn(
+      "governance-v1",
+      "initiate-proposal-to-set-market-feature",
+      [Cl.uint(9), Cl.bool(false), Cl.uint(10), Cl.uint(0)],
+      governance_account
+    );
+    expect(response.result).toBeErr(Cl.uint(40000)); // ERR-INVALID-ACTION
+
+    // Action u22 (remove collateral) is no longer valid for set-market-feature
+    response = simnet.callPublicFn(
+      "governance-v1",
+      "initiate-proposal-to-set-market-feature",
+      [Cl.uint(22), Cl.bool(false), Cl.uint(10), Cl.uint(0)],
+      governance_account
+    );
+    expect(response.result).toBeErr(Cl.uint(40000)); // ERR-INVALID-ACTION
+
+    // Action u8 (liquidation flag, upper bound) should still be accepted
+    response = simnet.callPublicFn(
+      "governance-v1",
+      "initiate-proposal-to-set-market-feature",
+      [Cl.uint(8), Cl.bool(true), Cl.uint(10), Cl.uint(0)],
+      governance_account
+    );
+    expect(response.result.type).toBe(ClarityType.ResponseOk);
+  });
+
+  it("should reject out-of-range actions for market state proposals (M-18)", async () => {
+    state_set_governance_contract(deployer);
+
+    // Action u11 (collateral settings) is no longer valid for set-market-state
+    let response = simnet.callPublicFn(
+      "governance-v1",
+      "initiate-proposal-to-set-market-state",
+      [Cl.uint(11), Cl.uint(10), Cl.uint(0)],
+      governance_account
+    );
+    expect(response.result).toBeErr(Cl.uint(40000)); // ERR-INVALID-ACTION
+
+    // Action u10 (market unpause, upper bound) should still be accepted
+    response = simnet.callPublicFn(
+      "governance-v1",
+      "initiate-proposal-to-set-market-state",
+      [Cl.uint(10), Cl.uint(10), Cl.uint(0)],
+      governance_account
+    );
+    expect(response.result.type).toBe(ClarityType.ResponseOk);
   });
 
   it("should be able to disable liquidations until a given block", async () => {
