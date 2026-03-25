@@ -51,6 +51,7 @@
 (define-constant ERR-USER-REWARDS-CLAIMED (err u100009))
 (define-constant ERR-REWARDS-NOT-CLAIMED (err u100010))
 (define-constant ERR-INVALID-SNAPSHOT-TIME (err u100011))
+(define-constant ERR-NOT-AUTHORIZED (err u100012))
 
 ;; Read-only functions
 (define-read-only (get-epoch-details)
@@ -121,6 +122,7 @@
 (define-public (claim-rewards (on-behalf-of (optional principal)))
   (let (
       (user (default-to contract-caller on-behalf-of))
+      (auth-check (asserts! (or (is-eq contract-caller user) (is-none on-behalf-of)) ERR-NOT-AUTHORIZED))
       (rewards (unwrap! (map-get? user-rewards user) ERR-NO-USER-REWARDS))
       (reward-amount (get earned-rewards rewards))
     )
