@@ -177,6 +177,12 @@ describe("PoC: slash-total-staked-lp-tokens underflow", () => {
     // ────────────────────────────────────────────────────────────
     mint_token("mock-usdc", 20_000_000_000, liquidator);
 
+    // Advance past the 6-block time-lock between borrowing and liquidation
+    simnet.mineEmptyBlocks(6);
+    // refresh prices after mining blocks
+    await set_price("mock-usdc", 1n, deployer);
+    await set_price("mock-btc", 94n, deployer);
+
     // After fix, liquidation should succeed (bad debt socialized correctly)
     const result = simnet.callPublicFn(
       "liquidator-v1",

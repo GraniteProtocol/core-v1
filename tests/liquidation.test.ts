@@ -369,6 +369,7 @@ describe("liquidation tests", () => {
     );
 
     mint_token("mock-usdc", 18181818181, depositor);
+    simnet.mineEmptyBlocks(6);
     let liquidate = simnet.callPublicFn(
       "liquidator-v1",
       "liquidate-collateral",
@@ -457,6 +458,7 @@ describe("liquidation tests", () => {
       borrower1
     ).result.value.value;
 
+    simnet.mineEmptyBlocks(6);
     let liquidate = simnet.callPublicFn(
       "liquidator-v1",
       "liquidate-collateral",
@@ -552,7 +554,7 @@ describe("liquidation tests", () => {
     let length = block.length;
     block.forEach((txn, index) => {
       if (index == length - 1) {
-        expect(txn.result).toBeErr(Cl.uint(113)); // ERR-LIQUIDATION-NOT-ALLOWED
+        expect(txn.result).toBeErr(Cl.uint(30011)); // ERR-LIQUIDATION-TIME-LOCK
       } else {
         expect(txn.result).toBeOk(Cl.bool(true));
       }
@@ -627,6 +629,7 @@ describe("liquidation tests", () => {
 
     mint_token("mock-usdc", 17777777777, depositor);
 
+    simnet.mineEmptyBlocks(6);
     let liquidate = simnet.callPublicFn(
       "liquidator-v1",
       "liquidate-collateral",
@@ -759,6 +762,7 @@ describe("liquidation tests", () => {
     );
 
     mint_token("mock-usdc", 18181818181, depositor);
+    simnet.mineEmptyBlocks(6);
     let liquidate = simnet.callPublicFn(
       "liquidator-v1",
       "liquidate-collateral",
@@ -841,6 +845,7 @@ describe("liquidation tests", () => {
     );
 
     mint_token("mock-usdc", 39000013190, depositor);
+    simnet.mineEmptyBlocks(6);
     let liquidate = simnet.callPublicFn(
       "liquidator-v1",
       "liquidate-collateral",
@@ -978,6 +983,7 @@ describe("liquidation tests", () => {
       liquidateData2,
       ...new Array(18).fill(Cl.none()),
     ];
+    simnet.mineEmptyBlocks(6);
     let liquidate = simnet.callPublicFn(
       "liquidator-v1",
       "batch-liquidate",
@@ -1077,6 +1083,7 @@ describe("liquidation tests", () => {
     );
 
     mint_token("mock-usdc", 30000000000000, depositor);
+    simnet.mineEmptyBlocks(6);
     let liquidate = simnet.callPublicFn(
       "liquidator-v1",
       "liquidate-collateral",
@@ -1098,7 +1105,7 @@ describe("liquidation tests", () => {
       deployer
     );
     expect(accounthealthRes.result.value.data["position-health"]).toEqual(
-      Cl.uint(100001972n)
+      Cl.uint(100001973n)
     );
   });
 
@@ -1152,6 +1159,7 @@ describe("liquidation tests", () => {
     );
 
     mint_token("mock-usdc", 18181818181, depositor);
+    simnet.mineEmptyBlocks(6);
     let liquidate = simnet.callPublicFn(
       "liquidator-v1",
       "liquidate-collateral",
@@ -1173,7 +1181,7 @@ describe("liquidation tests", () => {
       deployer
     );
     expect(accounthealthRes.result.value.data["position-health"]).toEqual(
-      Cl.uint(100000002n)
+      Cl.uint(100000000n)
     );
   });
 
@@ -1227,6 +1235,7 @@ describe("liquidation tests", () => {
     );
 
     mint_token("mock-usdc", 18181818181, depositor);
+    simnet.mineEmptyBlocks(6);
     let liquidate = simnet.callPublicFn(
       "liquidator-v1",
       "liquidate-collateral",
@@ -1302,6 +1311,7 @@ describe("liquidation tests", () => {
     );
 
     mint_token("mock-usdc", 18181818181, depositor);
+    simnet.mineEmptyBlocks(6);
     let liquidate = simnet.callPublicFn(
       "liquidator-v1",
       "liquidate-collateral",
@@ -1377,6 +1387,7 @@ describe("liquidation tests", () => {
     );
 
     mint_token("mock-usdc", 18181818181, depositor);
+    simnet.mineEmptyBlocks(6);
     let liquidate = simnet.callPublicFn(
       "liquidator-v1",
       "liquidate-collateral",
@@ -1492,6 +1503,7 @@ describe("liquidation tests", () => {
     );
 
     state_set_governance_contract(deployer);
+    simnet.mineEmptyBlocks(6);
     let liquidate = simnet.callPublicFn(
       "mock-liquidator-with-flash-loan",
       "liquidate-collateral",

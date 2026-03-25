@@ -25,8 +25,9 @@
 (define-constant ERR-INVALID-ORACLE-PRICE (err u30008))
 (define-constant ERR-MISSING-MARKET-PRICE (err u30009))
 (define-constant ERR-NON-ZERO-REPAY-AMOUNT (err u30010))
+(define-constant ERR-LIQUIDATION-NOT-ALLOWED (err u30011))
 
-;; PUBLIC FUNCTIONS 
+;; PUBLIC FUNCTIONS
 (define-public (batch-liquidate (pyth-price-feed-data (optional (buff 8192))) (collateral <token-trait>) (batch (list 20 (optional {
   user: principal,
   liquidator-repay-amount: uint,
@@ -251,7 +252,10 @@
 (define-private (execute-liquidation (user principal) (collateral <token-trait>) (liquidator-repay-amount uint) (min-collateral-expected uint))
   (let
       (
-        (collateral-token (contract-of collateral))      
+        (collateral-token (contract-of collateral))
+        ;; L-36: enforce minimum 6-block gap between borrowing and liquidation
+        (user-position-data (contract-call? .state-v1 get-borrow-repay-params user))
+        (position-for-block-check (unwrap! (get user-position user-position-data) ERR-NO-POSITION))
         ;; get liquidation info for the user
         (liquidation-res (try! (get-liquidation-info user collateral liquidator-repay-amount none none none none)))
         (liquidation-info (get liquidation-info liquidation-res))
@@ -294,6 +298,8 @@
           (get collaterals position-data)
         ))
       )
+      ;; L-36: require at least 6 blocks (~1 min) between borrowing and liquidation
+      (asserts! (>= stacks-block-height (+ (get borrowed-block position-for-block-check) u6)) ERR-LIQUIDATION-NOT-ALLOWED)
       (try! (ensure-non-zero-repay-amount liquidator-repay-amount collateral-price))
       ;; update state
       (try! (contract-call? .state-v1 update-liquidate-collateral-state collateral {

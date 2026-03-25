@@ -403,6 +403,11 @@ describe("Borrower User flow tests", () => {
     );
     expect(depositorBalance.result.value.value).toBe(5000n);
 
+    simnet.mineEmptyBlocks(6);
+    // refresh prices after mining blocks
+    await set_price("mock-usdc", 1n, deployer);
+    await set_price("mock-btc", 10n, deployer);
+    await set_price("mock-eth", 65n, deployer);
     let liquidate = simnet.callPublicFn(
       "liquidator-v1",
       "liquidate-collateral",
@@ -449,6 +454,11 @@ describe("Borrower User flow tests", () => {
     );
     expect(userDebtShares.result.value.data["debt-shares"].value).toEqual(796n);
 
+    simnet.mineEmptyBlocks(6);
+    // refresh prices after mining blocks
+    await set_price("mock-usdc", 1n, deployer);
+    await set_price("mock-btc", 10n, deployer);
+    await set_price("mock-eth", 65n, deployer);
     liquidate = simnet.callPublicFn(
       "liquidator-v1",
       "liquidate-collateral",
