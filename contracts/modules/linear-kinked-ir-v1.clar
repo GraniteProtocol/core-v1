@@ -181,7 +181,7 @@
 ;; rate in 12-fixed
 ;; n-blocks
 (define-read-only (get-rt-by-block (rate uint) (elapsed-block-time uint))
-  (/ (* rate (/ (* elapsed-block-time one-12) seconds-in-year)) one-12)
+  (/ (* rate elapsed-block-time) seconds-in-year)
 )
 
 ;; taylor series expansion to the 6th degree to estimate e^x
