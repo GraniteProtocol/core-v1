@@ -10,8 +10,8 @@
 (define-constant PRICE-SCALING-FACTOR (contract-call? .constants-v2 get-price-scaling-factor))
 ;; Must have the same precision as SCALING-FACTOR
 (define-constant MINIMUM_HEALTH_RATIO u100000000)
-;; Liquidation buffer of 0.50%
-(define-constant LIQUIDATION-BUFFER u500000)
+;; Liquidation buffer of 2.00%
+(define-constant LIQUIDATION-BUFFER u2000000)
 
 ;; ERROR VALUES
 (define-constant ERR-DIVIDE-BY-ZERO (err u30000))
