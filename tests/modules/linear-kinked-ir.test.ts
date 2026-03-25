@@ -420,7 +420,7 @@ describe("linear kinked interest rate module tests", () => {
 
     // (((1 + (0.15/365/24/60/60))^(30000)) - 1) * 100 = 0.01427042449%
     // ((1 + (0.15/365/24/60/60))^(30000)) * 10^8 = 10,00,14,270.4244869736
-    expect(IR.result).toBeOk(Cl.uint(1000142704245));
+    expect(IR.result).toBeOk(Cl.uint(1000142704244));
   });
 
   it("calculate interest accrual with 10000 elapsed blocks", () => {

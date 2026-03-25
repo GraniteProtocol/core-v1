@@ -176,7 +176,7 @@
 ))
 
 (define-private (mul (x uint) (y uint))
-	(/ (+ (* x y) (/ one-12 u2)) one-12)
+	(/ (* x y) one-12)
 )
 
 (define-private (div (x uint) (y uint))
