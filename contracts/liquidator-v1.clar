@@ -369,7 +369,7 @@
   )
   (let
     (
-      (denominator (-
+      (denominator (contract-call? .math-v1 safe-sub
           SCALING-FACTOR
           (try! (safe-div (* (+ SCALING-FACTOR liquidation-discount) collateral-liquid-ltv) SCALING-FACTOR))
       ))
