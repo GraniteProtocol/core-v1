@@ -10,6 +10,7 @@
 (define-constant ERR-NOT-INITIALIZED (err u70002))
 (define-constant ERR-NOT-GOVERNANCE (err u70003))
 (define-constant ERR-INVALID-UTILIZATION-KINK (err u70004))
+(define-constant ERR-INVALID-IR-PARAMS (err u70005))
 (define-constant ERR-TAYLOR-INPUT-TOO-LARGE (err u70006))
 
 ;; CONSTANTS
@@ -21,6 +22,7 @@
 (define-constant fact_5 u120000000000000)
 (define-constant fact_6 u720000000000000)
 (define-constant seconds-in-year u31536000)
+(define-constant MAX-IR-PARAM u100000000000000)
 (define-constant MAX-TAYLOR-INPUT u2000000000000)
 (define-constant STACKS_BLOCK_TIME (contract-call? .constants-v1 get-stacks-block-time ))
 
@@ -49,6 +51,9 @@
     )
 
     (asserts! (< utilization-kink-val one-12) ERR-INVALID-UTILIZATION-KINK)
+    (asserts! (<= ir-slope-1-val MAX-IR-PARAM) ERR-INVALID-IR-PARAMS)
+    (asserts! (<= ir-slope-2-val MAX-IR-PARAM) ERR-INVALID-IR-PARAMS)
+    (asserts! (<= base-ir-val MAX-IR-PARAM) ERR-INVALID-IR-PARAMS)
     (print {
         old-ir-slope-1: (var-get ir-slope-1),
         new-ir-slope-1: ir-slope-1-val,
