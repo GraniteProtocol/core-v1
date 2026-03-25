@@ -85,7 +85,7 @@
   (let (
       (extra-bucket-amount (- current-bucket max-bucket))
       (decay-window (get-decay-time-window))
-      (elapsed (if (is-eq last-updated-at u0) decay-window (- time-now last-updated-at)))
+      (elapsed (if (is-eq last-updated-at u0) decay-window (if (> time-now last-updated-at) (- time-now last-updated-at) u0)))
       (decayed-amount (if (>= elapsed decay-window) extra-bucket-amount (/ (* extra-bucket-amount elapsed) decay-window)))
       (new-bucket (- current-bucket decayed-amount))
   )
