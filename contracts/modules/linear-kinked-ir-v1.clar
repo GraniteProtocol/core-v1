@@ -10,6 +10,7 @@
 (define-constant ERR-NOT-INITIALIZED (err u70002))
 (define-constant ERR-NOT-GOVERNANCE (err u70003))
 (define-constant ERR-INVALID-UTILIZATION-KINK (err u70004))
+(define-constant ERR-TAYLOR-INPUT-TOO-LARGE (err u70006))
 
 ;; CONSTANTS
 (define-constant one-8 u100000000)
@@ -20,6 +21,7 @@
 (define-constant fact_5 u120000000000000)
 (define-constant fact_6 u720000000000000)
 (define-constant seconds-in-year u31536000)
+(define-constant MAX-TAYLOR-INPUT u2000000000000)
 (define-constant STACKS_BLOCK_TIME (contract-call? .constants-v1 get-stacks-block-time ))
 
 ;; DATA-VARS 
@@ -126,7 +128,10 @@
 (define-read-only (compounded-interest (current-interest-rate uint) (elapsed-block-time uint))
   (begin
     (asserts! (var-get is-initialized) ERR-NOT-INITIALIZED)
-    (ok (taylor-6 (get-rt-by-block current-interest-rate elapsed-block-time)))
+    (let ((rt (get-rt-by-block current-interest-rate elapsed-block-time)))
+      (asserts! (<= rt MAX-TAYLOR-INPUT) ERR-TAYLOR-INPUT-TOO-LARGE)
+      (ok (taylor-6 rt))
+    )
 ))
 
 (define-read-only (get-ir-params)
