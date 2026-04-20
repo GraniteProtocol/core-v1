@@ -20,6 +20,7 @@
 (define-constant ERR-INVALID-CAP-FACTOR (err u120005))
 (define-constant ERR-NOT-AUTHORIZED (err u120006))
 (define-constant ERR-SYNC-FAILED (err u120007))
+(define-constant ERR-BLOCK-INFO (err u120008))
 
 ;; VARIABLES
 
@@ -67,7 +68,7 @@
 ;; PRIVATE FUNCTIONS
 
 (define-private (get-time-now)
-  (unwrap-panic (get-stacks-block-info? time (- stacks-block-height u1)))
+  (ok (unwrap! (get-stacks-block-info? time (- stacks-block-height u1)) ERR-BLOCK-INFO))
 )
 
 (define-private (refill-bucket-amount (last-updated-at uint) (time-now uint) (max-bucket uint) (current-bucket uint) (inflow uint))
@@ -84,7 +85,7 @@
   (let (
       (extra-bucket-amount (- current-bucket max-bucket))
       (decay-window (get-decay-time-window))
-      (elapsed (if (is-eq last-updated-at u0) decay-window (- time-now last-updated-at)))
+      (elapsed (if (is-eq last-updated-at u0) decay-window (if (> time-now last-updated-at) (- time-now last-updated-at) u0)))
       (decayed-amount (if (>= elapsed decay-window) extra-bucket-amount (/ (* extra-bucket-amount elapsed) decay-window)))
       (new-bucket (- current-bucket decayed-amount))
   )
@@ -94,7 +95,7 @@
 (define-private (sync-lp-bucket (inflow uint))
   (let
     (
-      (time-now (get-time-now))
+      (time-now (try! (get-time-now)))
       (last-ts (var-get last-lp-bucket-update))
       (total-liquidity (unwrap! (contract-call? .mock-usdc get-balance .state-v1) ERR-FAILED-TO-GET-BALANCE))
       (max-lp-bucket (/ (* total-liquidity (var-get lp-cap-factor)) SCALING-FACTOR))
@@ -120,7 +121,7 @@
 (define-private (sync-debt-bucket (inflow uint))
   (let
     (
-      (time-now (get-time-now))
+      (time-now (try! (get-time-now)))
       (last-ts (var-get last-debt-bucket-update))
       (total-liquidity (contract-call? .state-v1 get-borrowable-balance))
       (max-debt-bucket (/ (* total-liquidity (var-get debt-cap-factor)) SCALING-FACTOR))
@@ -145,7 +146,7 @@
 (define-private (sync-collateral-bucket (collateral <token-trait>) (inflow uint))
   (let
     (
-      (time-now (get-time-now))
+      (time-now (try! (get-time-now)))
       (collateral-token (contract-of collateral))
       (last-ts (default-to u0 (map-get? last-collateral-bucket-update collateral-token)))
       (total-liquidity (unwrap! (contract-call? collateral get-balance .state-v1) ERR-FAILED-TO-GET-BALANCE))

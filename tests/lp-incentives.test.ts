@@ -316,8 +316,8 @@ describe("LP incentives tests", () => {
     expectUserStxBalance(user2, 0n);
     expectUnclaimedUserCount(1n);
 
-    // claim user2 rewards through user1
-    claimRewards(user1, user2);
+    // claim user2 rewards (L-30: must be claimed by user themselves)
+    claimRewards(user2);
     expectUserStxBalance(user1, 60n);
     expectUserStxBalance(user2, 40n);
     expectUnclaimedUserCount(0n);
@@ -414,9 +414,9 @@ describe("LP incentives tests", () => {
 
     // claim user rewards
     claimRewards(user1);
-    claimRewards(user1, user2);
+    claimRewards(user2);
     claimRewards(user3);
-    claimRewards(user1, user4);
+    claimRewards(user4);
     claimRewards(user5);
     claimRewards(user6);
 
@@ -552,9 +552,9 @@ describe("LP incentives tests", () => {
 
     // claim user rewards
     claimRewards(user1);
-    claimRewards(user1, user2);
+    claimRewards(user2);
     claimRewards(user3);
-    claimRewards(user1, user4);
+    claimRewards(user4);
     claimRewards(user5);
     claimRewards(user6);
 

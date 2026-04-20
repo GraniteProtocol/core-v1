@@ -97,7 +97,7 @@
         (lp-open-interest-without-principal (contract-call? .math-v1 safe-sub (get lp-open-interest interest-params) total-borrowed-amount))
         (lp-part (contract-call? .math-v1 safe-div (* interest-part lp-open-interest-without-principal) open-interest-without-principal))
         (protocol-part (contract-call? .math-v1 safe-div (* interest-part (get protocol-open-interest interest-params)) open-interest-without-principal))
-        (staked-part (contract-call? .math-v1 safe-div (* interest-part (get staked-open-interest interest-params)) open-interest-without-principal))
+        (staked-part (contract-call? .math-v1 safe-sub interest-part (+ lp-part protocol-part)))
         (asset-params (contract-call? .state-v1 get-lp-params))
         (staked-lp-tokens (contract-call? .math-v1 convert-to-shares asset-params staked-part false))
         (total-user-debt-shares (unwrap! (contract-call? .math-v1 sub (get debt-shares position) shares) ERR-NOT-ENOUGH-SHARES))

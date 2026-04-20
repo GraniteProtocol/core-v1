@@ -649,6 +649,11 @@ describe("staking tests", () => {
     );
     expect(depositorBalance.result.value.value).toBe(5000n);
 
+    simnet.mineEmptyBlocks(6);
+    // refresh prices after mining blocks
+    await set_price("mock-usdc", 1n, deployer);
+    await set_price("mock-btc", 10n, deployer);
+    await set_price("mock-eth", 65n, deployer);
     let liquidate = simnet.callPublicFn(
       "liquidator-v1",
       "liquidate-collateral",
@@ -705,6 +710,11 @@ describe("staking tests", () => {
     );
     expect(depositToReserve.result).toBeOk(Cl.bool(true));
 
+    simnet.mineEmptyBlocks(6);
+    // refresh prices after mining blocks
+    await set_price("mock-usdc", 1n, deployer);
+    await set_price("mock-btc", 10n, deployer);
+    await set_price("mock-eth", 65n, deployer);
     liquidate = simnet.callPublicFn(
       "liquidator-v1",
       "liquidate-collateral",
@@ -903,6 +913,11 @@ describe("staking tests", () => {
     );
     expect(depositorBalance.result.value.value).toBe(5000n);
 
+    simnet.mineEmptyBlocks(6);
+    // refresh prices after mining blocks
+    await set_price("mock-usdc", 1n, deployer);
+    await set_price("mock-btc", 10n, deployer);
+    await set_price("mock-eth", 65n, deployer);
     let liquidate = simnet.callPublicFn(
       "liquidator-v1",
       "liquidate-collateral",
@@ -972,6 +987,11 @@ describe("staking tests", () => {
     );
     expect(totalLpSupply.result).toBeOk(Cl.uint(2000));
 
+    simnet.mineEmptyBlocks(6);
+    // refresh prices after mining blocks
+    await set_price("mock-usdc", 1n, deployer);
+    await set_price("mock-btc", 10n, deployer);
+    await set_price("mock-eth", 65n, deployer);
     liquidate = simnet.callPublicFn(
       "liquidator-v1",
       "liquidate-collateral",
@@ -1195,6 +1215,11 @@ describe("staking tests", () => {
     );
     expect(depositorBalance.result.value.value).toBe(5000n);
 
+    simnet.mineEmptyBlocks(6);
+    // refresh prices after mining blocks
+    await set_price("mock-usdc", 1n, deployer);
+    await set_price("mock-btc", 10n, deployer);
+    await set_price("mock-eth", 65n, deployer);
     let liquidate = simnet.callPublicFn(
       "liquidator-v1",
       "liquidate-collateral",
@@ -1264,6 +1289,11 @@ describe("staking tests", () => {
     );
     expect(totalLpSupply.result).toBeOk(Cl.uint(2000));
 
+    simnet.mineEmptyBlocks(6);
+    // refresh prices after mining blocks
+    await set_price("mock-usdc", 1n, deployer);
+    await set_price("mock-btc", 10n, deployer);
+    await set_price("mock-eth", 65n, deployer);
     liquidate = simnet.callPublicFn(
       "liquidator-v1",
       "liquidate-collateral",
@@ -1449,6 +1479,11 @@ describe("staking tests", () => {
     mint_token("mock-usdc", 5000, depositor1);
 
     // first liquidation
+    simnet.mineEmptyBlocks(6);
+    // refresh prices after mining blocks
+    await set_price("mock-usdc", 1n, deployer);
+    await set_price("mock-btc", 10n, deployer);
+    await set_price("mock-eth", 65n, deployer);
     let liquidate = simnet.callPublicFn(
       "liquidator-v1",
       "liquidate-collateral",
@@ -1474,6 +1509,11 @@ describe("staking tests", () => {
     expect(depositToReserve.result).toBeOk(Cl.bool(true));
 
     // second liquidation triggers full wipe-out
+    simnet.mineEmptyBlocks(6);
+    // refresh prices after mining blocks
+    await set_price("mock-usdc", 1n, deployer);
+    await set_price("mock-btc", 10n, deployer);
+    await set_price("mock-eth", 65n, deployer);
     liquidate = simnet.callPublicFn(
       "liquidator-v1",
       "liquidate-collateral",
@@ -1580,6 +1620,11 @@ describe("staking tests", () => {
     mint_token("mock-usdc", 5000, depositor1);
 
     // first liquidation
+    simnet.mineEmptyBlocks(6);
+    // refresh prices after mining blocks
+    await set_price("mock-usdc", 1n, deployer);
+    await set_price("mock-btc", 10n, deployer);
+    await set_price("mock-eth", 65n, deployer);
     let liquidate = simnet.callPublicFn(
       "liquidator-v1",
       "liquidate-collateral",
@@ -1605,6 +1650,11 @@ describe("staking tests", () => {
     expect(depositToReserve.result).toBeOk(Cl.bool(true));
 
     // second liquidation triggers full wipe-out
+    simnet.mineEmptyBlocks(6);
+    // refresh prices after mining blocks
+    await set_price("mock-usdc", 1n, deployer);
+    await set_price("mock-btc", 10n, deployer);
+    await set_price("mock-eth", 65n, deployer);
     liquidate = simnet.callPublicFn(
       "liquidator-v1",
       "liquidate-collateral",
@@ -1769,6 +1819,11 @@ describe("staking tests", () => {
     );
     expect(depositorBalance.result.value.value).toBe(5000n);
 
+    simnet.mineEmptyBlocks(6);
+    // refresh prices after mining blocks
+    await set_price("mock-usdc", 1n, deployer);
+    await set_price("mock-btc", 10n, deployer);
+    await set_price("mock-eth", 65n, deployer);
     let liquidate = simnet.callPublicFn(
       "liquidator-v1",
       "liquidate-collateral",
@@ -1846,6 +1901,11 @@ describe("staking tests", () => {
     );
     expect(stakingStatus.result).toStrictEqual(Cl.bool(true));
 
+    simnet.mineEmptyBlocks(6);
+    // refresh prices after mining blocks
+    await set_price("mock-usdc", 1n, deployer);
+    await set_price("mock-btc", 10n, deployer);
+    await set_price("mock-eth", 65n, deployer);
     liquidate = simnet.callPublicFn(
       "liquidator-v1",
       "liquidate-collateral",

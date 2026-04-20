@@ -10,8 +10,8 @@
 (define-constant PRICE-SCALING-FACTOR (contract-call? .constants-v2 get-price-scaling-factor))
 ;; Must have the same precision as SCALING-FACTOR
 (define-constant MINIMUM_HEALTH_RATIO u100000000)
-;; Liquidation buffer of 0.50%
-(define-constant LIQUIDATION-BUFFER u500000)
+;; Liquidation buffer of 2.00%
+(define-constant LIQUIDATION-BUFFER u2000000)
 
 ;; ERROR VALUES
 (define-constant ERR-DIVIDE-BY-ZERO (err u30000))
@@ -25,8 +25,9 @@
 (define-constant ERR-INVALID-ORACLE-PRICE (err u30008))
 (define-constant ERR-MISSING-MARKET-PRICE (err u30009))
 (define-constant ERR-NON-ZERO-REPAY-AMOUNT (err u30010))
+(define-constant ERR-LIQUIDATION-NOT-ALLOWED (err u30011))
 
-;; PUBLIC FUNCTIONS 
+;; PUBLIC FUNCTIONS
 (define-public (batch-liquidate (pyth-price-feed-data (optional (buff 8192))) (collateral <token-trait>) (batch (list 20 (optional {
   user: principal,
   liquidator-repay-amount: uint,
@@ -251,7 +252,10 @@
 (define-private (execute-liquidation (user principal) (collateral <token-trait>) (liquidator-repay-amount uint) (min-collateral-expected uint))
   (let
       (
-        (collateral-token (contract-of collateral))      
+        (collateral-token (contract-of collateral))
+        ;; L-36: enforce minimum 6-block gap between borrowing and liquidation
+        (user-position-data (contract-call? .state-v1 get-borrow-repay-params user))
+        (position-for-block-check (unwrap! (get user-position user-position-data) ERR-NO-POSITION))
         ;; get liquidation info for the user
         (liquidation-res (try! (get-liquidation-info user collateral liquidator-repay-amount none none none none)))
         (liquidation-info (get liquidation-info liquidation-res))
@@ -283,7 +287,7 @@
         ;; calculate liquidity provider and protocol debt repaid
         (lp-part (contract-call? .math-v1 safe-div (* interest-part lp-open-interest-without-principal) open-interest-without-principal))
         (protocol-part (contract-call? .math-v1 safe-div (* interest-part (get protocol-open-interest open-interest-info)) open-interest-without-principal))
-        (staked-part (contract-call? .math-v1 safe-div (* interest-part (get staked-open-interest open-interest-info)) open-interest-without-principal))
+        (staked-part (contract-call? .math-v1 safe-sub interest-part (+ lp-part protocol-part)))
         (asset-params (contract-call? .state-v1 get-lp-params))
         (staked-lp-tokens (contract-call? .math-v1 convert-to-shares asset-params staked-part false))
         (updated-borrowed-amount (contract-call? .math-v1 safe-sub user-borrowed-amount principal-part))
@@ -294,6 +298,8 @@
           (get collaterals position-data)
         ))
       )
+      ;; L-36: require at least 6 blocks (~1 min) between borrowing and liquidation
+      (asserts! (>= stacks-block-height (+ (get borrowed-block position-for-block-check) u6)) ERR-LIQUIDATION-NOT-ALLOWED)
       (try! (ensure-non-zero-repay-amount liquidator-repay-amount collateral-price))
       ;; update state
       (try! (contract-call? .state-v1 update-liquidate-collateral-state collateral {
@@ -369,7 +375,7 @@
   )
   (let
     (
-      (denominator (-
+      (denominator (contract-call? .math-v1 safe-sub
           SCALING-FACTOR
           (try! (safe-div (* (+ SCALING-FACTOR liquidation-discount) collateral-liquid-ltv) SCALING-FACTOR))
       ))
@@ -532,9 +538,10 @@
             (interest-part (get interest-part interest-portion))
             (open-interest-without-principal (contract-call? .math-v1 safe-sub total-open-interest total-borrowed-amount))
             (lp-open-interest-without-principal (contract-call? .math-v1 safe-sub lp-open-interest-val total-borrowed-amount))
-            (lp-part (+ principal-part (contract-call? .math-v1 safe-div (* interest-part lp-open-interest-without-principal) open-interest-without-principal)))
+            (lp-interest-part (contract-call? .math-v1 safe-div (* interest-part lp-open-interest-without-principal) open-interest-without-principal))
             (protocol-part (contract-call? .math-v1 safe-div (* interest-part protocol-open-interest-val) open-interest-without-principal))
-            (staked-part (contract-call? .math-v1 safe-div (* interest-part staked-open-interest-val) open-interest-without-principal))
+            (staked-part (contract-call? .math-v1 safe-sub interest-part (+ lp-interest-part protocol-part)))
+            (lp-part (+ principal-part lp-interest-part))
             (updated-total-borrowed-amount (contract-call? .math-v1 safe-sub total-borrowed-amount principal-part))
             (staked-lp-tokens (contract-call? .staking-v1 get-total-staked-lp-tokens))
             (burned-staking-lp-tokens (try! (contract-call? .state-v1 socialize-user-bad-debt user remaining-debt lp-part staked-part protocol-part updated-total-borrowed-amount .staking-v1 staked-lp-tokens)))
@@ -549,7 +556,7 @@
             updated-total-borrowed-amount: updated-total-borrowed-amount,
             burned-staking-lp-tokens: burned-staking-lp-tokens
           })
-          (asserts! (<= burned-staking-lp-tokens u0) (contract-call? .staking-v1 slash-total-staked-lp-tokens burned-staking-lp-tokens))
+          (if (> burned-staking-lp-tokens u0) (try! (contract-call? .staking-v1 slash-total-staked-lp-tokens burned-staking-lp-tokens)) true)
           SUCCESS
       ))
     )
