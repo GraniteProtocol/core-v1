@@ -890,10 +890,172 @@ describe("governance tests", () => {
       ],
       governance_account
     );
+    // M-02: proposal-id hash now includes the `token` parameter, so the
+    // expected hash is the keccak256 of the consensus buffer including
+    // the mock-usdc principal.
     expect(response.result).toBeOk(
       Cl.bufferFromHex(
-        "b106bde29975cf54276899a0d1b04928bd3d5fd1d6179c0a7ff76c7ef0fdbf69"
+        "8a12529c357ba3d294fd399cb799125badb2b1864e37c9aab31a6bd48f280f14"
       )
+    );
+  });
+
+  // M-02 regression: ACTION_UPDATE_PYTH_TOKEN_FEED was missing from the
+  // time-locked map, so a >= threshold of compromised governance signers
+  // could swap a collateral token's oracle feed in the same block as the
+  // proposal threshold was met -- no community detection window. Plus the
+  // proposal-id hash didn't include the `token`, so signers couldn't
+  // cryptographically verify which token's feed they were approving.
+  it("M-02 timelock: pyth feed update cannot execute in the same block", async () => {
+    state_set_governance_contract(deployer);
+
+    const priceIdentifier = Cl.bufferFromHex(
+      "b0948a5e5313200c632b51bb5ca32f6de0d36e9950a942d19751e833f70dabfd"
+    );
+    const usdcPrincipal = Cl.contractPrincipal(deployer, "mock-usdc");
+
+    // Snapshot the pre-update price-feed entry to verify behavioral change.
+    const feedBefore = simnet.getMapEntry(
+      "pyth-adapter-v1",
+      "price-feeds",
+      usdcPrincipal
+    );
+
+    let response = simnet.callPublicFn(
+      "governance-v1",
+      "initiate-proposal-to-update-pyth-feed",
+      [usdcPrincipal, priceIdentifier, Cl.uint(100), Cl.uint(10)],
+      governance_account
+    );
+    expect(response.result.type).toBe(ClarityType.ResponseOk);
+    const proposal_id = response.result.value.buffer;
+
+    // Immediate execute attempt must fail with ERR-PROPOSAL-TIME-LOCKED.
+    let exec = simnet.callPublicFn(
+      "governance-v1",
+      "execute",
+      [Cl.buffer(proposal_id)],
+      governance_account
+    );
+    expect(exec.result).toBeErr(Cl.uint(40017)); // ERR-PROPOSAL-TIME-LOCKED
+
+    // After the time-lock period, execution succeeds AND the feed actually
+    // changes in pyth-adapter-v1's price-feeds map. Without this assertion
+    // a regression that auto-executes the proposal but never reaches
+    // pyth-adapter-v1 would still pass the (ok bool) check.
+    simnet.mineEmptyBlocks(21600);
+    exec = simnet.callPublicFn(
+      "governance-v1",
+      "execute",
+      [Cl.buffer(proposal_id)],
+      governance_account
+    );
+    expect(exec.result).toBeOk(Cl.bool(true));
+
+    const feedAfter = simnet.getMapEntry(
+      "pyth-adapter-v1",
+      "price-feeds",
+      usdcPrincipal
+    );
+    expect(feedAfter).not.toEqual(feedBefore);
+  });
+
+  it("M-02 timelock (auditor-missed): pyth time-delta update cannot execute in the same block", async () => {
+    // ACTION_UPDATE_TIME_DELTA was missing from the time-locked map alongside
+    // the M-02 feed-update finding. Same threat model: a compromised governance
+    // multisig could extend the staleness window in one block, making
+    // manipulated stale prices appear fresh. Same fix shape (one map-set
+    // entry); guarded here with a parallel timelock test.
+    state_set_governance_contract(deployer);
+
+    // Use a delta above the minimum (read at runtime to avoid hardcoding).
+    const minDelta = simnet.callReadOnlyFn(
+      "pyth-adapter-v1",
+      "get-pyth-minimum-time-delta",
+      [],
+      deployer
+    );
+    const newDelta = (minDelta.result.value as bigint) + 1000n;
+
+    const response = simnet.callPublicFn(
+      "governance-v1",
+      "initiate-proposal-to-update-pyth-time-delta",
+      [Cl.uint(10), Cl.uint(newDelta)],
+      governance_account
+    );
+    expect(response.result.type).toBe(ClarityType.ResponseOk);
+    const proposal_id = response.result.value.buffer;
+
+    let exec = simnet.callPublicFn(
+      "governance-v1",
+      "execute",
+      [Cl.buffer(proposal_id)],
+      governance_account
+    );
+    expect(exec.result).toBeErr(Cl.uint(40017)); // ERR-PROPOSAL-TIME-LOCKED
+
+    simnet.mineEmptyBlocks(21600);
+    exec = simnet.callPublicFn(
+      "governance-v1",
+      "execute",
+      [Cl.buffer(proposal_id)],
+      governance_account
+    );
+    expect(exec.result).toBeOk(Cl.bool(true));
+
+    const deltaAfter = simnet.callReadOnlyFn(
+      "pyth-adapter-v1",
+      "get-pyth-time-delta",
+      [],
+      deployer
+    );
+    expect(deltaAfter.result.value).toBe(newDelta);
+  });
+
+  it("M-02 hash-includes-token: distinct tokens with same feed produce distinct proposal-ids", async () => {
+    state_set_governance_contract(deployer);
+
+    const sameFeed = Cl.bufferFromHex(
+      "b0948a5e5313200c632b51bb5ca32f6de0d36e9950a942d19751e833f70dabfd"
+    );
+    const sameMaxConfidence = Cl.uint(100);
+    const sameExpiresIn = Cl.uint(10);
+
+    // Proposal A: token = mock-usdc.
+    const respA = simnet.callPublicFn(
+      "governance-v1",
+      "initiate-proposal-to-update-pyth-feed",
+      [
+        Cl.contractPrincipal(deployer, "mock-usdc"),
+        sameFeed,
+        sameMaxConfidence,
+        sameExpiresIn,
+      ],
+      governance_account
+    );
+    expect(respA.result.type).toBe(ClarityType.ResponseOk);
+    const idA = respA.result.value.buffer;
+
+    // Proposal B: same feed + max-confidence-ratio + expires-in, but a
+    // different token. Pre-fix this collided on the same proposal-id and
+    // the second proposal silently overwrote the first's stored feed
+    // metadata in the update-pyth-feed map. Post-fix the hash differs.
+    const respB = simnet.callPublicFn(
+      "governance-v1",
+      "initiate-proposal-to-update-pyth-feed",
+      [
+        Cl.contractPrincipal(deployer, "mock-btc"),
+        sameFeed,
+        sameMaxConfidence,
+        sameExpiresIn,
+      ],
+      governance_account
+    );
+    expect(respB.result.type).toBe(ClarityType.ResponseOk);
+    const idB = respB.result.value.buffer;
+
+    expect(Buffer.from(idA).toString("hex")).not.toEqual(
+      Buffer.from(idB).toString("hex")
     );
   });
 
@@ -1380,6 +1542,10 @@ describe("governance tests", () => {
       governance_account
     );
     expect(response.result.type).toBe(ClarityType.ResponseOk);
+    // M-02: ACTION_UPDATE_TIME_DELTA is now time-locked, so the proposal
+    // doesn't auto-execute on initiation. Mine the timelock period and
+    // execute explicitly.
+    execute_proposal(response);
 
     response = simnet.callReadOnlyFn(
       "pyth-adapter-v1",
