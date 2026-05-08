@@ -6,6 +6,9 @@ import {
   set_asset_cap,
   deposit,
   initialize_staking_reward,
+  initialize_lp,
+  state_set_governance_contract,
+  initialize_governance,
 } from "./utils";
 import { init_pyth, set_pyth_time_delta } from "./pyth";
 
@@ -24,6 +27,7 @@ describe("liquidity-provider tests", () => {
     set_asset_cap(deployer, 10000000000000n); // 100k USDC
     initialize_ir(deployer);
     initialize_staking_reward(deployer);
+    initialize_lp(deployer);
   });
 
   it("should fail when depositing 0 assets", async () => {
@@ -34,16 +38,28 @@ describe("liquidity-provider tests", () => {
       [Cl.uint(0), Cl.principal(depositor1)],
       depositor1
     );
-    expect(deposit.result).toBeErr(Cl.uint(10001)); // ERR-ASSET-TOO-LOW (M-8 minimum deposit guard)
+    // Post H-01: deposit() owns its zero-amount invariant locally via an
+    // explicit ERR-INPUT-ZERO assert (defense-in-depth, doesn't delegate
+    // to state-v1.transfer-from).
+    expect(deposit.result).toBeErr(Cl.uint(10004)); // ERR-INPUT-ZERO
 
-    // Attempt to withdraw 0 assets
+    // Attempt to withdraw 0 assets — symmetric ERR-INPUT-ZERO guard.
     const withdraw = simnet.callPublicFn(
       "liquidity-provider-v1",
       "withdraw",
       [Cl.uint(0), Cl.principal(depositor1)],
       depositor1
     );
-    expect(withdraw.result).toBeErr(Cl.uint(1));
+    expect(withdraw.result).toBeErr(Cl.uint(10004)); // ERR-INPUT-ZERO
+
+    // Attempt to redeem 0 shares — symmetric ERR-INPUT-ZERO guard.
+    const redeem = simnet.callPublicFn(
+      "liquidity-provider-v1",
+      "redeem",
+      [Cl.uint(0), Cl.principal(depositor1)],
+      depositor1
+    );
+    expect(redeem.result).toBeErr(Cl.uint(10004)); // ERR-INPUT-ZERO
   });
 
   it("should fail when depositing more than asset cap", async () => {
@@ -54,8 +70,10 @@ describe("liquidity-provider tests", () => {
       depositor1
     );
 
-    // Attempt to deposit max assets should succeed
-    deposit(10000000000000, depositor1);
+    // Attempt to deposit max assets should succeed.
+    // Cap is 10000000000000; H-01 dust burn already consumed 1000 of it during
+    // initialize_lp, so the largest user deposit that fits is cap - dust.
+    deposit(9999999999000, depositor1);
 
     // Attempt to another more than cap
     const depositRes = simnet.callPublicFn(
@@ -130,7 +148,7 @@ describe("liquidity-provider tests", () => {
   });
 
   it("should correctly handle deposits and withdrawals with multiple users", async () => {
-    // Mint asset tokens for all depositors (scaled up to meet M-8 minimum initial deposit)
+    // Mint asset tokens for all depositors
     simnet.callPublicFn(
       "mock-usdc",
       "mint",
@@ -254,27 +272,264 @@ describe("liquidity-provider tests", () => {
     );
     expect(redeemResult.result).toBeOk(Cl.bool(true));
 
-    // Check redeeming shares brings profits to LPs (scaled 20x from original)
+    // Check redeeming shares brings profits to LPs.
+    // Post H-01: pool starts with 1000 burn shares / 1000 burn assets. After
+    // user deposits (1000 + 2000 + 3000 = 6000 user shares / 6000 user assets)
+    // and the 2000 gift, the pool sits at 9000 assets / 7000 shares — share
+    // price 9/7. Each user's redemption reflects that diluted price; the
+    // 1000-asset / 1000-share burn floor remains permanently locked.
     let assetBalanceAfterWithdrawal = simnet.callReadOnlyFn(
       "mock-usdc",
       "get-balance",
       [Cl.principal(depositor1)],
       depositor1
     );
-    expect(assetBalanceAfterWithdrawal.result.value.value).toBe(1333n);
+    expect(assetBalanceAfterWithdrawal.result.value.value).toBe(1285n);
     assetBalanceAfterWithdrawal = simnet.callReadOnlyFn(
       "mock-usdc",
       "get-balance",
       [Cl.principal(depositor2)],
       depositor2
     );
-    expect(assetBalanceAfterWithdrawal.result.value.value).toBe(2666n);
+    expect(assetBalanceAfterWithdrawal.result.value.value).toBe(2571n);
     assetBalanceAfterWithdrawal = simnet.callReadOnlyFn(
       "mock-usdc",
       "get-balance",
       [Cl.principal(depositor3)],
       depositor3
     );
-    expect(assetBalanceAfterWithdrawal.result.value.value).toBe(4001n);
+    expect(assetBalanceAfterWithdrawal.result.value.value).toBe(3858n);
+  });
+});
+
+// H-01: LP inflation safeguard via burn-share floor at initialize()
+describe("H-01 initialize burn-floor", () => {
+  // Burn principal — c32check encoding of (testnet version byte 0x1a, 20-byte
+  // zero hash). Must match NULL_ADDRESS in liquidity-provider-v1.clar when
+  // is-in-mainnet=false (simnet/devnet uses testnet version byte).
+  const NULL_ADDRESS = "ST000000000000000000002AMW42H";
+
+  describe("auth + idempotence (no init in beforeEach)", () => {
+    beforeEach(async () => {
+      init_pyth(deployer);
+      set_pyth_time_delta(7200, deployer);
+      set_allowed_contracts(deployer);
+      set_asset_cap(deployer, 10000000000000n);
+      initialize_ir(deployer);
+      initialize_staking_reward(deployer);
+      // intentionally NOT calling initialize_lp here
+    });
+
+    it("rejects deposit before initialize", async () => {
+      simnet.callPublicFn(
+        "mock-usdc",
+        "mint",
+        [Cl.uint(2000), Cl.principal(depositor1)],
+        depositor1
+      );
+      const res = simnet.callPublicFn(
+        "liquidity-provider-v1",
+        "deposit",
+        [Cl.uint(1000), Cl.principal(depositor1)],
+        depositor1
+      );
+      expect(res.result).toBeErr(Cl.uint(10001)); // ERR-NOT-INITIALIZED
+    });
+
+    it("rejects withdraw before initialize", async () => {
+      const res = simnet.callPublicFn(
+        "liquidity-provider-v1",
+        "withdraw",
+        [Cl.uint(1000), Cl.principal(depositor1)],
+        depositor1
+      );
+      expect(res.result).toBeErr(Cl.uint(10001)); // ERR-NOT-INITIALIZED
+    });
+
+    it("rejects redeem before initialize", async () => {
+      const res = simnet.callPublicFn(
+        "liquidity-provider-v1",
+        "redeem",
+        [Cl.uint(1000), Cl.principal(depositor1)],
+        depositor1
+      );
+      expect(res.result).toBeErr(Cl.uint(10001)); // ERR-NOT-INITIALIZED
+    });
+
+    it("rejects initialize from non-deployer caller", async () => {
+      // initialize() is pinned to the contract deployer (captured at
+      // contract-load time as a constant). depositor1 is not the deployer.
+      const res = simnet.callPublicFn(
+        "liquidity-provider-v1",
+        "initialize",
+        [],
+        depositor1
+      );
+      expect(res.result).toBeErr(Cl.uint(10002)); // ERR-NOT-AUTHORIZED
+    });
+
+    it("init survives governance flip — deployer-pinned auth is independent", async () => {
+      // Auth is pinned to the deployer (captured at contract-load time as a
+      // constant), NOT to state-v1.governance. So flipping governance to the
+      // governance-v1 contract has no effect on init's reachability — the
+      // deployer can still bootstrap the pool either before or after the flip.
+      //
+      // NOTE: state_set_governance_contract is the load-bearing call here —
+      // it's what flips state-v1.governance from deployer to .governance-v1.
+      // initialize_governance is included to mirror the realistic deploy
+      // sequence (it sets up governance-v1 / meta-governance-v1 internal
+      // state but does NOT touch state-v1.governance).
+      initialize_governance(deployer, deployer, deployer);
+      state_set_governance_contract(deployer);
+
+      // Non-deployer still rejected.
+      const resOther = simnet.callPublicFn(
+        "liquidity-provider-v1",
+        "initialize",
+        [],
+        depositor1
+      );
+      expect(resOther.result).toBeErr(Cl.uint(10002)); // ERR-NOT-AUTHORIZED
+
+      // Deployer can still bootstrap.
+      initialize_lp(deployer);
+    });
+
+    it("rejects second initialize call", async () => {
+      // First init succeeds (also mints + spends the burn dust).
+      initialize_lp(deployer);
+
+      // Second init must reject regardless of total-supply state.
+      const res = simnet.callPublicFn(
+        "liquidity-provider-v1",
+        "initialize",
+        [],
+        deployer
+      );
+      expect(res.result).toBeErr(Cl.uint(10003)); // ERR-ALREADY-INITIALIZED
+    });
+  });
+
+  describe("post-init invariants", () => {
+    beforeEach(async () => {
+      init_pyth(deployer);
+      set_pyth_time_delta(7200, deployer);
+      set_allowed_contracts(deployer);
+      set_asset_cap(deployer, 10000000000000n);
+      initialize_ir(deployer);
+      initialize_staking_reward(deployer);
+      initialize_lp(deployer);
+    });
+
+    it("locks MINIMUM_INITIAL_DEPOSIT shares to the burn principal", async () => {
+      const burnBalance = simnet.callReadOnlyFn(
+        "state-v1",
+        "get-balance",
+        [Cl.principal(NULL_ADDRESS)],
+        deployer
+      );
+      expect(burnBalance.result.value.value).toBe(1000n);
+
+      const totalSupply = simnet.callReadOnlyFn(
+        "state-v1",
+        "get-total-supply",
+        [],
+        deployer
+      );
+      expect(totalSupply.result.value.value).toBe(1000n);
+    });
+
+    it("inflation attack regression: redeem cannot collapse share supply below floor", async () => {
+      // Auditor PoC reduced: depositor deposits, redeems everything they hold,
+      // and total-supply must remain >= MINIMUM_INITIAL_DEPOSIT (1000) so the
+      // pool never returns to a fresh-share manipulable state.
+      simnet.callPublicFn(
+        "mock-usdc",
+        "mint",
+        [Cl.uint(1000), Cl.principal(depositor1)],
+        depositor1
+      );
+      deposit(1000, depositor1);
+
+      // Total supply = 1000 (burn) + 1000 (depositor1) = 2000.
+      let supply = simnet.callReadOnlyFn(
+        "state-v1",
+        "get-total-supply",
+        [],
+        deployer
+      );
+      expect(supply.result.value.value).toBe(2000n);
+
+      // Depositor1 redeems all of their shares.
+      const userShares = simnet.callReadOnlyFn(
+        "state-v1",
+        "get-balance",
+        [Cl.principal(depositor1)],
+        depositor1
+      );
+      const sharesHeld = userShares.result.value.value as bigint;
+
+      const redeemRes = simnet.callPublicFn(
+        "liquidity-provider-v1",
+        "redeem",
+        [Cl.uint(sharesHeld), Cl.principal(depositor1)],
+        depositor1
+      );
+      expect(redeemRes.result).toBeOk(Cl.bool(true));
+
+      // The burn floor must still hold on both axes — supply AND assets.
+      // Asset-side check is the actual security property: a future bug that
+      // drained pool assets while leaving share count intact would still
+      // re-open the inflation vector.
+      supply = simnet.callReadOnlyFn(
+        "state-v1",
+        "get-total-supply",
+        [],
+        deployer
+      );
+      expect(supply.result.value.value).toBe(1000n);
+
+      const lpParams = simnet.callReadOnlyFn(
+        "state-v1",
+        "get-lp-params",
+        [],
+        deployer
+      );
+      expect(
+        lpParams.result.data["total-assets"].value as bigint
+      ).toBeGreaterThanOrEqual(1000n);
+
+      // Burn principal still owns the floor shares.
+      const burnBalance = simnet.callReadOnlyFn(
+        "state-v1",
+        "get-balance",
+        [Cl.principal(NULL_ADDRESS)],
+        deployer
+      );
+      expect(burnBalance.result.value.value).toBe(1000n);
+    });
+
+    it("accepts sub-MINIMUM deposits after initialize (M-8 floor retired)", async () => {
+      // The pre-H-01 M-8 guard rejected first deposits below 1000. H-01
+      // moved the floor to a one-shot burn at init, so user deposits of
+      // any positive size are legal afterwards. Verify three boundary
+      // sizes: 1, 999, 1000.
+      simnet.callPublicFn(
+        "mock-usdc",
+        "mint",
+        [Cl.uint(3000), Cl.principal(depositor1)],
+        depositor1
+      );
+
+      for (const amount of [1, 999, 1000]) {
+        const res = simnet.callPublicFn(
+          "liquidity-provider-v1",
+          "deposit",
+          [Cl.uint(amount), Cl.principal(depositor1)],
+          depositor1
+        );
+        expect(res.result).toBeOk(Cl.bool(true));
+      }
+    });
   });
 });

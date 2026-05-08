@@ -10,6 +10,7 @@ import {
   deposit_and_borrow,
   set_asset_cap,
   initialize_staking_reward,
+  initialize_lp,
 } from "./utils";
 import {
   init_pyth,
@@ -31,6 +32,7 @@ describe("Borrower User flow tests", () => {
     set_asset_cap(deployer, 10000000000000n); // 100k USDC
     initialize_ir(deployer);
     initialize_staking_reward(deployer);
+    initialize_lp(deployer);
     await set_initial_price("mock-usdc", 1n, deployer);
     await set_initial_price("mock-btc", 10n, deployer);
     await set_initial_price("mock-eth", 1n, deployer);
@@ -316,7 +318,8 @@ describe("Borrower User flow tests", () => {
       deployer
     );
     let totalAssets = totalAssetsRes.result.data["total-assets"].value;
-    expect(totalAssets).toEqual(2001n);
+    // H-01 burn dust adds 1000 to every pool's total-assets baseline.
+    expect(totalAssets).toEqual(3001n);
 
     let accounthealthRes = simnet.callReadOnlyFn(
       "liquidator-v1",
@@ -373,7 +376,8 @@ describe("Borrower User flow tests", () => {
       deployer
     );
     totalAssets = totalAssetsRes.result.data["total-assets"].value;
-    expect(totalAssets).toEqual(2001n);
+    // H-01 burn dust adds 1000 to every pool's total-assets baseline.
+    expect(totalAssets).toEqual(3001n);
 
     collateralVal = simnet.callReadOnlyFn(
       "borrower-v1",
@@ -428,7 +432,8 @@ describe("Borrower User flow tests", () => {
       deployer
     );
     totalAssets = totalAssetsRes.result.data["total-assets"].value;
-    expect(totalAssets).toEqual(2002n);
+    // H-01 burn dust adds 1000 to every pool's total-assets baseline.
+    expect(totalAssets).toEqual(3002n);
 
     depositorBalance = simnet.callReadOnlyFn(
       "mock-usdc",
@@ -549,8 +554,8 @@ describe("Borrower User flow tests", () => {
       deployer
     );
     totalAssets = totalAssetsRes.result.data["total-assets"].value;
-    // this is after socializing the remaining debt from the user
-    // total assets with interest is 2002
-    expect(totalAssets).toEqual(2002n - socializedDebt);
+    // this is after socializing the remaining debt from the user.
+    // total assets with interest is 2002 + 1000 H-01 burn dust = 3002.
+    expect(totalAssets).toEqual(3002n - socializedDebt);
   });
 });

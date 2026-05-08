@@ -12,6 +12,7 @@ import {
   update_supported_collateral,
   set_asset_cap,
   initialize_staking_reward,
+  initialize_lp,
 } from "./utils";
 import {
   init_pyth,
@@ -37,6 +38,7 @@ describe("borrower tests", () => {
     set_asset_cap(deployer, 10000000000000n); // 100k USDC
     initialize_ir(deployer);
     initialize_staking_reward(deployer);
+    initialize_lp(deployer);
     await set_initial_price("mock-usdc", 1n, deployer);
     await set_initial_price("mock-btc", 1n, deployer);
     await set_initial_price("mock-eth", 1n, deployer);
@@ -822,7 +824,7 @@ describe("borrower tests", () => {
     mint_token("mock-usdc", 100001000, borrower1);
     mint_token("mock-usdc", 1800000e8, borrower2);
 
-    // 1. attacker deposit 1000 (minimum initial deposit enforced by M-8 fix)
+    // 1. attacker deposits 1000 (donation-attack precursor)
     deposit(1000, borrower1);
 
     let userBalancePostBorrow = simnet.callReadOnlyFn(
@@ -867,8 +869,9 @@ describe("borrower tests", () => {
     );
     expect(borrow.result).toBeErr(Cl.uint(20001));
 
-    // 5. victim deposit many usdc to protocol, and receive the same amount of share token balance
-    deposit(9999999999000, borrower2);
+    // 5. victim deposit many usdc to protocol, and receive the same amount of share token balance.
+    // Cap is 10T; H-01 dust burn already locked 1000 + borrower1's seed 1000.
+    deposit(9999999998000, borrower2);
 
     let shareTokenBalance = simnet.callReadOnlyFn(
       "state-v1",
@@ -876,7 +879,7 @@ describe("borrower tests", () => {
       [Cl.principal(borrower2)],
       borrower2
     );
-    expect(shareTokenBalance.result.value.value).toEqual(9999999999000n);
+    expect(shareTokenBalance.result.value.value).toEqual(9999999998000n);
 
     shareTokenBalance = simnet.callReadOnlyFn(
       "state-v1",
@@ -1090,37 +1093,11 @@ describe("borrower tests", () => {
     remove_collateral("mock-btc", 549948753641, deployer, borrower1);
   });
 
-  it("should reject initial deposit below minimum", async () => {
-    mint_token("mock-usdc", 100_000_000_000, borrower1);
-    // Deposit of 2 (far below minimum) should fail
-    let depositResult = simnet.callPublicFn(
-      "liquidity-provider-v1",
-      "deposit",
-      [Cl.uint(2), Cl.principal(borrower1)],
-      borrower1
-    );
-    expect(depositResult.result).toBeErr(Cl.uint(10001)); // ERR-ASSET-TOO-LOW
+  // H-01 retired the per-deposit minimum guard (M-8) — the share-supply floor
+  // is now enforced once at initialize() via a burn-share dust deposit, so any
+  // small deposit after that is fine. Test removed.
 
-    // Deposit of 999 (one below boundary) should also fail
-    depositResult = simnet.callPublicFn(
-      "liquidity-provider-v1",
-      "deposit",
-      [Cl.uint(999), Cl.principal(borrower1)],
-      borrower1
-    );
-    expect(depositResult.result).toBeErr(Cl.uint(10001)); // ERR-ASSET-TOO-LOW
-
-    // Deposit of exactly 1000 (the minimum) should succeed
-    depositResult = simnet.callPublicFn(
-      "liquidity-provider-v1",
-      "deposit",
-      [Cl.uint(1000), Cl.principal(borrower1)],
-      borrower1
-    );
-    expect(depositResult.result).toBeOk(Cl.bool(true));
-  });
-
-  it.each([1000, 2500, 7500, 10000, 22500, 72500])(
+  it.each([1, 100, 999, 1000, 2500, 7500, 10000, 22500, 72500])(
     "should not have vault inflation attack: %i",
     async (initial_deposit) => {
       mint_token("mock-usdc", 100_000_000_000, borrower1);

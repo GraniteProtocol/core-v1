@@ -7,6 +7,7 @@ import {
   mint_token,
   set_asset_cap,
   initialize_staking_reward,
+  initialize_lp,
   state_set_governance_contract,
 } from "./utils";
 
@@ -62,6 +63,7 @@ describe("Flash loan tests", () => {
     set_asset_cap(deployer, 10000000000000n); // 100k USDC
     initialize_ir(deployer);
     initialize_staking_reward(deployer);
+    initialize_lp(deployer);
   });
 
   it("Disallow not allowed contracts", async () => {
@@ -95,8 +97,10 @@ describe("Flash loan tests", () => {
     setCallbackAllowed();
     state_set_governance_contract(deployer);
 
-    mint_token("mock-usdc", amount, depositor);
-    deposit(amount, depositor);
+    // H-01 dust burn already locked 1000 of asset cap; deposit fills the
+    // remaining headroom so state-v1 holds exactly `amount` USDC.
+    mint_token("mock-usdc", amount - 1000, depositor);
+    deposit(amount - 1000, depositor);
 
     expectUserUSDCBalance(
       Cl.contractPrincipal(deployer, "state-v1"),
@@ -138,8 +142,8 @@ describe("Flash loan tests", () => {
     setCallbackAllowed();
     setCallbackResult(Cl.error(Cl.uint(2000)));
 
-    mint_token("mock-usdc", amount, depositor);
-    deposit(amount, depositor);
+    mint_token("mock-usdc", amount - 1000, depositor);
+    deposit(amount - 1000, depositor);
 
     expectUserUSDCBalance(
       Cl.contractPrincipal(deployer, "state-v1"),
@@ -171,8 +175,8 @@ describe("Flash loan tests", () => {
     const amount = 100000 * Math.pow(10, 8);
     setCallbackAllowed();
 
-    mint_token("mock-usdc", amount, depositor);
-    deposit(amount, depositor);
+    mint_token("mock-usdc", amount - 1000, depositor);
+    deposit(amount - 1000, depositor);
 
     expectUserUSDCBalance(
       Cl.contractPrincipal(deployer, "state-v1"),
@@ -205,8 +209,8 @@ describe("Flash loan tests", () => {
     setCallbackAllowed();
     state_set_governance_contract(deployer);
 
-    mint_token("mock-usdc", amount, depositor);
-    deposit(amount, depositor);
+    mint_token("mock-usdc", amount - 1000, depositor);
+    deposit(amount - 1000, depositor);
 
     expectUserUSDCBalance(
       Cl.contractPrincipal(deployer, "state-v1"),

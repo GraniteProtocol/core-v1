@@ -7,6 +7,7 @@ import {
   deposit_and_borrow,
   set_asset_cap,
   initialize_staking_reward,
+  initialize_lp,
 } from "./utils";
 import { init_pyth, set_initial_price, set_pyth_time_delta } from "./pyth";
 
@@ -23,6 +24,7 @@ describe("LP User flow tests", () => {
     set_asset_cap(deployer, 10000000000000n); // 100k USDC
     initialize_ir(deployer);
     initialize_staking_reward(deployer);
+    initialize_lp(deployer);
     await set_initial_price("mock-usdc", 1n, deployer);
     await set_initial_price("mock-btc", 1n, deployer);
     await set_initial_price("mock-eth", 1n, deployer);
@@ -68,11 +70,16 @@ describe("LP User flow tests", () => {
       [Cl.principal(depositor1)],
       depositor1
     );
-    expect(depositorBalance.result.value.value).toBe(1003n);
+    // Post H-01: 1000-dust burn share dilutes interest distribution by ~half.
+    expect(depositorBalance.result.value.value).toBe(1001n);
   });
 
   it("Provide asset liquidity, reserve drawdown", async () => {
-    deposit_and_borrow(1000, depositor1, 1000, 700, borrower1, deployer);
+    // H-01 burn dust adds 1000 USDC of permanent liquidity into the pool that
+    // doesn't belong to any user, so the borrow side is bumped to 1700 (with
+    // matching collateral) to bring state-v1's free-liquidity below depositor
+    // share value and exercise the reserve-drawdown path.
+    deposit_and_borrow(1000, depositor1, 2500, 1700, borrower1, deployer);
 
     // accrue interest
     simnet.mineEmptyBlocks(5);
@@ -94,7 +101,9 @@ describe("LP User flow tests", () => {
     );
     expect(reserveBalance.result.value).toBe(500n);
 
-    // LP tries to withdraw amount that is being borrwered, reserve balance is used
+    // State-v1 USDC = 1000 (dust) + 1000 (deposit) - 1700 (borrow) + 500
+    // (reserve) = 800. depositor1 holds 1000 LP shares; trying to withdraw
+    // their full 1000 fails because free-liq is only 800.
     let withdraw = simnet.callPublicFn(
       "liquidity-provider-v1",
       "withdraw",
@@ -111,7 +120,10 @@ describe("LP User flow tests", () => {
     );
     expect(freeLiquidity.result.value.value).toBe(800n);
 
-    // LP can withdraw max of total assets + reserve = 300 + 500 = 800
+    // LP can withdraw up to free-liq (800 in asset terms), draining into
+    // reserve territory. depositor1 holds 1000 shares; after interest the
+    // share-price is slightly above 1, so withdrawing 800 assets burns
+    // ~800 of those shares and the remaining shares stay in the pool.
     withdraw = simnet.callPublicFn(
       "liquidity-provider-v1",
       "withdraw",

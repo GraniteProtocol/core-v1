@@ -193,6 +193,26 @@ export const initialize_staking_reward = (deployer: any) => {
   expect(response.result).toBeOk(Cl.bool(true));
 };
 
+// H-01: MINIMUM_INITIAL_DEPOSIT in liquidity-provider-v1.clar — the dust
+// amount burned to NULL_ADDRESS during initialize. Single source of truth
+// for tests so a future tuning of the contract constant only needs to be
+// reflected here.
+export const MINIMUM_INITIAL_DEPOSIT = 1000n;
+
+// H-01: governance must call initialize before any deposit. Mints
+// MINIMUM_INITIAL_DEPOSIT to deployer so the burn dust can be transferred
+// into NULL_ADDRESS during init.
+export const initialize_lp = (deployer: any) => {
+  mint_token("mock-usdc", Number(MINIMUM_INITIAL_DEPOSIT), deployer);
+  const response = simnet.callPublicFn(
+    "liquidity-provider-v1",
+    "initialize",
+    [],
+    deployer
+  );
+  expect(response.result).toBeOk(Cl.bool(true));
+};
+
 export const set_allowed_contracts = (deployer: any) => {
   let contracts = [
     Cl.contractPrincipal(deployer, "liquidity-provider-v1"),

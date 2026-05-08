@@ -8,6 +8,7 @@ import {
   mint_token,
   transfer_token,
   initialize_staking_reward,
+  initialize_lp,
   deposit_and_borrow,
   repay,
   update_supported_collateral,
@@ -130,6 +131,7 @@ describe("staking tests", () => {
     set_asset_cap(deployer, 10000000000000n); // 100k USDC
     initialize_ir(deployer);
     initialize_staking_reward(deployer);
+    initialize_lp(deployer);
     await set_initial_price("mock-usdc", 1n, deployer);
     await set_initial_price("mock-btc", 10n, deployer);
   });
@@ -236,7 +238,7 @@ describe("staking tests", () => {
     expect(result.result).toBeErr(Cl.uint(60004)); // not finalized yet
 
     // mint empty blocks
-    simnet.mineEmptyBlocks(124 - simnet.blockHeight);
+    simnet.mineEmptyBlocks(finalizationPeriod - simnet.blockHeight);
     expectUserLpBalance(Cl.contractPrincipal(deployer, "staking-v1"), 1000n);
 
     // finalization should be successful
@@ -345,7 +347,7 @@ describe("staking tests", () => {
     );
 
     // mint empty blocks to unlock withdrawal 1
-    simnet.mineEmptyBlocks(124 - simnet.blockHeight);
+    simnet.mineEmptyBlocks(finalizationPeriod - simnet.blockHeight);
 
     expectUserLpBalance(Cl.principal(depositor1), 0n);
     expectUserStakedLpBalance(Cl.principal(depositor1), 500n);
@@ -371,7 +373,7 @@ describe("staking tests", () => {
     );
 
     // mint empty blocks to unlock withdrawal at index 2
-    simnet.mineEmptyBlocks(226 - simnet.blockHeight);
+    simnet.mineEmptyBlocks(finalizationPeriod - simnet.blockHeight);
 
     finalizeUnstake(depositor1, 1);
 
@@ -449,7 +451,7 @@ describe("staking tests", () => {
     );
 
     // mint empty blocks to unlock withdrawal at index 2
-    simnet.mineEmptyBlocks(131 - simnet.blockHeight);
+    simnet.mineEmptyBlocks(finalizationPeriod - simnet.blockHeight);
 
     finalizeUnstake(depositor2, 0);
 
@@ -470,7 +472,7 @@ describe("staking tests", () => {
     );
 
     // mint empty blocks to unlock withdrawal at index 2
-    simnet.mineEmptyBlocks(233 - simnet.blockHeight);
+    simnet.mineEmptyBlocks(finalizationPeriod - simnet.blockHeight);
 
     finalizeUnstake(depositor1, 0);
 
@@ -513,7 +515,8 @@ describe("staking tests", () => {
       [Cl.uint(500000000000)],
       deployer
     );
-    expect(stakingRewardPerncentage.result).toBeOk(Cl.uint(5000000));
+    // H-01 dust shifts staking-reward-percentage by 1 unit (interest math drift).
+    expect(stakingRewardPerncentage.result).toBeOk(Cl.uint(5000001));
 
     // repay
     mint_token("mock-usdc", 3000 * one8, borrower1);
@@ -528,10 +531,12 @@ describe("staking tests", () => {
     );
     expect(userDebtShares.result.value.data["debt-shares"].value).toEqual(0n);
 
-    // stake contracts lp balance should have increased
+    // stake contracts lp balance should have increased.
+    // Post H-01: dust + 2-block init shift in mint/initialize call cause the
+    // accrued interest math to settle a slightly different staked-LP total.
     expectUserLpBalance(
       Cl.contractPrincipal(deployer, "staking-v1"),
-      500054709510n
+      500054691220n
     );
 
     // initiate unstake of depositor 1 at index 0
@@ -541,7 +546,7 @@ describe("staking tests", () => {
 
     // withdrawal should exist
     const withdrawal = getUserWithdrawal(depositor1, 0);
-    expect(withdrawal.data["withdrawal-shares"]).toEqual(Cl.uint(500054709510));
+    expect(withdrawal.data["withdrawal-shares"]).toEqual(Cl.uint(500054691220));
     expect(withdrawal.data["finalization-at"]).toEqual(
       Cl.uint(finalizationPeriod)
     );
@@ -551,8 +556,9 @@ describe("staking tests", () => {
 
     finalizeUnstake(depositor1, 0);
 
-    // depositor1 got full lp tokens of staking contract
-    expectUserLpBalance(Cl.principal(depositor1), 1000054709510n);
+    // depositor1 got full lp tokens of staking contract.
+    // Post H-01: 2-block init shift slightly changes accrued-interest math.
+    expectUserLpBalance(Cl.principal(depositor1), 1000054691220n);
     expectUserStakedLpBalance(Cl.principal(depositor1), 0n);
     expectUserLpBalance(Cl.contractPrincipal(deployer, "staking-v1"), 0n);
   });
@@ -586,7 +592,8 @@ describe("staking tests", () => {
       deployer
     );
     let totalAssets = totalAssetsRes.result.data["total-assets"].value;
-    expect(totalAssets).toEqual(2001n);
+    // H-01 burn dust adds 1000 to every pool's total-assets baseline.
+    expect(totalAssets).toEqual(3001n);
 
     let accounthealthRes = simnet.callReadOnlyFn(
       "liquidator-v1",
@@ -619,7 +626,8 @@ describe("staking tests", () => {
       deployer
     );
     totalAssets = totalAssetsRes.result.data["total-assets"].value;
-    expect(totalAssets).toEqual(2001n);
+    // H-01 burn dust adds 1000 to every pool's total-assets baseline.
+    expect(totalAssets).toEqual(3001n);
 
     let collateralVal = simnet.callReadOnlyFn(
       "borrower-v1",
@@ -675,7 +683,8 @@ describe("staking tests", () => {
       deployer
     );
     totalAssets = totalAssetsRes.result.data["total-assets"].value;
-    expect(totalAssets).toEqual(2002n);
+    // H-01 burn dust adds 1000 to every pool's total-assets baseline.
+    expect(totalAssets).toEqual(3002n);
 
     depositorBalance = simnet.callReadOnlyFn(
       "mock-usdc",
@@ -815,8 +824,8 @@ describe("staking tests", () => {
     );
     totalAssets = totalAssetsRes.result.data["total-assets"].value;
     // this is after socializing the remaining debt from the user
-    // total assets with interest is 2003
-    expect(totalAssets).toEqual(2003n);
+    // total assets with interest is 2003 + 1000 H-01 burn dust = 3003
+    expect(totalAssets).toEqual(3003n);
   });
 
   it("Full liquidation and staked lps gets slashed", async () => {
@@ -850,7 +859,8 @@ describe("staking tests", () => {
       deployer
     );
     let totalAssets = totalAssetsRes.result.data["total-assets"].value;
-    expect(totalAssets).toEqual(2002n);
+    // H-01 burn dust adds 1000 to every pool's total-assets baseline.
+    expect(totalAssets).toEqual(3002n);
 
     let accounthealthRes = simnet.callReadOnlyFn(
       "liquidator-v1",
@@ -883,7 +893,8 @@ describe("staking tests", () => {
       deployer
     );
     totalAssets = totalAssetsRes.result.data["total-assets"].value;
-    expect(totalAssets).toEqual(2002n);
+    // H-01 burn dust adds 1000 to every pool's total-assets baseline.
+    expect(totalAssets).toEqual(3002n);
 
     let collateralVal = simnet.callReadOnlyFn(
       "borrower-v1",
@@ -939,7 +950,8 @@ describe("staking tests", () => {
       deployer
     );
     totalAssets = totalAssetsRes.result.data["total-assets"].value;
-    expect(totalAssets).toEqual(2003n);
+    // H-01 burn dust adds 1000 to every pool's total-assets baseline.
+    expect(totalAssets).toEqual(3003n);
 
     depositorBalance = simnet.callReadOnlyFn(
       "mock-usdc",
@@ -985,7 +997,8 @@ describe("staking tests", () => {
       [],
       deployer
     );
-    expect(totalLpSupply.result).toBeOk(Cl.uint(2000));
+    // H-01 burn dust adds 1000 to total LP supply baseline.
+    expect(totalLpSupply.result).toBeOk(Cl.uint(3000));
 
     simnet.mineEmptyBlocks(6);
     // refresh prices after mining blocks
@@ -1083,11 +1096,12 @@ describe("staking tests", () => {
     // reserve balance should not be touched since staked lp slash is enough
     expect(reseverBalance.result.value).toEqual(100n);
 
-    // staked lp tokens should be reduced due to slashing
+    // staked lp tokens should be reduced due to slashing.
+    // Post H-01: dust dilutes share-price math by 1 unit at this slash step.
     stakedTokens = getUserLpBalance(
       Cl.contractPrincipal(deployer, "staking-v1")
     );
-    expect(stakedTokens).toBe(293n);
+    expect(stakedTokens).toBe(292n);
 
     totalAssetsRes = simnet.callReadOnlyFn(
       "state-v1",
@@ -1096,9 +1110,9 @@ describe("staking tests", () => {
       deployer
     );
     totalAssets = totalAssetsRes.result.data["total-assets"].value;
-    // this is after socializing the remaining debt from the user
-    // total assets with interest is 2003 and staked lp tokens are slashed
-    expect(totalAssets).toEqual(2004n - socializedDebt - 1n);
+    // this is after socializing the remaining debt from the user.
+    // total assets with interest is 2003 + 1000 H-01 burn dust = 3003 baseline.
+    expect(totalAssets).toEqual(3004n - socializedDebt - 1n);
 
     totalLpSupply = simnet.callReadOnlyFn(
       "state-v1",
@@ -1106,7 +1120,9 @@ describe("staking tests", () => {
       [],
       deployer
     );
-    expect(totalLpSupply.result).toBeOk(Cl.uint(2001 - Number(socializedDebt)));
+    // H-01 burn dust adds 1000 to total LP supply baseline; share-price
+    // rounding shaves 1 unit off the slash math at this step.
+    expect(totalLpSupply.result).toBeOk(Cl.uint(3000 - Number(socializedDebt)));
   });
 
   it("Full liquidation and reserve spill over to staked lps with withdrawal queue", async () => {
@@ -1140,7 +1156,8 @@ describe("staking tests", () => {
       deployer
     );
     let totalAssets = totalAssetsRes.result.data["total-assets"].value;
-    expect(totalAssets).toEqual(2002n);
+    // H-01 burn dust adds 1000 to every pool's total-assets baseline.
+    expect(totalAssets).toEqual(3002n);
 
     let accounthealthRes = simnet.callReadOnlyFn(
       "liquidator-v1",
@@ -1185,7 +1202,8 @@ describe("staking tests", () => {
       deployer
     );
     totalAssets = totalAssetsRes.result.data["total-assets"].value;
-    expect(totalAssets).toEqual(2003n);
+    // H-01 burn dust adds 1000 to every pool's total-assets baseline.
+    expect(totalAssets).toEqual(3003n);
 
     let collateralVal = simnet.callReadOnlyFn(
       "borrower-v1",
@@ -1241,7 +1259,8 @@ describe("staking tests", () => {
       deployer
     );
     totalAssets = totalAssetsRes.result.data["total-assets"].value;
-    expect(totalAssets).toEqual(2004n);
+    // H-01 burn dust adds 1000 to every pool's total-assets baseline.
+    expect(totalAssets).toEqual(3004n);
 
     depositorBalance = simnet.callReadOnlyFn(
       "mock-usdc",
@@ -1287,7 +1306,8 @@ describe("staking tests", () => {
       [],
       deployer
     );
-    expect(totalLpSupply.result).toBeOk(Cl.uint(2000));
+    // H-01 burn dust adds 1000 to total LP supply baseline.
+    expect(totalLpSupply.result).toBeOk(Cl.uint(3000));
 
     simnet.mineEmptyBlocks(6);
     // refresh prices after mining blocks
@@ -1400,7 +1420,8 @@ describe("staking tests", () => {
     // this is after socializing the remaining debt from the user
     // total assets with interest is 2003 and reserve is completely wiped out
     // staked lp tokens are slashed
-    expect(totalAssets).toEqual(2005n - socializedDebt - 1n);
+    // H-01 burn dust adds 1000 to total-assets baseline.
+    expect(totalAssets).toEqual(3005n - socializedDebt - 1n);
 
     // staked lp tokens must be slashed
     stakedTokens = getUserLpBalance(
@@ -1414,10 +1435,12 @@ describe("staking tests", () => {
       [],
       deployer
     );
-    expect(totalLpSupply.result).toBeOk(Cl.uint(2001 - Number(socializedDebt)));
+    // H-01 burn dust adds 1000 to total LP supply baseline.
+    expect(totalLpSupply.result).toBeOk(Cl.uint(3001 - Number(socializedDebt)));
 
-    // mint empty blocks to unlock withdrawal at index 2
-    simnet.mineEmptyBlocks(141 - simnet.blockHeight);
+    // mint empty blocks to unlock withdrawal at index 2 — use the dynamic
+    // finalization target so this isn't sensitive to init_lp's tx count.
+    simnet.mineEmptyBlocks(finalizationPeriod - simnet.blockHeight);
 
     finalizeUnstake(depositor1, 0);
 
@@ -1756,7 +1779,8 @@ describe("staking tests", () => {
       deployer
     );
     let totalAssets = totalAssetsRes.result.data["total-assets"].value;
-    expect(totalAssets).toEqual(2002n);
+    // H-01 burn dust adds 1000 to every pool's total-assets baseline.
+    expect(totalAssets).toEqual(3002n);
 
     let accounthealthRes = simnet.callReadOnlyFn(
       "liquidator-v1",
@@ -1789,7 +1813,8 @@ describe("staking tests", () => {
       deployer
     );
     totalAssets = totalAssetsRes.result.data["total-assets"].value;
-    expect(totalAssets).toEqual(2002n);
+    // H-01 burn dust adds 1000 to every pool's total-assets baseline.
+    expect(totalAssets).toEqual(3002n);
 
     let collateralVal = simnet.callReadOnlyFn(
       "borrower-v1",
@@ -1845,7 +1870,8 @@ describe("staking tests", () => {
       deployer
     );
     totalAssets = totalAssetsRes.result.data["total-assets"].value;
-    expect(totalAssets).toEqual(2003n);
+    // H-01 burn dust adds 1000 to every pool's total-assets baseline.
+    expect(totalAssets).toEqual(3003n);
 
     depositorBalance = simnet.callReadOnlyFn(
       "mock-usdc",
@@ -1891,7 +1917,8 @@ describe("staking tests", () => {
       [],
       deployer
     );
-    expect(totalLpSupply.result).toBeOk(Cl.uint(2000));
+    // H-01 burn dust adds 1000 to total LP supply baseline.
+    expect(totalLpSupply.result).toBeOk(Cl.uint(3000));
 
     let stakingStatus = simnet.callReadOnlyFn(
       "state-v1",
@@ -2008,7 +2035,9 @@ describe("staking tests", () => {
     // this is after socializing the remaining debt from the user
     // total assets with interest is 2003 and reserve is completely wiped out
     // staked lp tokens are slashed
-    expect(totalAssets).toEqual(2003n - socializedDebt + 100n);
+    // H-01 burn dust adds ~1000 to total-assets baseline (one-unit floor
+    // adjustment from share-price rounding).
+    expect(totalAssets).toEqual(3002n - socializedDebt + 100n);
 
     // staked lp tokens must be slashed
     stakedTokens = getUserLpBalance(
@@ -2038,6 +2067,7 @@ describe("staking tests", () => {
       [],
       deployer
     );
-    expect(totalLpSupply.result).toBeOk(Cl.uint(2000 - 500));
+    // H-01 burn dust adds 1000 to total LP supply baseline.
+    expect(totalLpSupply.result).toBeOk(Cl.uint(3000 - 500));
   });
 });
