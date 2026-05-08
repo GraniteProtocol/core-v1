@@ -827,8 +827,20 @@
     ;; reduce position collateral amount
     (map-set user-collaterals {user: user, collateral: collateral-token} {amount: (- user-balance collateral-to-give)})
     ;; reduce position debt shares and total debt shares
+    ;; TODO:(ved) LEV-M-01 -- this writes back the stale collaterals list
+    ;; from `position` instead of the `updated-collaterals` field passed in
+    ;; via `liquidate-collateral-state`. On a full collateral seizure that
+    ;; leaves a zero-balance phantom entry in the position, wasting one of
+    ;; the 10 collateral slots and potentially bricking the position if
+    ;; governance later removes the token's oracle feed. Fix is one line:
+    ;; `collaterals: (get updated-collaterals liquidate-collateral-state),`
+    ;; but state-v1 is immutable in production; deferred to v2 / contract
+    ;; migration. Auditor note (ABA, 2026-05-08): "issue is already known
+    ;; (reported in previous reports), I only noted here down to remind you
+    ;; of it and because of the potential DoS on position, if the oracle
+    ;; feed is removed."
     (map-set positions user {
-      debt-shares: (- (get debt-shares position) paid-shares), 
+      debt-shares: (- (get debt-shares position) paid-shares),
       collaterals: (get collaterals position),
       borrowed-amount: (get borrowed-amount liquidate-collateral-state),
       borrowed-block: (get borrowed-block position)
