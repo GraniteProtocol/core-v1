@@ -287,7 +287,8 @@
         ;; calculate liquidity provider and protocol debt repaid
         (lp-part (contract-call? .math-v1 safe-div (* interest-part lp-open-interest-without-principal) open-interest-without-principal))
         (protocol-part (contract-call? .math-v1 safe-div (* interest-part (get protocol-open-interest open-interest-info)) open-interest-without-principal))
-        (staked-part (contract-call? .math-v1 safe-sub interest-part (+ lp-part protocol-part)))
+        ;; M-01: proportional split (see borrower-v1 for rationale).
+        (staked-part (contract-call? .math-v1 safe-div (* interest-part (get staked-open-interest open-interest-info)) open-interest-without-principal))
         (asset-params (contract-call? .state-v1 get-lp-params))
         (staked-lp-tokens (contract-call? .math-v1 convert-to-shares asset-params staked-part false))
         (updated-borrowed-amount (contract-call? .math-v1 safe-sub user-borrowed-amount principal-part))
@@ -540,7 +541,8 @@
             (lp-open-interest-without-principal (contract-call? .math-v1 safe-sub lp-open-interest-val total-borrowed-amount))
             (lp-interest-part (contract-call? .math-v1 safe-div (* interest-part lp-open-interest-without-principal) open-interest-without-principal))
             (protocol-part (contract-call? .math-v1 safe-div (* interest-part protocol-open-interest-val) open-interest-without-principal))
-            (staked-part (contract-call? .math-v1 safe-sub interest-part (+ lp-interest-part protocol-part)))
+            ;; M-01: proportional split (see borrower-v1 for rationale).
+            (staked-part (contract-call? .math-v1 safe-div (* interest-part staked-open-interest-val) open-interest-without-principal))
             (lp-part (+ principal-part lp-interest-part))
             (updated-total-borrowed-amount (contract-call? .math-v1 safe-sub total-borrowed-amount principal-part))
             (staked-lp-tokens (contract-call? .staking-v1 get-total-staked-lp-tokens))

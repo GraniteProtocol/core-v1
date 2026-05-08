@@ -1234,3 +1234,219 @@ describe("borrower tests", () => {
     }
   );
 });
+
+// M-01: when no LP tokens are staked, state-v1's staked-open-interest stays at
+// zero forever. Pre-fix, the upgradable callers computed staked-part as a
+// remainder (interest-part - lp-part - protocol-part) which produced a non-zero
+// dust value from flooring whenever lp/protocol shares didn't divide evenly.
+// state-v1 then ran a raw subtraction (- 0 dust) on the zero baseline,
+// underflowing and reverting the entire repay/liquidate transaction.
+//
+// Post-fix, staked-part is computed proportionally via safe-div, which returns
+// 0 cleanly when staked-open-interest = 0. The trade-off is up to ~2 dust
+// units of interest per tx going unassigned to any bucket — economically
+// negligible, dramatically preferable to a DoS on every repay/liquidate.
+describe("M-01 interest-dust no-stakers regression", () => {
+  beforeEach(async () => {
+    init_pyth(deployer);
+    set_pyth_time_delta(7200, deployer);
+    set_allowed_contracts(deployer);
+    set_asset_cap(deployer, 10000000000000n);
+    initialize_ir(deployer);
+    initialize_staking_reward(deployer);
+    await set_initial_price("mock-usdc", 1n, deployer);
+    await set_initial_price("mock-btc", 1n, deployer);
+  });
+
+  it("borrower-v1::update-repay-state path: repay succeeds with no stakers across a sweep of repay amounts", async () => {
+    // Pool + borrower setup. Nobody stakes — staked-open-interest stays 0.
+    // The bug surfaces when (lp-share, protocol-share) of interest-part
+    // produce a flooring residue that the upgradable callers route to
+    // staked-part. Whether the residue is 0 or 1 depends sensitively on
+    // the repay amount, so we sweep a range to ensure we hit residue cases.
+    mint_token("mock-usdc", 100_000_000_000, depositor);
+    deposit(100_000_000_000, depositor);
+
+    update_supported_collateral(
+      "mock-btc",
+      70000000,
+      80000000,
+      10000000,
+      8,
+      deployer
+    );
+    mint_token("mock-btc", 100_000_000_000, borrower1);
+    add_collateral("mock-btc", 80_000_000_000, deployer, borrower1);
+    // Push utilization high so the kinked IR drives substantial interest.
+    borrow(50_000_000_000, borrower1);
+
+    // Heavy time elapsed → meaningful interest accrual that produces awkward
+    // ratios when split across (lp, protocol).
+    simnet.mineEmptyBlocks(50_000);
+
+    // Sanity: confirm there are no stakers. get-total-staked-lp-tokens
+    // returns a bare uint (not a response), so we read .value directly.
+    const totalStaked = simnet.callReadOnlyFn(
+      "staking-v1",
+      "get-total-staked-lp-tokens",
+      [],
+      deployer
+    );
+    expect(totalStaked.result.value).toBe(0n);
+
+    mint_token("mock-usdc", 200_000_000_000, borrower1);
+
+    // Sweep a range of awkward partial-repay amounts that produce flooring
+    // residues across the (lp-part, protocol-part) split. With protocol-
+    // reserve-percentage > 0 set in beforeEach, every one of these triggers
+    // the pre-fix underflow inside state-v1::update-repay-state because the
+    // residue routes a non-zero staked-part into the (- 0 residue) path.
+    // Post-fix safe-div returns 0 cleanly for every amount.
+    for (const amount of [
+      1_000_000_001, 2_500_000_003, 3_333_333_337, 7_777_777_777,
+    ]) {
+      const res = simnet.callPublicFn(
+        "borrower-v1",
+        "repay",
+        [Cl.uint(amount), Cl.none()],
+        borrower1
+      );
+      expect(res.result).toBeOk(Cl.bool(true));
+    }
+  });
+
+  it("liquidator-v1::update-liquidate-collateral-state path: liquidation succeeds with no stakers", async () => {
+    mint_token("mock-usdc", 100_000_000_000, depositor);
+    deposit(100_000_000_000, depositor);
+
+    // Generous initial LTV so the borrow lands.
+    update_supported_collateral(
+      "mock-btc",
+      90000000,
+      95000000,
+      5000000,
+      8,
+      deployer
+    );
+    mint_token("mock-btc", 100_000_000_000, borrower1);
+    add_collateral("mock-btc", 20_000_000_000, deployer, borrower1);
+    borrow(18_000_000_000, borrower1);
+
+    // Mine plenty of blocks so interest accrual produces flooring residues
+    // across the lp / protocol split (the M-01 trigger condition).
+    simnet.mineEmptyBlocks(500);
+
+    // Refresh prices (pyth staleness window is shorter than the mined gap).
+    await set_price("mock-usdc", 1n, deployer);
+    await set_price("mock-btc", 1n, deployer);
+
+    // Tighten LTV to push the position underwater.
+    update_supported_collateral(
+      "mock-btc",
+      40000000,
+      50000000,
+      2000000,
+      8,
+      deployer
+    );
+
+    // Sanity: confirm there are no stakers. get-total-staked-lp-tokens
+    // returns a bare uint (not a response), so we read .value directly.
+    const totalStaked = simnet.callReadOnlyFn(
+      "staking-v1",
+      "get-total-staked-lp-tokens",
+      [],
+      deployer
+    );
+    expect(totalStaked.result.value).toBe(0n);
+
+    mint_token("mock-usdc", 18_181_818_181, depositor);
+    simnet.mineEmptyBlocks(6); // liquidation cooldown
+    const res = simnet.callPublicFn(
+      "liquidator-v1",
+      "liquidate-collateral",
+      [
+        Cl.none(),
+        btc_collateral_contract,
+        Cl.principal(borrower1),
+        Cl.uint(18_181_818_181),
+        Cl.uint(1),
+      ],
+      depositor
+    );
+    // Pre-fix this would underflow inside state-v1::update-liquidate-collateral-state.
+    expect(res.result).toBeOk(Cl.bool(true));
+  });
+
+  it("liquidator-v1::socialize-user-bad-debt path: bad-debt socialization succeeds with no stakers", async () => {
+    mint_token("mock-usdc", 100_000_000_000, depositor);
+    deposit(100_000_000_000, depositor);
+
+    update_supported_collateral(
+      "mock-btc",
+      90000000,
+      95000000,
+      5000000,
+      8,
+      deployer
+    );
+    mint_token("mock-btc", 100_000_000_000, borrower1);
+    add_collateral("mock-btc", 20_000_000_000, deployer, borrower1);
+    borrow(18_000_000_000, borrower1);
+
+    simnet.mineEmptyBlocks(500);
+
+    // Refresh prices (pyth staleness window is shorter than the mined gap).
+    await set_price("mock-usdc", 1n, deployer);
+    await set_price("mock-btc", 1n, deployer);
+
+    // Sanity: confirm there are no stakers. get-total-staked-lp-tokens
+    // returns a bare uint (not a response), so we read .value directly.
+    const totalStaked = simnet.callReadOnlyFn(
+      "staking-v1",
+      "get-total-staked-lp-tokens",
+      [],
+      deployer
+    );
+    expect(totalStaked.result.value).toBe(0n);
+
+    // High liquidation discount + tighter LTV pushes the seize-all path
+    // beyond the borrower's collateral value, leaving residual debt that
+    // gets socialized via state-v1::socialize-user-bad-debt.
+    update_supported_collateral(
+      "mock-btc",
+      40000000,
+      50000000,
+      20000000,
+      8,
+      deployer
+    );
+
+    mint_token("mock-usdc", 18_181_818_181, depositor);
+    simnet.mineEmptyBlocks(6);
+    const res = simnet.callPublicFn(
+      "liquidator-v1",
+      "liquidate-collateral",
+      [
+        Cl.none(),
+        btc_collateral_contract,
+        Cl.principal(borrower1),
+        Cl.uint(18_181_818_181),
+        Cl.uint(1),
+      ],
+      depositor
+    );
+    expect(res.result).toBeOk(Cl.bool(true));
+
+    // Verify the bad-debt path was actually entered. socialize-bad-debt is a
+    // private helper with two short-circuit gates — without this assertion
+    // a "healthy partial-liquidation" outcome would pass the test and leave
+    // the M-01 site uncovered.
+    const socializedEvent = res.events.find(
+      (e: any) =>
+        e.event === "print_event" &&
+        e.data?.value?.data?.action?.data === "socialized-bad-debt"
+    );
+    expect(socializedEvent).toBeDefined();
+  });
+});
