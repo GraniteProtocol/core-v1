@@ -1267,11 +1267,6 @@
 (define-public (initiate-proposal-to-update-pyth-feed (token principal) (feed (buff 32)) (max-confidence-ratio uint) (expires-in uint))
     (let (
       (proposal-nonce (var-get next-proposal-nonce))
-      ;; M-02: include `token` in the proposal-id hash so signers can
-      ;; cryptographically verify which token's feed they're approving.
-      ;; Pre-fix two proposals targeting different tokens with the same
-      ;; (feed, max-confidence-ratio) collided on the same hash, enabling
-      ;; bait-and-switch by a malicious proposer.
       (proposal-id (keccak256 (unwrap! (to-consensus-buff? {
         sender: contract-caller,
         nonce: proposal-nonce,
@@ -1336,16 +1331,7 @@
 (map-set time-locked ACTION_REMOVE_ALLOWED_CONTRACT true)
 (map-set time-locked ACTION_SET_STAKING_FLAG true)
 (map-set time-locked ACTION_UPDATE_FLASH_LOAN_FEE true)
-;; M-02: enforce timelock on Pyth feed updates. Without this, a compromised
-;; governance multisig (>= threshold of signers) could swap a collateral
-;; token's oracle feed in the same block the proposal is approved -- no
-;; community detection window, instant mass-liquidation or unlimited-borrow
-;; via oracle manipulation.
 (map-set time-locked ACTION_UPDATE_PYTH_TOKEN_FEED true)
-;; M-02 (auditor-missed): same threat model via the staleness window.
-;; ACTION_UPDATE_TIME_DELTA controls pyth-time-delta -- a compromised
-;; multisig could extend it to make stale (manipulated) prices appear fresh.
-;; Closes the same oracle-manipulation attack surface as the feed swap.
 (map-set time-locked ACTION_UPDATE_TIME_DELTA true)
 (map-set time-locked ACTION_ADD_CONTRACT_FLASH_LOAN true)
 (map-set time-locked ACTION_REMOVE_CONTRACT_FLASH_LOAN true)
