@@ -97,10 +97,6 @@
         (lp-open-interest-without-principal (contract-call? .math-v1 safe-sub (get lp-open-interest interest-params) total-borrowed-amount))
         (lp-part (contract-call? .math-v1 safe-div (* interest-part lp-open-interest-without-principal) open-interest-without-principal))
         (protocol-part (contract-call? .math-v1 safe-div (* interest-part (get protocol-open-interest interest-params)) open-interest-without-principal))
-        ;; M-01: proportional split (was remainder; pre-fix underflowed when
-        ;; no LP tokens were staked). Up to ~2 dust units / tx are left
-        ;; unassigned to any open-interest bucket and stay parked in
-        ;; state-v1's free-liquidity -- accepted trade-off vs. the DoS.
         (staked-part (contract-call? .math-v1 safe-div (* interest-part (get staked-open-interest interest-params)) open-interest-without-principal))
         (asset-params (contract-call? .state-v1 get-lp-params))
         (staked-lp-tokens (contract-call? .math-v1 convert-to-shares asset-params staked-part false))
