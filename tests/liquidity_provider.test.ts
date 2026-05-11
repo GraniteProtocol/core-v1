@@ -7,8 +7,7 @@ import {
   deposit,
   initialize_staking_reward,
   initialize_lp,
-  state_set_governance_contract,
-  initialize_governance,
+  mint_token,
 } from "./utils";
 import { init_pyth, set_pyth_time_delta } from "./pyth";
 
@@ -356,43 +355,22 @@ describe("H-01 initialize burn-floor", () => {
       expect(res.result).toBeErr(Cl.uint(10001)); // ERR-NOT-INITIALIZED
     });
 
-    it("rejects initialize from non-deployer caller", async () => {
-      // initialize() is pinned to the contract deployer (captured at
-      // contract-load time as a constant). depositor1 is not the deployer.
+    it("any caller can initialize; second call rejected", async () => {
+      mint_token("mock-usdc", 1000, depositor1);
       const res = simnet.callPublicFn(
         "liquidity-provider-v1",
         "initialize",
         [],
         depositor1
       );
-      expect(res.result).toBeErr(Cl.uint(10002)); // ERR-NOT-AUTHORIZED
-    });
-
-    it("init survives governance flip — deployer-pinned auth is independent", async () => {
-      // Auth is pinned to the deployer (captured at contract-load time as a
-      // constant), NOT to state-v1.governance. So flipping governance to the
-      // governance-v1 contract has no effect on init's reachability — the
-      // deployer can still bootstrap the pool either before or after the flip.
-      //
-      // NOTE: state_set_governance_contract is the load-bearing call here —
-      // it's what flips state-v1.governance from deployer to .governance-v1.
-      // initialize_governance is included to mirror the realistic deploy
-      // sequence (it sets up governance-v1 / meta-governance-v1 internal
-      // state but does NOT touch state-v1.governance).
-      initialize_governance(deployer, deployer, deployer);
-      state_set_governance_contract(deployer);
-
-      // Non-deployer still rejected.
-      const resOther = simnet.callPublicFn(
+      expect(res.result).toBeOk(Cl.bool(true));
+      const second = simnet.callPublicFn(
         "liquidity-provider-v1",
         "initialize",
         [],
         depositor1
       );
-      expect(resOther.result).toBeErr(Cl.uint(10002)); // ERR-NOT-AUTHORIZED
-
-      // Deployer can still bootstrap.
-      initialize_lp(deployer);
+      expect(second.result).toBeErr(Cl.uint(10003));
     });
 
     it("rejects second initialize call", async () => {
