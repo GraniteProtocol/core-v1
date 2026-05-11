@@ -3,6 +3,7 @@
 ;; ERRORS
 (define-constant ERR-INTEREST-PARAMS (err u10000))
 (define-constant ERR-NOT-INITIALIZED (err u10001))
+(define-constant ERR-POOL-INSOLVENT (err u10002))
 (define-constant ERR-ALREADY-INITIALIZED (err u10003))
 (define-constant ERR-INPUT-ZERO (err u10004))
 
@@ -45,8 +46,11 @@
     (try! (accrue-interest))
     (let (
         (lp-params (contract-call? .state-v1 get-lp-params))
+        (total-assets (get total-assets lp-params))
+        (total-shares (get total-shares lp-params))
         (shares (contract-call? .math-v1 convert-to-shares lp-params assets false))
       )
+      (asserts! (or (> total-assets u0) (is-eq total-shares u0)) ERR-POOL-INSOLVENT)
       (try! (contract-call? .withdrawal-caps-v1 lp-deposit assets))
       (try! (contract-call? .state-v1 add-assets contract-caller recipient assets shares))
       (print {
