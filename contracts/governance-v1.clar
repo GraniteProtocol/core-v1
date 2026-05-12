@@ -178,7 +178,8 @@
   closed: bool,
   expires-at: uint,
   executed: bool,
-  execute-at: (optional uint)
+  execute-at: (optional uint),
+  member-count: uint
 })
 
 ;; approved multisigs for given proposal
@@ -308,6 +309,7 @@
       closed: false,
       executed: false,
       execute-at: none,
+      member-count: (contract-call? .meta-governance-v1 governance-multisig-count),
     })
     (map-set proposal-approved-members {proposal-id: proposal-id, member: contract-caller} true)
     (print {
@@ -544,7 +546,7 @@
   (let (
       (proposal (unwrap! (map-get? governance-proposal proposal-id) ERR-UNKNOWN-PROPOSAL))
       (approve-count (get approve-count proposal))
-      (total-count (contract-call? .meta-governance-v1 governance-multisig-count))
+      (total-count (get member-count proposal))
       (percentage (/ (* approve-count u100) total-count))
     )
     (ok (>= percentage THRESHOLD))
@@ -554,7 +556,7 @@
   (let (
       (proposal (unwrap! (map-get? governance-proposal proposal-id) ERR-UNKNOWN-PROPOSAL))
       (deny-count (get deny-count proposal))
-      (total-count (contract-call? .meta-governance-v1 governance-multisig-count))
+      (total-count (get member-count proposal))
       (percentage (/ (* deny-count u100) total-count))
     )
     (ok (>= percentage THRESHOLD))
