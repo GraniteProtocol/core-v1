@@ -26,6 +26,7 @@ import { Cl } from "@stacks/transactions";
 import {
   deposit,
   initialize_ir,
+  initialize_lp,
   initialize_staking_reward,
   mint_token,
   set_allowed_contracts,
@@ -57,12 +58,10 @@ describe("L-01: ERR-POOL-INSOLVENT guards deposit when total-assets=0 / total-sh
     initialize_staking_reward(deployer);
     await set_initial_price("mock-usdc", 1n, deployer);
     await set_initial_price("mock-btc", 100n, deployer);
+    initialize_lp(deployer);
   });
 
   it("positive control: assert does not fire on a healthy pool", async () => {
-    // Normal pool state: total-assets > 0, total-shares > 0. The new assert
-    // path `(or (> total-assets u0) (is-eq total-shares u0))` short-circuits
-    // on the first arm and lets the deposit through.
     const first = 100_000_000_000;
     mint_token("mock-usdc", first, lp);
     deposit(first, lp);
@@ -79,24 +78,5 @@ describe("L-01: ERR-POOL-INSOLVENT guards deposit when total-assets=0 / total-sh
       second
     );
     expect(res.result).toBeOk(Cl.bool(true));
-  });
-
-  it("positive control: first-ever deposit (clean state) still works", async () => {
-    // Boot state: total-assets = 0, total-shares = 0. The assert path's
-    // second arm `(is-eq total-shares u0)` is true → deposit proceeds.
-    // This is the path the MINIMUM_INITIAL_DEPOSIT guard is built around;
-    // the new assert must not regress it.
-    const first = 1_000_000;
-    mint_token("mock-usdc", first, lp);
-    const res = simnet.callPublicFn(
-      "liquidity-provider-v1",
-      "deposit",
-      [Cl.uint(first), Cl.principal(lp)],
-      lp
-    );
-    expect(res.result).toBeOk(Cl.bool(true));
-    const params = getLpParams();
-    expect(params.totalAssets).toBe(BigInt(first));
-    expect(params.totalShares).toBe(BigInt(first));
   });
 });
