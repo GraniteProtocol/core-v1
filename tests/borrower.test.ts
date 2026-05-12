@@ -1233,6 +1233,7 @@ describe("M-01 interest-dust no-stakers regression", () => {
     initialize_staking_reward(deployer);
     await set_initial_price("mock-usdc", 1n, deployer);
     await set_initial_price("mock-btc", 1n, deployer);
+    initialize_lp(deployer);
   });
 
   it("borrower-v1::update-repay-state path: repay succeeds with no stakers across a sweep of repay amounts", async () => {
