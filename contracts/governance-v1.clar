@@ -1273,6 +1273,7 @@
         action: ACTION_UPDATE_PYTH_TOKEN_FEED,
         expires-in: expires-in,
         data: {
+          token: token,
           feed: feed,
           max-confidence-ratio: max-confidence-ratio
         }
@@ -1330,6 +1331,8 @@
 (map-set time-locked ACTION_REMOVE_ALLOWED_CONTRACT true)
 (map-set time-locked ACTION_SET_STAKING_FLAG true)
 (map-set time-locked ACTION_UPDATE_FLASH_LOAN_FEE true)
+(map-set time-locked ACTION_UPDATE_PYTH_TOKEN_FEED true)
+(map-set time-locked ACTION_UPDATE_TIME_DELTA true)
 (map-set time-locked ACTION_ADD_CONTRACT_FLASH_LOAN true)
 (map-set time-locked ACTION_REMOVE_CONTRACT_FLASH_LOAN true)
 (map-set time-locked ACTION_ALLOW_ANY_CONTRACT_FLASH_LOAN true)
