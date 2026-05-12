@@ -375,10 +375,8 @@
   )
   (let
     (
-      (denominator (contract-call? .math-v1 safe-sub
-          SCALING-FACTOR
-          (try! (safe-div (* (+ SCALING-FACTOR liquidation-discount) collateral-liquid-ltv) SCALING-FACTOR))
-      ))
+      (denominator (- SCALING-FACTOR
+        (try! (safe-div (* (+ SCALING-FACTOR liquidation-discount) collateral-liquid-ltv) SCALING-FACTOR))))
       (total-repay-amount (try! (safe-div (* (- debt total-collaterals-liquid-value) SCALING-FACTOR) denominator)))
       (repay-amount-without-discount (contract-call? .math-v1 divide-round-up (* collateral-value SCALING-FACTOR) (+ liquidation-discount SCALING-FACTOR)))
       (repay-allowed (if (< total-repay-amount repay-amount-without-discount) total-repay-amount repay-amount-without-discount))
