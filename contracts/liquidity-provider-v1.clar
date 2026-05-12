@@ -2,25 +2,54 @@
 
 ;; ERRORS
 (define-constant ERR-INTEREST-PARAMS (err u10000))
-(define-constant ERR-ASSET-TOO-LOW (err u10001))
+(define-constant ERR-NOT-INITIALIZED (err u10001))
+(define-constant ERR-ALREADY-INITIALIZED (err u10003))
+(define-constant ERR-INPUT-ZERO (err u10004))
 
 ;; CONSTANTS
 (define-constant SUCCESS (ok true))
-(define-constant MINIMUM_INITIAL_DEPOSIT u1000) ;; 0.001 USDC (6 decimals) - enforced only on first deposit
+(define-constant MINIMUM_INITIAL_DEPOSIT u1000)
+(define-constant NULL_ADDRESS
+  (unwrap-panic (principal-construct? (if is-in-mainnet 0x16 0x1a)
+                                       0x0000000000000000000000000000000000000000)))
+
+;; STATE
+(define-data-var initialized bool false)
 
 ;; PUBLIC FUNCTIONS
+(define-public (initialize)
+  (begin
+    (asserts! (not (var-get initialized)) ERR-ALREADY-INITIALIZED)
+    (let (
+        (total-lp-supply (unwrap-panic (contract-call? .state-v1 get-total-supply)))
+        (dust-burned (is-eq total-lp-supply u0))
+      )
+      (var-set initialized true)
+      (try! (if dust-burned
+          (deposit MINIMUM_INITIAL_DEPOSIT NULL_ADDRESS)
+          SUCCESS
+      ))
+      (print {
+        action: "initialized",
+        user: contract-caller,
+        total-lp-supply-before: total-lp-supply,
+        dust-burned: dust-burned,
+      })
+      SUCCESS
+)))
+
 (define-public (deposit (assets uint) (recipient principal))
   (begin
+    (asserts! (var-get initialized) ERR-NOT-INITIALIZED)
+    (asserts! (> assets u0) ERR-INPUT-ZERO)
     (try! (accrue-interest))
     (let (
         (lp-params (contract-call? .state-v1 get-lp-params))
-        (total-assets (get total-assets lp-params))
         (shares (contract-call? .math-v1 convert-to-shares lp-params assets false))
       )
-      (try! (if (and (is-eq total-assets u0) (< assets MINIMUM_INITIAL_DEPOSIT)) ERR-ASSET-TOO-LOW SUCCESS))
       (try! (contract-call? .withdrawal-caps-v1 lp-deposit assets))
       (try! (contract-call? .state-v1 add-assets contract-caller recipient assets shares))
-      (print { 
+      (print {
         recipient: recipient,
         assets: assets,
         shares: shares,
@@ -28,11 +57,13 @@
         lp-params: (contract-call? .state-v1 get-lp-params),
         action: "deposit",
       }))
-    SUCCESS  
+    SUCCESS
 ))
 
 (define-public (withdraw (assets uint) (recipient principal))
   (begin
+    (asserts! (var-get initialized) ERR-NOT-INITIALIZED)
+    (asserts! (> assets u0) ERR-INPUT-ZERO)
     (try! (contract-call? .withdrawal-caps-v1 check-withdrawal-lp-cap assets))
     (try! (accrue-interest))
     (let ((shares (contract-call? .math-v1 convert-to-shares (contract-call? .state-v1 get-lp-params) assets true)))
@@ -45,11 +76,13 @@
         lp-params: (contract-call? .state-v1 get-lp-params),
         action: "withdraw"
       }))
-    SUCCESS  
+    SUCCESS
 ))
 
 (define-public (redeem (shares uint) (recipient principal))
   (begin
+    (asserts! (var-get initialized) ERR-NOT-INITIALIZED)
+    (asserts! (> shares u0) ERR-INPUT-ZERO)
     (try! (accrue-interest))
     (let
       (

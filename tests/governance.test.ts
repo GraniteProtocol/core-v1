@@ -5,6 +5,7 @@ import {
   deposit,
   initialize_governance,
   initialize_ir,
+  initialize_lp,
   initialize_staking_reward,
   mint_token,
   mint_token_to_contract,
@@ -60,6 +61,7 @@ describe("governance tests", () => {
     set_asset_cap(deployer, 10000000000000n); // 100k USDC
     initialize_ir(deployer);
     initialize_staking_reward(deployer);
+    initialize_lp(deployer);
     await set_initial_price("mock-usdc", 1n, deployer);
     initialize_governance(governance_account, guardian_account, deployer);
   });
@@ -525,7 +527,8 @@ describe("governance tests", () => {
       [Cl.contractPrincipal(deployer, "state-v1")],
       deployer
     );
-    expect(balance.result.value.value).toBe(1000n);
+    // H-01 burn dust raises the state-v1 USDC baseline by 1000.
+    expect(balance.result.value.value).toBe(2000n);
 
     response = simnet.callPublicFn(
       "governance-v1",
@@ -542,7 +545,8 @@ describe("governance tests", () => {
       [Cl.contractPrincipal(deployer, "state-v1")],
       deployer
     );
-    expect(balance.result.value.value).toBe(0n);
+    // H-01 burn dust permanently sits in state-v1 backing the locked shares.
+    expect(balance.result.value.value).toBe(1000n);
 
     balance = simnet.callReadOnlyFn(
       "mock-usdc",

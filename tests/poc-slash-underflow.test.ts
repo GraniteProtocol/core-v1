@@ -30,6 +30,7 @@ import {
   add_collateral,
   borrow,
   initialize_staking_reward,
+  initialize_lp,
 } from "./utils";
 import {
   init_pyth,
@@ -92,6 +93,7 @@ describe("PoC: slash-total-staked-lp-tokens underflow", () => {
     set_asset_cap(deployer, 10000000000000n);
     initialize_ir(deployer);
     initialize_staking_reward(deployer);
+    initialize_lp(deployer);
     await set_initial_price("mock-usdc", 1n, deployer);
     await set_initial_price("mock-btc", 100n, deployer);
   });

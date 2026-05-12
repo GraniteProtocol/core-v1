@@ -11,6 +11,7 @@ import {
   deposit,
   initialize_governance,
   initialize_ir,
+  initialize_lp,
   initialize_staking_reward,
   mint_token,
   set_allowed_contracts,
@@ -52,6 +53,7 @@ describe("withdrawal caps tests", () => {
     set_asset_cap(deployer, 2n ** 128n - 1n);
     initialize_ir(deployer);
     initialize_staking_reward(deployer);
+    initialize_lp(deployer);
     initialize_governance(deployer, deployer, deployer);
     update_supported_collateral(
       "mock-btc",
@@ -137,7 +139,8 @@ describe("withdrawal caps tests", () => {
       [],
       deployer
     ).result;
-    expect(lp_bucket).toBeUint(50000000000);
+    // H-01 burn dust adds to total-assets which feeds the cap-factor scaling.
+    expect(lp_bucket).toBeUint(50000000800);
 
     // let the extra amount to decay to bring to max bucket
     simnet.mineEmptyBlocks(20);
@@ -222,7 +225,8 @@ describe("withdrawal caps tests", () => {
       [],
       deployer
     ).result;
-    expect(debt_bucket).toBeUint(25000000000n);
+    // H-01 burn dust adds to total-assets which feeds the cap-factor scaling.
+    expect(debt_bucket).toBeUint(25000000800n);
 
     // Borrow 200 USDC
     res = simnet.callPublicFn(
@@ -239,7 +243,8 @@ describe("withdrawal caps tests", () => {
       [],
       deployer
     ).result;
-    expect(debt_bucket).toBeUint(5003240740n);
+    // H-01 burn dust adds to total-assets which feeds the cap-factor scaling.
+    expect(debt_bucket).toBeUint(5003241540n);
 
     // Borrow 51 USDC. It should be blocked bc debt bucker is aroun ~50 USDC
     res = simnet.callPublicFn(
@@ -271,7 +276,8 @@ describe("withdrawal caps tests", () => {
       [],
       deployer
     ).result;
-    expect(debt_bucket).toBeUint(44907406n);
+    // H-01 burn dust adds to total-assets which feeds the cap-factor scaling.
+    expect(debt_bucket).toBeUint(44908216n);
   });
 
   it("collateral cap should allow / block removing collateral & update itself correctly", async () => {
@@ -625,7 +631,8 @@ describe("withdrawal caps tests", () => {
       [],
       deployer
     ).result;
-    expect(bucket).toBeUint(1000000000000000);
+    // H-01 burn dust adds to total-assets which feeds the cap-factor scaling.
+    expect(bucket).toBeUint(1000000000000100);
 
     simnet.mineEmptyBlocks(20);
 
@@ -644,7 +651,8 @@ describe("withdrawal caps tests", () => {
       [],
       deployer
     ).result;
-    expect(bucket).toBeUint(0n);
+    // H-01 dust leaves 100 worth of headroom in the bucket here.
+    expect(bucket).toBeUint(100n);
 
     // Mine a large number of blocks
     for (let x = 0; x < 1_000_000; x++) {
@@ -657,7 +665,8 @@ describe("withdrawal caps tests", () => {
       [Cl.contractPrincipal(deployer, "state-v1")],
       deployer
     );
-    expect(balance.result.value.value).toBe(BigInt((amount * 9) / 10));
+    // +1000 H-01 burn dust still parked in state-v1.
+    expect(balance.result.value.value).toBe(BigInt((amount * 9) / 10 + 1000));
 
     // Withdraw full cap again
     withdraw = simnet.callPublicFn(
@@ -674,7 +683,8 @@ describe("withdrawal caps tests", () => {
       [],
       deployer
     ).result;
-    expect(bucket).toBeUint(0);
+    // H-01 dust leaves 100 worth of headroom in the bucket here too.
+    expect(bucket).toBeUint(100);
   });
 
   it("should handle maximum Clarity uint values without overflow", () => {
@@ -733,7 +743,9 @@ describe("withdrawal caps tests", () => {
       [],
       deployer
     );
-    expect(bucket.result).toBeUint(0);
+    // H-01 dust leaves 990 worth of headroom in the bucket after the test
+    // withdraws 10% of the cap.
+    expect(bucket.result).toBeUint(990);
 
     for (let x = 0; x < 100; x++) {
       simnet.mineBlock([]);

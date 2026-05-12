@@ -12,6 +12,7 @@ import {
   repay,
   set_asset_cap,
   initialize_staking_reward,
+  initialize_lp,
   expectUserUSDCBalance,
   mint_token_to_contract,
   expectUserBTCBalance,
@@ -45,6 +46,7 @@ describe("liquidation tests", () => {
     set_asset_cap(deployer, 10000000000000n); // 100k USDC
     initialize_ir(deployer);
     initialize_staking_reward(deployer);
+    initialize_lp(deployer);
     await set_initial_price("mock-usdc", 1n, deployer);
     await set_initial_price("mock-btc", 1n, deployer);
     await set_initial_price("mock-eth", 1n, deployer);
@@ -1180,8 +1182,9 @@ describe("liquidation tests", () => {
       [Cl.principal(borrower1), Cl.none(), Cl.none()],
       deployer
     );
+    // H-01 burn dust shifts position-health rounding by 1 micro-unit.
     expect(accounthealthRes.result.value.data["position-health"]).toEqual(
-      Cl.uint(100000000n)
+      Cl.uint(100000001n)
     );
   });
 
@@ -1468,7 +1471,8 @@ describe("liquidation tests", () => {
     expectUserUSDCBalance(Cl.principal(borrower1), 18000000000n, deployer);
     expectUserUSDCBalance(
       Cl.contractPrincipal(deployer, "state-v1"),
-      82000000000n,
+      // H-01 burn dust adds 1000 to state-v1's USDC baseline.
+      82000001000n,
       deployer
     );
     expectUserUSDCBalance(
@@ -1525,10 +1529,11 @@ describe("liquidation tests", () => {
       0n,
       deployer
     );
-    // state contract should have previous balance + fee + liquidated repay amount
+    // state contract should have previous balance + fee + liquidated repay
+    // amount + H-01 burn dust (1000).
     expectUserUSDCBalance(
       Cl.contractPrincipal(deployer, "state-v1"),
-      BigInt(82000000000 + repayAmount),
+      BigInt(82000001000 + repayAmount),
       deployer
     );
 
