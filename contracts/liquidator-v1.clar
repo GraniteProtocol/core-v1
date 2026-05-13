@@ -275,10 +275,8 @@
         ;; convert repay amount to debt shares
         (debt-params (contract-call? .state-v1 get-debt-params))
         (paid-shares (contract-call? .math-v1 convert-to-debt-shares debt-params repay-amount false))
-        (interest-portion (if (>= current-debt user-borrowed-amount)
-          (contract-call? .math-v1 calculate-interest-portions current-debt user-borrowed-amount repay-amount)
-          {principal-part: repay-amount, interest-part: u0}
-        ))
+        (effective-borrowed-amount (if (< current-debt user-borrowed-amount) current-debt user-borrowed-amount))
+        (interest-portion (contract-call? .math-v1 calculate-interest-portions current-debt effective-borrowed-amount repay-amount))
         (principal-part (get principal-part interest-portion))
         (interest-part (get interest-part interest-portion))
         (total-borrowed-amount (get total-borrowed-amount position-data))
@@ -290,8 +288,10 @@
         (staked-part (contract-call? .math-v1 safe-div (* interest-part (get staked-open-interest open-interest-info)) open-interest-without-principal))
         (asset-params (contract-call? .state-v1 get-lp-params))
         (staked-lp-tokens (contract-call? .math-v1 convert-to-shares asset-params staked-part false))
-        (updated-borrowed-amount (contract-call? .math-v1 safe-sub user-borrowed-amount principal-part))
-        (updated-total-borrowed-amount (contract-call? .math-v1 safe-sub total-borrowed-amount principal-part))
+        (remaining-user-debt-shares (contract-call? .math-v1 safe-sub (get debt-shares position-for-block-check) paid-shares))
+        (updated-borrowed-amount (contract-call? .math-v1 safe-sub effective-borrowed-amount principal-part))
+        (updated-total-borrowed-amount (contract-call? .math-v1 safe-sub total-borrowed-amount
+          (if (is-eq remaining-user-debt-shares u0) user-borrowed-amount principal-part)))
         (remaining-collateral-balance (- user-balance collateral-to-give))
         (updated-collaterals-list (if (is-eq remaining-collateral-balance u0)
           (get new-list (contract-call? .state-v1 remove-item (get collaterals position-data) collateral-token))
@@ -375,10 +375,8 @@
   )
   (let
     (
-      (denominator (contract-call? .math-v1 safe-sub
-          SCALING-FACTOR
-          (try! (safe-div (* (+ SCALING-FACTOR liquidation-discount) collateral-liquid-ltv) SCALING-FACTOR))
-      ))
+      (denominator (- SCALING-FACTOR
+        (try! (safe-div (* (+ SCALING-FACTOR liquidation-discount) collateral-liquid-ltv) SCALING-FACTOR))))
       (total-repay-amount (try! (safe-div (* (- debt total-collaterals-liquid-value) SCALING-FACTOR) denominator)))
       (repay-amount-without-discount (contract-call? .math-v1 divide-round-up (* collateral-value SCALING-FACTOR) (+ liquidation-discount SCALING-FACTOR)))
       (repay-allowed (if (< total-repay-amount repay-amount-without-discount) total-repay-amount repay-amount-without-discount))
@@ -542,7 +540,7 @@
             (protocol-part (contract-call? .math-v1 safe-div (* interest-part protocol-open-interest-val) open-interest-without-principal))
             (staked-part (contract-call? .math-v1 safe-div (* interest-part staked-open-interest-val) open-interest-without-principal))
             (lp-part (+ principal-part lp-interest-part))
-            (updated-total-borrowed-amount (contract-call? .math-v1 safe-sub total-borrowed-amount principal-part))
+            (updated-total-borrowed-amount (contract-call? .math-v1 safe-sub total-borrowed-amount user-borrowed-amount))
             (staked-lp-tokens (contract-call? .staking-v1 get-total-staked-lp-tokens))
             (burned-staking-lp-tokens (try! (contract-call? .state-v1 socialize-user-bad-debt user remaining-debt lp-part staked-part protocol-part updated-total-borrowed-amount .staking-v1 staked-lp-tokens)))
           )

@@ -13,7 +13,6 @@
 (define-constant ERR_CONTRACT_NOT_ALLOWED (err u110000))
 (define-constant ERR-NOT-AUTHORIZED (err u110001))
 (define-constant ERR-INVALID-FEE (err u110002))
-(define-constant ERR-FLASH-LOAN-IN-PROGRESS (err u110003))
 
 
 ;; Data vars
@@ -23,7 +22,6 @@
 (define-data-var allow-any bool false)
 ;; Fee of 0.01% for processing flash loan scaled to 10^8
 (define-data-var fee uint u10000)
-(define-data-var flash-loan-in-progress bool false)
 
 ;; Read only functions
 
@@ -88,9 +86,7 @@
       (caller contract-caller)
       (callback-contract (contract-of callback))
     )
-    (asserts! (not (var-get flash-loan-in-progress)) ERR-FLASH-LOAN-IN-PROGRESS)
     (asserts! (is-contract-allowed callback-contract) ERR_CONTRACT_NOT_ALLOWED)
-    (var-set flash-loan-in-progress true)
     ;; transfer funds to user
     (try! (contract-call? .state-v1 transfer-to .mock-usdc caller amount))
     (try! (contract-call? callback on-granite-flash-loan amount flash-loan-fee data))
@@ -99,7 +95,6 @@
       (contract-call? .mock-usdc transfer flash-loan-fee caller (contract-call? .state-v1 get-governance) none)
       SUCCESS
     ))
-    (var-set flash-loan-in-progress false)
 
     (print {
       action: "flash-loan",
