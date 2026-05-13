@@ -74,7 +74,7 @@
 (define-private (refill-bucket-amount (last-updated-at uint) (time-now uint) (max-bucket uint) (current-bucket uint) (inflow uint))
   (let (
       (refill-window (get-refill-time-window))
-      (elapsed (if (is-eq last-updated-at u0) refill-window (- time-now last-updated-at)))
+      (elapsed (if (is-eq last-updated-at u0) refill-window (if (> time-now last-updated-at) (- time-now last-updated-at) u0)))
       (refill-amount (if (>= elapsed refill-window) max-bucket (/ (* max-bucket elapsed) refill-window)))
       (new-bucket (min (+ current-bucket refill-amount) max-bucket))
   )
