@@ -24,6 +24,10 @@
 (define-constant seconds-in-year u31536000)
 (define-constant MAX-IR-PARAM u100000000000000)
 (define-constant MAX-TAYLOR-INPUT u2000000000000)
+;; 10x (1000%) in 12-fixed. Caps effective interest-rate output so the
+;; Taylor input guard at MAX-TAYLOR-INPUT cannot brick accrue-interest
+;; under stressed (open-interest > total-assets) conditions.
+(define-constant MAX-UTILIZATION u10000000000000)
 (define-constant STACKS_BLOCK_TIME (contract-call? .constants-v1 get-stacks-block-time ))
 
 ;; DATA-VARS 
@@ -121,7 +125,10 @@
 
 ;; total-assets and open-interest are fixed to u8 precision
 (define-read-only (utilization-calc (total-assets uint) (open-interest uint))
-  (if (> total-assets u0) (/ (* open-interest one-12) total-assets) u0)
+  (if (> total-assets u0)
+    (let ((u (/ (* open-interest one-12) total-assets)))
+      (if (<= u MAX-UTILIZATION) u MAX-UTILIZATION))
+    u0)
 )
 
 (define-read-only (get-ir (total-assets uint) (open-interest uint))
