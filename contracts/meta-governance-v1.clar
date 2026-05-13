@@ -29,7 +29,8 @@
   approve-count: uint,
   deny-count: uint,
   completed: bool,
-  expires-at: uint
+  expires-at: uint,
+  member-count: uint
 })
 
 ;; contract deployer. No permissions except to initialize the contract
@@ -85,7 +86,8 @@
       approve-count: u1,
       deny-count: u0,
       completed: false,
-      expires-at: (+ stacks-block-height expires-in)
+      expires-at: (+ stacks-block-height expires-in),
+      member-count: (var-get governance-accounts-count)
     })
     (map-set proposal-approved-members {proposal-id: proposal-id, member: contract-caller} true)
     (print {
@@ -104,7 +106,7 @@
   (let (
       (proposal (unwrap! (map-get? governance-proposal proposal-id) ERR-UNKNOWN-PROPOSAL))
       (approve-count (get approve-count proposal))
-      (total-count (var-get governance-accounts-count))
+      (total-count (get member-count proposal))
       (percentage (/ (* approve-count u100) total-count))
     )
     (ok (>= percentage THRESHOLD))
@@ -114,7 +116,7 @@
   (let (
       (proposal (unwrap! (map-get? governance-proposal proposal-id) ERR-UNKNOWN-PROPOSAL))
       (deny-count (get deny-count proposal))
-      (total-count (var-get governance-accounts-count))
+      (total-count (get member-count proposal))
       (percentage (/ (* deny-count u100) total-count))
     )
     (ok (>= percentage THRESHOLD))
@@ -149,7 +151,8 @@
           approve-count: (get approve-count proposal),
           deny-count: (get deny-count proposal),
           expires-at: (get expires-at proposal),
-          completed: true
+          completed: true,
+          member-count: (get member-count proposal)
         })
         SUCCESS
       )
@@ -173,7 +176,8 @@
           approve-count: (get approve-count proposal),
           deny-count: (get deny-count proposal),
           expires-at: (get expires-at proposal),
-          completed: true
+          completed: true,
+          member-count: (get member-count proposal)
         })
         SUCCESS
       )
@@ -281,7 +285,8 @@
       approve-count: (+ (get approve-count proposal) u1),
       deny-count: (get deny-count proposal),
       expires-at: (get expires-at proposal),
-      completed: (get completed proposal)
+      completed: (get completed proposal),
+      member-count: (get member-count proposal)
     })
 
     (print {
@@ -307,7 +312,8 @@
       approve-count: (get approve-count proposal),
       deny-count: (+ (get deny-count proposal) u1),
       expires-at: (get expires-at proposal),
-      completed: (get completed proposal)
+      completed: (get completed proposal),
+      member-count: (get member-count proposal)
     })
 
     (print {
@@ -328,7 +334,7 @@
   (let (
       (proposal (unwrap! (map-get? governance-proposal proposal-id) ERR-UNKNOWN-PROPOSAL))
       (total-voted (+ (get approve-count proposal) (get deny-count proposal)))
-      (total-count (var-get governance-accounts-count))
+      (total-count (get member-count proposal))
       (deny-threshold (try! (deny-threshold-met proposal-id)))
       (approve-threshold (try! (approve-threshold-met proposal-id)))
       (has-threshold-met (or deny-threshold approve-threshold))
@@ -353,7 +359,8 @@
       approve-count: (get approve-count proposal),
       deny-count: (get deny-count proposal),
       expires-at: (get expires-at proposal),
-      completed: true
+      completed: true,
+      member-count: (get member-count proposal)
     })
     (print {
       action: "proposal-closed",

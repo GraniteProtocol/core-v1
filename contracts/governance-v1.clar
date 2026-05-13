@@ -1222,7 +1222,7 @@
   (let (
       (proposal (unwrap! (map-get? governance-proposal proposal-id) ERR-UNKNOWN-PROPOSAL))
       (total-voted (+ (get approve-count proposal) (get deny-count proposal)))
-      (total-count (contract-call? .meta-governance-v1 governance-multisig-count))
+      (total-count (get member-count proposal))
       (deny-threshold (try! (deny-threshold-met proposal-id)))
       (approve-threshold (try! (approve-threshold-met proposal-id)))
       (has-threshold-met (or deny-threshold approve-threshold))
