@@ -133,7 +133,11 @@
       
     )
     (asserts! (> price 0) ERR-INVALID-PRICE)
-    (asserts! (and (>= expo -18) (<= expo 18)) ERR-INVALID-EXPONENT)
+    ;; Upper bound 11 is the max safe value: pyth_max_int64 (~9.2e18)
+    ;; * 10^(expo+PRICE_DECIMALS) must not exceed clarity_max_int128
+    ;; (~1.7e38). With PRICE_DECIMALS = 8, expo <= 11 holds the product
+    ;; below the overflow threshold for any valid Pyth price.
+    (asserts! (and (>= expo -18) (<= expo 11)) ERR-INVALID-EXPONENT)
     (asserts! (is-valid timestamp) ERR-PYTH-PRICE-STALE)
     (try! (check-confidence (to-uint price) price-conf max-confidence-ratio))
     (ok (to-uint (convert-res price expo PRICE_DECIMALS)))
