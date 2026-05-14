@@ -208,7 +208,7 @@
       (active-staked-lp-tokens-to-slash (- lp-tokens withdrawal-lp-tokens-to-slash))
     ) 
     (try! (contract-call? .state-v1 is-allowed-contract contract-caller))
-    (var-set total-lp-tokens-staked (contract-call? .math-v1 safe-sub (var-get total-lp-tokens-staked) active-staked-lp-tokens-to-slash))
+    (var-set total-lp-tokens-staked (- (var-get total-lp-tokens-staked) active-staked-lp-tokens-to-slash))
     (if (is-eq withdrawal-lp-tokens withdrawal-lp-tokens-to-slash)
       (var-set unfinalized-withdrawals {
         lp-tokens: u0,
