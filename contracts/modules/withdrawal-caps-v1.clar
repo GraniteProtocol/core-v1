@@ -269,7 +269,7 @@
     (asserts! (<= new-cap SCALING-FACTOR) ERR-INVALID-CAP-FACTOR)
     (print {
       action: "set-debt-cap",
-      old-value: (var-get lp-cap-factor),
+      old-value: (var-get debt-cap-factor),
       new-value: new-cap
     })
     (var-set debt-cap-factor new-cap)

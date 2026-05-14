@@ -10,7 +10,7 @@
 
 
 ;; Errors
-(define-constant ERR_CONTRACT_NOT_ALLOWED (err u110000))
+(define-constant ERR-CONTRACT-NOT-ALLOWED (err u110000))
 (define-constant ERR-NOT-AUTHORIZED (err u110001))
 (define-constant ERR-INVALID-FEE (err u110002))
 
@@ -86,7 +86,7 @@
       (caller contract-caller)
       (callback-contract (contract-of callback))
     )
-    (asserts! (is-contract-allowed callback-contract) ERR_CONTRACT_NOT_ALLOWED)
+    (asserts! (is-contract-allowed callback-contract) ERR-CONTRACT-NOT-ALLOWED)
     ;; transfer funds to user
     (try! (contract-call? .state-v1 transfer-to .mock-usdc caller amount))
     (try! (contract-call? callback on-granite-flash-loan amount flash-loan-fee data))

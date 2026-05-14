@@ -12,13 +12,15 @@
 (define-constant MINIMUM_HEALTH_RATIO u100000000)
 ;; Liquidation buffer of 2.00%
 (define-constant LIQUIDATION-BUFFER u2000000)
+;; Minimum number of Stacks blocks between borrow and liquidation. Prevents
+;; same-block borrow-then-liquidate sandwich attacks against oracle updates.
+(define-constant MINIMUM-LIQUIDATION-BLOCK-GAP u6)
 
 ;; ERROR VALUES
 (define-constant ERR-DIVIDE-BY-ZERO (err u30000))
 (define-constant ERR-INTEREST-PARAMS (err u30001))
 (define-constant ERR-NO-POSITION (err u30002))
 (define-constant ERR-USER-POSITION-HEALTHY (err u30003))
-(define-constant ERR-LIQUIDATED-TOO-MUCH (err u30004))
 (define-constant ERR-COLLATERAL-NOT-SUPPORTED (err u30005))
 (define-constant ERR-INSUFFICIENT-BALANCE (err u30006))
 (define-constant ERR-SLIPPAGE (err u30007))
@@ -125,7 +127,7 @@
       maybe-collateral-price
     )))
     (collateral-price (get collateral-price liquidation-info)))
-    (try! (ensure-non-zero-repay-amount liquidator-repay-amount collateral-price))
+    (try! (ensure-non-zero-repay-amount liquidator-repay-amount))
     (ok (get liquidation-info liquidation-info))))
 
 (define-read-only
@@ -253,7 +255,6 @@
   (let
       (
         (collateral-token (contract-of collateral))
-        ;; L-36: enforce minimum 6-block gap between borrowing and liquidation
         (user-position-data (contract-call? .state-v1 get-borrow-repay-params user))
         (position-for-block-check (unwrap! (get user-position user-position-data) ERR-NO-POSITION))
         ;; get liquidation info for the user
@@ -298,9 +299,9 @@
           (get collaterals position-data)
         ))
       )
-      ;; L-36: require at least 6 blocks (~1 min) between borrowing and liquidation
-      (asserts! (>= stacks-block-height (+ (get borrowed-block position-for-block-check) u6)) ERR-LIQUIDATION-NOT-ALLOWED)
-      (try! (ensure-non-zero-repay-amount liquidator-repay-amount collateral-price))
+      ;; Enforce minimum block gap between borrowing and liquidation
+      (asserts! (>= stacks-block-height (+ (get borrowed-block position-for-block-check) MINIMUM-LIQUIDATION-BLOCK-GAP)) ERR-LIQUIDATION-NOT-ALLOWED)
+      (try! (ensure-non-zero-repay-amount liquidator-repay-amount))
       ;; update state
       (try! (contract-call? .state-v1 update-liquidate-collateral-state collateral {
         liquidator: contract-caller,
@@ -498,7 +499,7 @@
     ) collateral-prices) u0
 ))
 
-(define-private (ensure-non-zero-repay-amount (amount uint) (collateral-price uint))
+(define-private (ensure-non-zero-repay-amount (amount uint))
   (if (> amount u0)
     SUCCESS
     ERR-NON-ZERO-REPAY-AMOUNT
