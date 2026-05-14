@@ -11,8 +11,11 @@
 (define-constant ERR-INVALID-TIME-DELTA (err u80007))
 
 (define-constant STACKS_BLOCK_TIME (contract-call? .constants-v1 get-stacks-block-time ))
-;; Minimum time delta of 1 minute.
-(define-constant MINIMUM_TIME_DELTA u60)
+;; Minimum time delta of 15 seconds (~2 Stacks blocks). Prevents
+;; governance from setting time-delta to 0 (which would freeze
+;; price-dependent operations) while still allowing tight freshness
+;; during volatile market conditions.
+(define-constant MINIMUM_TIME_DELTA u15)
 ;; Maximum time delta of 2 hours.
 (define-constant MAXIMUM_TIME_DELTA u7200)
 ;; Maximum future timestamp tolerance of 60 seconds.

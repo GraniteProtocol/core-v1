@@ -222,11 +222,11 @@ describe("pyth-adapter-v1 time-delta bounds (M-1)", () => {
     expect(result.result).toBeErr(Cl.uint(80007)); // ERR-INVALID-TIME-DELTA
   });
 
-  it("time-delta of 59 rejected", () => {
+  it("time-delta one below minimum rejected", () => {
     const result = simnet.callPublicFn(
       "pyth-adapter-v1",
       "update-time-delta",
-      [Cl.uint(59)],
+      [Cl.uint(14)],
       deployer
     );
     expect(result.result).toBeErr(Cl.uint(80007)); // ERR-INVALID-TIME-DELTA
@@ -246,7 +246,7 @@ describe("pyth-adapter-v1 time-delta bounds (M-1)", () => {
     const result = simnet.callPublicFn(
       "pyth-adapter-v1",
       "update-time-delta",
-      [Cl.uint(60)],
+      [Cl.uint(15)],
       deployer
     );
     expect(result.result).toBeOk(Cl.bool(true));

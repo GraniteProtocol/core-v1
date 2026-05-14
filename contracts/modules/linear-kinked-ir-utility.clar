@@ -11,9 +11,11 @@
 (define-constant fact_5 u120000000000000)
 (define-constant fact_6 u720000000000000)
 (define-constant seconds-in-year u31536000)
+;; Matches MAX-UTILIZATION in linear-kinked-ir-v1.clar -- keep in sync.
+(define-constant MAX-UTILIZATION u10000000000000)
 
 
-;; READ-ONLY FUNCTIONS 
+;; READ-ONLY FUNCTIONS
 
 ;; Accrues interest based on the the last accrued block
 ;; returns updated lp interest, staked interest, protocol interest, total assets, and last accrued block
@@ -67,7 +69,10 @@
 ;; PRIVATE HELPER FUNCTIONS 
 ;; total-assets and open-interest are fixed to u8 precision
 (define-private (utilization-calc (total-assets uint) (open-interest uint))
-  (if (> total-assets u0) (/ (* open-interest one-12) total-assets) u0)
+  (if (> total-assets u0)
+    (let ((u (/ (* open-interest one-12) total-assets)))
+      (if (<= u MAX-UTILIZATION) u MAX-UTILIZATION))
+    u0)
 )
 
 (define-private (get-ir (total-assets uint) (open-interest uint) (ir-slope-1 uint) (ir-slope-2 uint) (utilization-kink uint) (base-ir uint))
