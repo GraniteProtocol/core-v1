@@ -75,7 +75,7 @@ describe("Flash loan tests", () => {
       user1
     );
 
-    expect(res.result).toBeErr(Cl.uint(110000)); // ERR_CONTRACT_NOT_ALLOWED
+    expect(res.result).toBeErr(Cl.uint(110000)); // ERR-CONTRACT-NOT-ALLOWED
   });
 
   it("Not enough USDC on state contract", async () => {
