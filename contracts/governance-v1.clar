@@ -1222,7 +1222,7 @@
   (let (
       (proposal (unwrap! (map-get? governance-proposal proposal-id) ERR-UNKNOWN-PROPOSAL))
       (total-voted (+ (get approve-count proposal) (get deny-count proposal)))
-      (total-count (get member-count proposal))
+      (current-count (contract-call? .meta-governance-v1 governance-multisig-count))
       (deny-threshold (try! (deny-threshold-met proposal-id)))
       (approve-threshold (try! (approve-threshold-met proposal-id)))
       (has-threshold-met (or deny-threshold approve-threshold))
@@ -1230,7 +1230,7 @@
     (try! (is-governance-member contract-caller))
     (asserts! (not (get closed proposal)) ERR-PROPOSAL-CLOSED)
     (if (>= stacks-block-height (get expires-at proposal))
-      (begin 
+      (begin
         (print {
           action: "proposal-expired",
           proposal-id: proposal-id
@@ -1238,7 +1238,7 @@
         true
       )
       (begin
-        (asserts! (is-eq total-count total-voted) ERR-PROPOSAL-VOTING-INCOMPLETE)
+        (asserts! (>= total-voted current-count) ERR-PROPOSAL-VOTING-INCOMPLETE)
         (asserts! (not has-threshold-met) ERR-PROPOSAL-CANNOT-CLOSE)
       )
     )
