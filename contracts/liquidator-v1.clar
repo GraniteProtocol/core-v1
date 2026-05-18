@@ -289,6 +289,8 @@
         (staked-part (contract-call? .math-v1 safe-div (* interest-part (get staked-open-interest open-interest-info)) open-interest-without-principal))
         (asset-params (contract-call? .state-v1 get-lp-params))
         (staked-lp-tokens (contract-call? .math-v1 convert-to-shares asset-params staked-part false))
+        (is-wiped (contract-call? .staking-v1 is-staking-wiped-out))
+        (effective-staked-lp-tokens (if is-wiped u0 staked-lp-tokens))
         (remaining-user-debt-shares (contract-call? .math-v1 safe-sub (get debt-shares position-for-block-check) paid-shares))
         (updated-borrowed-amount (contract-call? .math-v1 safe-sub effective-borrowed-amount principal-part))
         (updated-total-borrowed-amount (contract-call? .math-v1 safe-sub total-borrowed-amount
@@ -312,14 +314,14 @@
         lp-part: (+ principal-part lp-part),
         protocol-part: protocol-part,
         staked-part: staked-part,
-        staked-lp-tokens: staked-lp-tokens,
+        staked-lp-tokens: effective-staked-lp-tokens,
         borrowed-amount: updated-borrowed-amount,
         total-borrowed-amount: updated-total-borrowed-amount,
         staking-contract: .staking-v1,
         remaining-balance: remaining-collateral-balance,
         updated-collaterals: updated-collaterals-list
       }))
-      (try! (contract-call? .staking-v1 increase-lp-staked-balance staked-lp-tokens))
+      (try! (contract-call? .staking-v1 increase-lp-staked-balance effective-staked-lp-tokens))
       (try! (contract-call? .withdrawal-caps-v1 repay repay-amount))
       ;; slippage check
       (asserts! (>= collateral-to-give min-collateral-expected) ERR-SLIPPAGE)
@@ -543,7 +545,9 @@
             (lp-part (+ principal-part lp-interest-part))
             (updated-total-borrowed-amount (contract-call? .math-v1 safe-sub total-borrowed-amount user-borrowed-amount))
             (staked-lp-tokens (contract-call? .staking-v1 get-total-staked-lp-tokens))
-            (burned-staking-lp-tokens (try! (contract-call? .state-v1 socialize-user-bad-debt user remaining-debt lp-part staked-part protocol-part updated-total-borrowed-amount .staking-v1 staked-lp-tokens)))
+            (is-wiped (contract-call? .staking-v1 is-staking-wiped-out))
+            (effective-staked-lp-tokens (if is-wiped u0 staked-lp-tokens))
+            (burned-staking-lp-tokens (try! (contract-call? .state-v1 socialize-user-bad-debt user remaining-debt lp-part staked-part protocol-part updated-total-borrowed-amount .staking-v1 effective-staked-lp-tokens)))
           )
           (print {
             user: user,

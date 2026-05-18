@@ -98,6 +98,8 @@
         (staked-part (contract-call? .math-v1 safe-div (* interest-part (get staked-open-interest interest-params)) open-interest-without-principal))
         (asset-params (contract-call? .state-v1 get-lp-params))
         (staked-lp-tokens (contract-call? .math-v1 convert-to-shares asset-params staked-part false))
+        (is-wiped (contract-call? .staking-v1 is-staking-wiped-out))
+        (effective-staked-lp-tokens (if is-wiped u0 staked-lp-tokens))
         (total-user-debt-shares (unwrap! (contract-call? .math-v1 sub (get debt-shares position) shares) ERR-NOT-ENOUGH-SHARES))
         (updated-borrowed-amount (contract-call? .math-v1 safe-sub effective-borrowed-amount principal-part))
         (updated-total-borrowed-amount (contract-call? .math-v1 safe-sub total-borrowed-amount
@@ -114,14 +116,14 @@
         lp-part: (+ principal-part lp-part),
         protocol-part: protocol-part,
         staked-part: staked-part,
-        staked-lp-tokens: staked-lp-tokens,
+        staked-lp-tokens: effective-staked-lp-tokens,
         payor: contract-caller,
         borrowed-amount: updated-borrowed-amount,
         total-borrowed-amount: updated-total-borrowed-amount,
         staking-contract: .staking-v1,
         borrowed-block: (get borrowed-block position)
       }))
-      (try! (contract-call? .staking-v1 increase-lp-staked-balance staked-lp-tokens))
+      (try! (contract-call? .staking-v1 increase-lp-staked-balance effective-staked-lp-tokens))
       (print {
         assets: repay-amount,
         total-user-debt-shares: total-user-debt-shares,
