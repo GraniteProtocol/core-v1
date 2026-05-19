@@ -350,14 +350,17 @@
     (asserts! (not (is-eq action ACTION_SET_BORROW_FLAG)) (contract-call? .state-v1 set-borrow-flag flag))
     (asserts! (not (is-eq action ACTION_SET_REPAY_FLAG)) (contract-call? .state-v1 set-repay-flag flag))
     (asserts! (not (is-eq action ACTION_SET_LIQUIDATION_FLAG)) (contract-call? .state-v1 set-liquidation-flag flag cooldown))
-    (asserts! (not (is-eq action ACTION_SET_INTEREST_ACCRUAL_FLAG)) (contract-call? .state-v1 set-interest-accrual-flag flag))
+    (asserts! (not (is-eq action ACTION_SET_INTEREST_ACCRUAL_FLAG)) (begin
+      (try! (accrue-interest))
+      (contract-call? .state-v1 set-interest-accrual-flag flag)))
     ERR-INVALID-ACTION
 ))
 
 (define-private (execute-state-set-market-flag (proposal-id (buff 32)) (action uint))
   (let ((cooldown (unwrap-panic (map-get? unpause-market-data proposal-id))))
-    (asserts! (not (is-eq action ACTION_SET_MARKET_PAUSE_FLAG)) (begin 
-      (try! (contract-call? .state-v1 pause-market)) 
+    (asserts! (not (is-eq action ACTION_SET_MARKET_PAUSE_FLAG)) (begin
+      (try! (accrue-interest))
+      (try! (contract-call? .state-v1 pause-market))
       (contract-call? .state-v1 set-staking-flag false)))
     (asserts! (not (is-eq action ACTION_SET_MARKET_UNPAUSE_FLAG)) (begin 
       (try! (contract-call? .state-v1 unpause-market cooldown))
@@ -1303,6 +1306,9 @@
 (define-public (guardian-pause-market)
   (begin
     (try! (is-guardian contract-caller))
+    ;; Best-effort: don't block emergency response if the state being
+    ;; escaped is what's causing accrual to fail.
+    (match (accrue-interest) ok-result true err-result true)
     (try! (contract-call? .state-v1 pause-market))
     (try! (contract-call? .state-v1 set-staking-flag false))
     SUCCESS
