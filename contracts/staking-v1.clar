@@ -324,7 +324,10 @@
         lp-tokens: (- (get lp-tokens unfinalized-withdrawal-info) lp-tokens-to-return),
         shares: (- (get shares unfinalized-withdrawal-info) withdraw-shares),
       })
-      true
+      (var-set unfinalized-withdrawals {
+        lp-tokens: (contract-call? .math-v1 safe-sub (get lp-tokens unfinalized-withdrawal-info) lp-tokens-to-return),
+        shares: (contract-call? .math-v1 safe-sub (get shares unfinalized-withdrawal-info) withdraw-shares),
+      })
     )
     (map-delete user-withdrawals {user: user, index: index})
      (print {
