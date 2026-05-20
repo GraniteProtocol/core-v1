@@ -189,54 +189,63 @@
 (define-public (increase-lp-staked-balance (lp-tokens uint))
   (begin
     (try! (contract-call? .state-v1 is-allowed-contract contract-caller))
-    (var-set total-lp-tokens-staked (+ (var-get total-lp-tokens-staked) lp-tokens))
-    (print {
-      action: "increase-lp-staked-balance",
-      amount: lp-tokens,
-    })
-    SUCCESS
+    (if (var-get staking-wiped-out)
+      (begin
+        (print {
+          action: "increase-lp-staked-balance-skipped-wiped",
+          amount: lp-tokens,
+        })
+        SUCCESS
+      )
+      (begin
+        (var-set total-lp-tokens-staked (+ (var-get total-lp-tokens-staked) lp-tokens))
+        (print {
+          action: "increase-lp-staked-balance",
+          amount: lp-tokens,
+        })
+        SUCCESS
+      )
+    )
   )
 )
 
 
 (define-public (slash-total-staked-lp-tokens (lp-tokens uint))
-  (let (
-      (total-staked-lp-tokens (get-total-staked-lp-tokens))
-      (unfinalized-withdrawal-info (var-get unfinalized-withdrawals))
-      (withdrawal-lp-tokens (get lp-tokens unfinalized-withdrawal-info))
-      (withdrawal-lp-tokens-to-slash (/ (* lp-tokens withdrawal-lp-tokens) total-staked-lp-tokens))
-      (active-staked-lp-tokens-to-slash (- lp-tokens withdrawal-lp-tokens-to-slash))
-    ) 
+  (begin
     (try! (contract-call? .state-v1 is-allowed-contract contract-caller))
-    (var-set total-lp-tokens-staked (- (var-get total-lp-tokens-staked) active-staked-lp-tokens-to-slash))
-    (if (is-eq withdrawal-lp-tokens withdrawal-lp-tokens-to-slash)
-      (var-set unfinalized-withdrawals {
-        lp-tokens: u0,
-        shares: u0,
-      })
-      (var-set unfinalized-withdrawals {
-        lp-tokens: (- withdrawal-lp-tokens withdrawal-lp-tokens-to-slash),
-        shares: (get shares unfinalized-withdrawal-info),
-      })
+    (if (or (is-eq lp-tokens u0) (is-eq (get-total-staked-lp-tokens) u0))
+      SUCCESS
+      (let (
+          (total-staked-lp-tokens (get-total-staked-lp-tokens))
+          (unfinalized-withdrawal-info (var-get unfinalized-withdrawals))
+          (withdrawal-lp-tokens (get lp-tokens unfinalized-withdrawal-info))
+          (withdrawal-lp-tokens-to-slash (/ (* lp-tokens withdrawal-lp-tokens) total-staked-lp-tokens))
+          (active-staked-lp-tokens-to-slash (- lp-tokens withdrawal-lp-tokens-to-slash))
+          (new-active (- (var-get total-lp-tokens-staked) active-staked-lp-tokens-to-slash))
+        )
+        (var-set total-lp-tokens-staked new-active)
+        (if (is-eq withdrawal-lp-tokens withdrawal-lp-tokens-to-slash)
+          (var-set unfinalized-withdrawals { lp-tokens: u0, shares: u0 })
+          (var-set unfinalized-withdrawals {
+            lp-tokens: (- withdrawal-lp-tokens withdrawal-lp-tokens-to-slash),
+            shares: (get shares unfinalized-withdrawal-info),
+          })
+        )
+        (if (is-eq new-active u0)
+          (begin
+            (var-set staking-wiped-out true)
+            (print { action: "staking-wipe-out", amount: lp-tokens })
+            SUCCESS
+          )
+          (begin
+            (print { action: "slash-total-staked-lp-tokens", amount: lp-tokens })
+            SUCCESS
+          )
+        )
+      )
     )
-    (if (is-eq lp-tokens total-staked-lp-tokens)
-      (begin 
-        (var-set staking-wiped-out true)
-        (print {
-          action: "staking-wipe-out",
-          amount: lp-tokens,
-        })
-        SUCCESS
-      )
-
-      (begin 
-        (print {
-          action: "slash-total-staked-lp-tokens",
-          amount: lp-tokens,
-        })
-        SUCCESS  
-      )
-)))
+  )
+)
 
 (define-public (reconcile-lp-token-balance)
   (let (
@@ -315,7 +324,10 @@
         lp-tokens: (- (get lp-tokens unfinalized-withdrawal-info) lp-tokens-to-return),
         shares: (- (get shares unfinalized-withdrawal-info) withdraw-shares),
       })
-      true
+      (var-set unfinalized-withdrawals {
+        lp-tokens: (contract-call? .math-v1 safe-sub (get lp-tokens unfinalized-withdrawal-info) lp-tokens-to-return),
+        shares: (contract-call? .math-v1 safe-sub (get shares unfinalized-withdrawal-info) withdraw-shares),
+      })
     )
     (map-delete user-withdrawals {user: user, index: index})
      (print {
