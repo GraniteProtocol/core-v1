@@ -2295,3 +2295,203 @@ describe("governance tests", () => {
     expect(response.result).toEqual(Cl.bool(false));
   });
 });
+
+describe("LEV-L-01: governance proposal snapshots member-count at creation", () => {
+  const wallet_3 = accounts.get("wallet_3")!;
+  const wallet_4 = accounts.get("wallet_4")!;
+  const wallet_5 = accounts.get("wallet_5")!;
+
+  beforeEach(async () => {
+    init_pyth(deployer);
+    await set_pyth_time_delta(7200, deployer);
+    set_allowed_contracts(deployer);
+    set_asset_cap(deployer, 10000000000000n);
+    initialize_ir(deployer);
+    initialize_staking_reward(deployer);
+    initialize_lp(deployer);
+    await set_initial_price("mock-usdc", 1n, deployer);
+    initialize_governance(governance_account, guardian_account, deployer);
+    state_set_governance_contract(deployer);
+  });
+
+  const addMember = (newMember: any, voters: any[]) => {
+    const res = simnet.callPublicFn(
+      "meta-governance-v1",
+      "initiate-proposal-to-update-governance-multisig",
+      [Cl.uint(0), Cl.principal(newMember), Cl.uint(10)],
+      governance_account
+    );
+    expect(res.result.type).toBe(ClarityType.ResponseOk);
+    const pid = (res.result as any).value.buffer;
+    for (const v of voters) {
+      const r = simnet.callPublicFn(
+        "meta-governance-v1",
+        "approve",
+        [Cl.buffer(pid)],
+        v
+      );
+      expect(r.result).toBeOk(Cl.bool(true));
+    }
+  };
+
+  const getMultisigCount = () => {
+    const r = simnet.callReadOnlyFn(
+      "meta-governance-v1",
+      "governance-multisig-count",
+      [],
+      deployer
+    );
+    return (r.result as any).value as bigint;
+  };
+
+  const getProposal = (pid: any) => {
+    const r = simnet.callReadOnlyFn(
+      "governance-v1",
+      "get-proposal",
+      [Cl.buffer(pid)],
+      deployer
+    );
+    return ((r.result as any).value as any).data;
+  };
+
+  it("multisig growth during timelock cannot strand an approved proposal at execute-time", async () => {
+    // Setup: 3-member multisig. governance_account is the initial member; add
+    // wallet_3 and wallet_4 via meta-governance.
+    addMember(wallet_3, []); // 1 -> 2 (auto-vote = 100%)
+    addMember(wallet_4, [wallet_3]); // 2 -> 3 (auto + wallet_3 = 2/2 = 100%)
+    expect(getMultisigCount()).toBe(3n);
+
+    // Create a time-locked governance-v1 proposal. governance_account's
+    // initiate counts as the first approve; 1/3 = 33% < 60%, no execute-at.
+    let response = simnet.callPublicFn(
+      "governance-v1",
+      "initiate-proposal-to-update-interest-params",
+      [
+        Cl.uint(750000000000),
+        Cl.uint(1500000000000),
+        Cl.uint(700000000000),
+        Cl.uint(500000000000),
+        Cl.uint(100000),
+      ],
+      governance_account
+    );
+    expect(response.result.type).toBe(ClarityType.ResponseOk);
+    const pid = (response.result as any).value.buffer;
+
+    // Snapshot captured at creation must equal current multisig count.
+    expect(getProposal(pid)["member-count"]).toEqual(Cl.uint(3));
+    expect(getProposal(pid)["execute-at"]).toEqual(Cl.none());
+
+    // Second approve: 2/3 = 66% >= 60%. Time-locked, so execute-at gets set.
+    response = simnet.callPublicFn(
+      "governance-v1",
+      "approve",
+      [Cl.buffer(pid)],
+      wallet_3
+    );
+    expect(response.result).toBeOk(Cl.bool(true));
+    expect(getProposal(pid)["execute-at"].type).toBe(ClarityType.OptionalSome);
+
+    // During the timelock, grow the multisig to 5.
+    addMember(wallet_5, [wallet_3]); // 3 -> 4 (auto + w3 = 2/3 = 66%)
+    addMember(guardian_account, [wallet_3, wallet_4]); // 4 -> 5 (3/4 = 75%)
+    expect(getMultisigCount()).toBe(5n);
+
+    // Wait out the timelock and execute. Pre-fix, 2/5 = 40% would fail the
+    // recomputed threshold and silently return SUCCESS without executing,
+    // leaving the proposal stuck (votes blocked once execute-at is set).
+    // Post-fix, the snapshot stays at 3, so 2/3 = 66% still clears.
+    simnet.mineEmptyBlocks(21600);
+    response = simnet.callPublicFn(
+      "governance-v1",
+      "execute",
+      [Cl.buffer(pid)],
+      governance_account
+    );
+    expect(response.result).toBeOk(Cl.bool(true));
+
+    // Proposal must be marked executed and the IR params must reflect the new
+    // values — proves the snapshot-based threshold actually fired execution.
+    const finalProposal = getProposal(pid);
+    expect(finalProposal["executed"]).toEqual(Cl.bool(true));
+    expect(finalProposal["closed"]).toEqual(Cl.bool(true));
+
+    const irParams = simnet.callReadOnlyFn(
+      "linear-kinked-ir-v1",
+      "get-ir-params",
+      [],
+      deployer
+    );
+    expect((irParams.result as any).data["base-ir"]).toEqual(
+      Cl.uint(500000000000)
+    );
+  });
+
+  it("multisig shrink between votes cannot lower the effective threshold", async () => {
+    // Setup: 4-member multisig.
+    addMember(wallet_3, []);
+    addMember(wallet_4, [wallet_3]);
+    addMember(wallet_5, [wallet_3]); // 2/3 = 66% clears immediately on w3's vote
+    expect(getMultisigCount()).toBe(4n);
+
+    // Create proposal as governance_account; 1/4 = 25% < 60%.
+    let response = simnet.callPublicFn(
+      "governance-v1",
+      "initiate-proposal-to-update-interest-params",
+      [
+        Cl.uint(750000000000),
+        Cl.uint(1500000000000),
+        Cl.uint(700000000000),
+        Cl.uint(500000000000),
+        Cl.uint(100000),
+      ],
+      governance_account
+    );
+    expect(response.result.type).toBe(ClarityType.ResponseOk);
+    const pid = (response.result as any).value.buffer;
+    expect(getProposal(pid)["member-count"]).toEqual(Cl.uint(4));
+    expect(getProposal(pid)["execute-at"]).toEqual(Cl.none());
+
+    // Shrink the multisig by removing the two non-voters on the pending proposal.
+    // ACTION_REMOVE_GOVERNANCE_MULTISIG = u1
+    const removeMember = (m: any, voters: any[]) => {
+      const r = simnet.callPublicFn(
+        "meta-governance-v1",
+        "initiate-proposal-to-update-governance-multisig",
+        [Cl.uint(1), Cl.principal(m), Cl.uint(10)],
+        governance_account
+      );
+      expect(r.result.type).toBe(ClarityType.ResponseOk);
+      const rpid = (r.result as any).value.buffer;
+      for (const v of voters) {
+        const rr = simnet.callPublicFn(
+          "meta-governance-v1",
+          "approve",
+          [Cl.buffer(rpid)],
+          v
+        );
+        expect(rr.result).toBeOk(Cl.bool(true));
+      }
+    };
+    // Remove wallet_4 (4 -> 3, needs 2/4 plus the auto, so 3/4 = 75%; auto + w3 + w5)
+    removeMember(wallet_4, [wallet_3, wallet_5]);
+    // Remove wallet_5 (3 -> 2, needs auto + w3 = 2/3 = 66%)
+    removeMember(wallet_5, [wallet_3]);
+    expect(getMultisigCount()).toBe(2n);
+
+    // wallet_3 now approves the original proposal. Live count = 2, so the
+    // pre-fix threshold check would see 2/2 = 100% and set execute-at.
+    // Post-fix, snapshot stays at 4, so 2/4 = 50% < 60% and execute-at must
+    // remain none — the proposal cannot have its original quorum requirement
+    // lowered retroactively by member removals.
+    response = simnet.callPublicFn(
+      "governance-v1",
+      "approve",
+      [Cl.buffer(pid)],
+      wallet_3
+    );
+    expect(response.result).toBeOk(Cl.bool(true));
+    expect(getProposal(pid)["execute-at"]).toEqual(Cl.none());
+    expect(getProposal(pid)["executed"]).toEqual(Cl.bool(false));
+  });
+});
