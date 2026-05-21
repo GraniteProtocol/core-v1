@@ -14,6 +14,7 @@
 (define-constant ERR-NOT-GOVERNANCE (err u60007))
 (define-constant ERR-INTEREST-PARAMS (err u60008))
 (define-constant ERR-STAKING-DISABLED (err u60009))
+(define-constant ERR-STAKING-WIPED-OUT (err u60010))
 
 ;; Constants
 (define-constant SUCCESS (ok true))
@@ -362,9 +363,12 @@
     (staking-disabled (not (contract-call? .state-v1 is-staking-enabled)))
     (wiped-out (var-get staking-wiped-out))
   )
-    (if (or staking-disabled wiped-out)
-      ERR-STAKING-DISABLED
-      (ok true)
+    (if wiped-out
+      ERR-STAKING-WIPED-OUT
+      (if staking-disabled
+        ERR-STAKING-DISABLED
+        (ok true)
+      )
     )
   )
 )
