@@ -17,7 +17,6 @@
 
 ;; Constants
 (define-constant SUCCESS (ok true))
-(define-constant SCALING-FACTOR u100000000)
 
 ;; lp-token
 (define-constant token-prefix "gusdc")
