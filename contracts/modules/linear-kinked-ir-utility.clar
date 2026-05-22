@@ -13,6 +13,7 @@
 (define-constant seconds-in-year u31536000)
 ;; Matches MAX-UTILIZATION in linear-kinked-ir-v1.clar -- keep in sync.
 (define-constant MAX-UTILIZATION u10000000000000)
+(define-constant MAX-TAYLOR-INPUT u2000000000000)
 
 
 ;; READ-ONLY FUNCTIONS
@@ -79,7 +80,12 @@
   (ir-calc (utilization-calc total-assets open-interest) ir-slope-1 ir-slope-2 utilization-kink base-ir))
 
 (define-private (compounded-interest (current-interest-rate uint) (elapsed-block-time uint))
-  (taylor-6 (get-rt-by-block current-interest-rate elapsed-block-time)))
+  (let ((rt (get-rt-by-block current-interest-rate elapsed-block-time)))
+    (if (<= rt MAX-TAYLOR-INPUT)
+      (taylor-6 rt)
+      u0
+    )
+  ))
 
 
 (define-private (calc-total-interest (ir uint) (open-ir uint))
