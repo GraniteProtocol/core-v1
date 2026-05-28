@@ -1,17 +1,23 @@
-// PoC: liquidator-v1 conflates USD-value with raw market-asset tokens.
+// Bug PoC + fix verification for the liquidator-v1 USD-value vs raw-token
+// denomination flaw.
 //
-// The math computes `current-debt-adjusted = debt-tokens × market-asset-price`
-// (a USD value) and passes that as the `debt` input to `calculate-repayment-info`.
-// The resulting `repay-amount` is therefore also USD-value-shaped, but it is
-// then used downstream as a raw token count: `transfer-from .mock-usdc liquidator
-// repay-amount` and `convert-to-debt-shares debt-params repay-amount`. The two
-// lanes only reconcile at market-asset-price = SCALING_FACTOR (i.e. $1).
+// PRE-FIX: `current-debt-adjusted = debt-tokens × market-asset-price` was
+// passed as the `debt` input to `calculate-repayment-info`. The resulting
+// `repay-amount` was therefore USD-value-shaped, but flowed downstream as
+// a raw token count: `transfer-from .mock-usdc liquidator repay-amount`
+// and `convert-to-debt-shares debt-params repay-amount`. The two lanes
+// only reconciled at market-asset-price = SCALING_FACTOR (i.e. $1).
 //
-// Verification gate: Tests 1-3.
-//   Test 1: baseline at $1.00 — math is internally consistent.
-//   Test 2: at $0.50 — liquidator transfers half the tokens that the
-//           collateral's USD value would warrant. (Variant A: theft / LP bad debt.)
-//   Test 3: at $1.50 — liquidate reverts. (Variant B: liquidation freeze.)
+// POST-FIX: `execute-liquidation` now converts the USD-value `repay-amount`
+// back to raw market-asset tokens via `÷ market-asset-price` before passing
+// it to `convert-to-debt-shares`, `calculate-interest-portions`, and the
+// `.mock-usdc transfer-from` inside `state-v1.update-liquidate-collateral-
+// state`. `calc-collateral-to-give` keeps the USD-value input (it already
+// divides by collateral-price internally).
+//
+// Each test asserts the POST-FIX invariant: the ratio
+//   collateral_USD_seized / effective_USD_paid ≈ 1 + liquidation_premium = 1.05
+// holds at every USDCx price (not just $1).
 
 import { beforeEach, describe, expect, it } from "vitest";
 import { Cl, ClarityType, contractPrincipalCV } from "@stacks/transactions";
@@ -197,16 +203,17 @@ describe("PoC: liquidator-v1 USD-value vs raw-token denomination", () => {
   });
 
   // ─────────────────────────────────────────────────────────────────────────
-  // Test 2 — USDCx = $0.50. Variant A: liquidator under-pays in tokens.
+  // Test 2 — USDCx = $0.50. Variant A scenario.
+  // PRE-FIX: liquidator paid USD-value tokens → ratio ~2.0 (110% skim).
+  // POST-FIX: liquidator pays correct tokens → ratio ≈ 1.05 (just the premium).
   // ─────────────────────────────────────────────────────────────────────────
-  it("variant A: at USDCx = $0.50, liquidator transfers fewer tokens than the seized collateral is worth", async () => {
+  it("variant A: at USDCx = $0.50, liquidator pays the correct token count post-fix (ratio stays 1.05)", async () => {
     setupBorrowerAtPeg();
     makePositionUnderwater();
 
-    // Drop USDCx to $0.50. Position is still underwater (health ≈ 0.11).
     await set_price_without_scaling("mock-usdc", HALF_DOLLAR, deployer, -8);
 
-    fundLiquidator(LIQUIDATOR_REPAY_INPUT);
+    fundLiquidator(LIQUIDATOR_REPAY_INPUT * 3n); // need more tokens post-fix
     const liquidatorUsdcBefore = getUserBalance(
       Cl.principal(liquidator),
       "mock-usdc",
@@ -223,50 +230,35 @@ describe("PoC: liquidator-v1 USD-value vs raw-token denomination", () => {
       deployer,
     );
     const usdcSpent = liquidatorUsdcBefore - liquidatorUsdcAfter;
-
     const liquidatorBtcAfter = getUserBalance(
       Cl.principal(liquidator),
       "mock-btc",
       deployer,
     );
 
-    // The bug: the liquidator's USDCx outflow (raw tokens) is computed as a
-    // USD value at $0.50/token, so their *effective USD outlay* is
-    // usdcSpent × 0.50, while the BTC they receive is still valued by the
-    // protocol in USD via collateral-price. Compare:
-    //   - effective USD paid    = usdcSpent × 0.50    (tokens × spot price)
-    //   - collateral USD seized = liquidatorBtcAfter × 1.0
-    // Without the bug these should reconcile at the 5% liquidation premium.
     const effectiveUsdPaid = (usdcSpent * HALF_DOLLAR) / ONE_DOLLAR;
     const collateralUsdSeized = liquidatorBtcAfter; // btc price = $1
+    const ratioPerMille = (collateralUsdSeized * 1000n) / effectiveUsdPaid;
 
     console.log(
       `[$0.50]      USDCx paid in = ${usdcSpent}  BTC received = ${liquidatorBtcAfter}\n` +
-        `             effective USD paid = ${effectiveUsdPaid}  collateral USD seized = ${collateralUsdSeized}`,
+        `             effective USD paid = ${effectiveUsdPaid}  collateral USD seized = ${collateralUsdSeized}\n` +
+        `             ratio = ${ratioPerMille} / 1000 (intended 1050; bug would yield ~2100)`,
     );
 
-    // Assertion 1: collateral received should be ~2× the liquidator's
-    // effective USD outlay (because the bug skim is 1 / market-asset-price = 2×
-    // at $0.50, on top of the normal premium).
-    expect(collateralUsdSeized).toBeGreaterThan(effectiveUsdPaid * 2n - effectiveUsdPaid / 20n);
-
-    // Assertion 2: cross-check vs the baseline. At $0.50 the liquidator's
-    // usdcSpent should be exactly half of what it was at $1 for the same
-    // input, because repay-amount is the USD value (half) and gets passed
-    // as raw tokens (half).
-    // (We can't compare against Test 1's value directly in a single test
-    // run, so the assertion lives in the structural inequality above.)
+    // Post-fix invariant: ratio is 1.050 ± rounding.
+    expect(ratioPerMille).toBeGreaterThanOrEqual(1045n);
+    expect(ratioPerMille).toBeLessThanOrEqual(1055n);
   });
 
   // ─────────────────────────────────────────────────────────────────────────
-  // Test 3 — USDCx = $1.50. Variant B: liquidation reverts.
+  // Test 3 — USDCx = $1.50. Variant B scenario.
+  // PRE-FIX: arithmetic underflow in update-liquidate-collateral-state.
+  // POST-FIX: succeeds; ratio ≈ 1.05.
   // ─────────────────────────────────────────────────────────────────────────
-  it("variant B: at USDCx = $1.50, the liquidate call reverts on arithmetic underflow", async () => {
+  it("variant B: at USDCx = $1.50, liquidation succeeds post-fix (no longer reverts) with ratio 1.05", async () => {
     setupBorrowerAtPeg();
     makePositionUnderwater();
-
-    // Position health pre-shift: ≈ 0.055.
-    // At USDCx = $1.50 the debt_USD is 1.5× → health ≈ 0.037, even more underwater.
 
     await set_price_without_scaling(
       "mock-usdc",
@@ -275,44 +267,7 @@ describe("PoC: liquidator-v1 USD-value vs raw-token denomination", () => {
       -8,
     );
 
-    fundLiquidator(LIQUIDATOR_REPAY_INPUT);
-
-    simnet.mineEmptyBlocks(6);
-
-    // The bug: repay-amount is computed as a USD value (1.5 × debt-tokens),
-    // then used as a raw debt-share / open-interest deduction. That
-    // overshoots the borrower's actual debt-shares and the call aborts
-    // with an arithmetic underflow at the native `-` in
-    // state-v1.update-liquidate-collateral-state's tuple update of
-    // `debt-shares` / `total-debt-shares`. The clarinet-sdk surfaces
-    // runtime errors as JS exceptions, not ResponseErr.
-    let threw = false;
-    let errMessage = "";
-    try {
-      callLiquidate(LIQUIDATOR_REPAY_INPUT);
-    } catch (e: any) {
-      threw = true;
-      errMessage = (e?.message ?? String(e)).toString();
-    }
-    expect(threw).toBe(true);
-    expect(errMessage).toContain("ArithmeticUnderflow");
-    expect(errMessage).toContain("update-liquidate-collateral-state");
-
-    console.log(
-      `[$1.50]      liquidate-collateral aborted with ArithmeticUnderflow at update-liquidate-collateral-state`,
-    );
-  });
-
-  // ─────────────────────────────────────────────────────────────────────────
-  // Test 4 — Live Pyth reading (USDCx = $0.99974). The bug is leaking NOW.
-  // ─────────────────────────────────────────────────────────────────────────
-  it("live-state ($0.99974): bug already mis-charges at today's Pyth reading", async () => {
-    setupBorrowerAtPeg();
-    makePositionUnderwater();
-
-    await set_price_without_scaling("mock-usdc", LIVE_PYTH_READING, deployer, -8);
-
-    fundLiquidator(LIQUIDATOR_REPAY_INPUT);
+    fundLiquidator(LIQUIDATOR_REPAY_INPUT * 2n);
     const before = getUserBalance(Cl.principal(liquidator), "mock-usdc", deployer);
 
     simnet.mineEmptyBlocks(6);
@@ -323,34 +278,66 @@ describe("PoC: liquidator-v1 USD-value vs raw-token denomination", () => {
     const usdcSpent = before - after;
     const btcReceived = getUserBalance(Cl.principal(liquidator), "mock-btc", deployer);
 
-    // Effective USD paid = tokens × spot, collateral USD seized = btc × $1.
+    const effectiveUsdPaid = (usdcSpent * ONE_AND_HALF_DOLLAR) / ONE_DOLLAR;
+    const collateralUsdSeized = btcReceived;
+    const ratioPerMille = (collateralUsdSeized * 1000n) / effectiveUsdPaid;
+
+    console.log(
+      `[$1.50]      USDCx paid in = ${usdcSpent}  BTC received = ${btcReceived}\n` +
+        `             effective USD paid = ${effectiveUsdPaid}  collateral USD seized = ${collateralUsdSeized}\n` +
+        `             ratio = ${ratioPerMille} / 1000 (post-fix; pre-fix would have reverted)`,
+    );
+
+    expect(ratioPerMille).toBeGreaterThanOrEqual(1045n);
+    expect(ratioPerMille).toBeLessThanOrEqual(1055n);
+  });
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // Test 4 — Live Pyth reading (USDCx = $0.99974). Post-fix: ratio ≈ 1.05.
+  // ─────────────────────────────────────────────────────────────────────────
+  it("live-state ($0.99974): post-fix ratio holds at 1.05 (no leak at micro-depeg)", async () => {
+    setupBorrowerAtPeg();
+    makePositionUnderwater();
+
+    await set_price_without_scaling("mock-usdc", LIVE_PYTH_READING, deployer, -8);
+
+    fundLiquidator(LIQUIDATOR_REPAY_INPUT * 2n);
+    const before = getUserBalance(Cl.principal(liquidator), "mock-usdc", deployer);
+
+    simnet.mineEmptyBlocks(6);
+    const result = callLiquidate(LIQUIDATOR_REPAY_INPUT);
+    expect(result.result.type).toBe(ClarityType.ResponseOk);
+
+    const after = getUserBalance(Cl.principal(liquidator), "mock-usdc", deployer);
+    const usdcSpent = before - after;
+    const btcReceived = getUserBalance(Cl.principal(liquidator), "mock-btc", deployer);
+
     const effectiveUsdPaid = (usdcSpent * LIVE_PYTH_READING) / ONE_DOLLAR;
     const collateralUsdSeized = btcReceived;
-    // Skim percentage on top of the 5% intended premium.
-    const skim = collateralUsdSeized * 1000n / effectiveUsdPaid; // basis-thousands
-    const skimMinus105 = skim - 1050n;
+    const ratioPerMille = (collateralUsdSeized * 1000n) / effectiveUsdPaid;
 
     console.log(
       `[$0.99974]   USDCx paid = ${usdcSpent}  BTC received = ${btcReceived}\n` +
         `             effective USD paid = ${effectiveUsdPaid}  collateral USD seized = ${collateralUsdSeized}\n` +
-        `             ratio = ${skim} / 1000  (intended 1050 = 5% premium; extra above 1050 is bug skim)`,
+        `             ratio = ${ratioPerMille} / 1000  (intended 1050)`,
     );
 
-    // At a 0.026% depeg the bug skim is tiny but present — assert the
-    // collateral-vs-effective-paid ratio is STRICTLY above the 5% premium.
-    expect(collateralUsdSeized * 1000n).toBeGreaterThan(effectiveUsdPaid * 1050n);
+    expect(ratioPerMille).toBeGreaterThanOrEqual(1045n);
+    expect(ratioPerMille).toBeLessThanOrEqual(1055n);
   });
 
   // ─────────────────────────────────────────────────────────────────────────
   // Test 5 — SVB-low scenario (USDCx = $0.8735). Real precedent.
+  // PRE-FIX: ratio ≈ 1.20 (15% skim on top of premium).
+  // POST-FIX: ratio ≈ 1.05.
   // ─────────────────────────────────────────────────────────────────────────
-  it("SVB-low ($0.8735): per-liquidation skim is ~12.65% on top of the 5% premium", async () => {
+  it("SVB-low ($0.8735): post-fix ratio holds at 1.05 (no skim during historical-low depeg)", async () => {
     setupBorrowerAtPeg();
     makePositionUnderwater();
 
     await set_price_without_scaling("mock-usdc", SVB_LOW, deployer, -8);
 
-    fundLiquidator(LIQUIDATOR_REPAY_INPUT);
+    fundLiquidator(LIQUIDATOR_REPAY_INPUT * 2n);
     const before = getUserBalance(Cl.principal(liquidator), "mock-usdc", deployer);
 
     simnet.mineEmptyBlocks(6);
@@ -363,20 +350,16 @@ describe("PoC: liquidator-v1 USD-value vs raw-token denomination", () => {
 
     const effectiveUsdPaid = (usdcSpent * SVB_LOW) / ONE_DOLLAR;
     const collateralUsdSeized = btcReceived;
-    // Expected skim at $0.8735: (1/0.8735 − 1) × 100 = ~14.49% on top of the
-    // intended 5%, for a total collateral/paid ratio ≈ 1.20.
-    const ratioPerMille = collateralUsdSeized * 1000n / effectiveUsdPaid;
+    const ratioPerMille = (collateralUsdSeized * 1000n) / effectiveUsdPaid;
 
     console.log(
       `[$0.8735]    USDCx paid = ${usdcSpent}  BTC received = ${btcReceived}\n` +
         `             effective USD paid = ${effectiveUsdPaid}  collateral USD seized = ${collateralUsdSeized}\n` +
-        `             ratio = ${ratioPerMille} / 1000  (intended 1050; ~1200 expected with bug)`,
+        `             ratio = ${ratioPerMille} / 1000  (intended 1050; pre-fix would be ~1200)`,
     );
 
-    // Lower bound: ratio is ≥ 1.18 (well above the 1.05 fair-premium ceiling
-    // and below the theoretical 1.20 that ignores rounding).
-    expect(ratioPerMille).toBeGreaterThanOrEqual(1180n);
-    expect(ratioPerMille).toBeLessThanOrEqual(1210n);
+    expect(ratioPerMille).toBeGreaterThanOrEqual(1045n);
+    expect(ratioPerMille).toBeLessThanOrEqual(1055n);
   });
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -427,19 +410,32 @@ describe("PoC: liquidator-v1 USD-value vs raw-token denomination", () => {
     // retired" using a USD-value as the retirement quantity, while only ~84
     // USDCx of tokens (worth $42) actually arrived.
     expect(tokensIntoState).toBe(tokensOutOfLiquidator);
+
+    // Post-fix invariant: at $0.50 the liquidator now pays MORE tokens (≈ 2×
+    // the USD-value upper-bound) than pre-fix. The earlier observation that
+    // tokens-into-state was halved at depeg is no longer true.
+    const effectiveUsdPaidNow = (tokensIntoState * HALF_DOLLAR) / ONE_DOLLAR;
+    // collateral seized USD ≈ tokens × 1.0
+    const collateralUsdSeized = getUserBalance(
+      Cl.principal(liquidator),
+      "mock-btc",
+      deployer,
+    );
+    const ratioPerMille = (collateralUsdSeized * 1000n) / effectiveUsdPaidNow;
+    expect(ratioPerMille).toBeGreaterThanOrEqual(1045n);
+    expect(ratioPerMille).toBeLessThanOrEqual(1055n);
   });
 
   // ─────────────────────────────────────────────────────────────────────────
-  // Test 7 — Permissionless attacker. No privilege, no flash loan.
+  // Test 7 — Permissionless attacker. Post-fix: no exploit, just normal premium.
   // ─────────────────────────────────────────────────────────────────────────
-  it("permissionless: any fresh wallet can extract value at $0.50 — no privilege or flash loan", async () => {
+  it("permissionless: at USDCx = $0.50 post-fix, attacker only captures the 5% premium, no extra skim", async () => {
     setupBorrowerAtPeg();
     makePositionUnderwater();
     await set_price_without_scaling("mock-usdc", HALF_DOLLAR, deployer, -8);
 
-    // Pick a fresh wallet that has never touched the protocol.
     const attacker = accounts.get("wallet_7")!;
-    mint_token("mock-usdc", Number(LIQUIDATOR_REPAY_INPUT), attacker);
+    mint_token("mock-usdc", Number(LIQUIDATOR_REPAY_INPUT * 3n), attacker);
     const before = getUserBalance(Cl.principal(attacker), "mock-usdc", deployer);
     expect(getUserBalance(Cl.principal(attacker), "mock-btc", deployer)).toBe(0n);
 
@@ -463,16 +459,14 @@ describe("PoC: liquidator-v1 USD-value vs raw-token denomination", () => {
     const usdcSpent = before - after;
 
     const effectiveUsdPaid = (usdcSpent * HALF_DOLLAR) / ONE_DOLLAR;
-    const profitUsd = btcReceived - effectiveUsdPaid;
+    const ratioPerMille = (btcReceived * 1000n) / effectiveUsdPaid;
 
     console.log(
       `[permissionless] attacker USDCx spent = ${usdcSpent}  BTC received = ${btcReceived}\n` +
-        `                 effective USD paid = ${effectiveUsdPaid}  net profit USD ≈ ${profitUsd}`,
+        `                 effective USD paid = ${effectiveUsdPaid}  ratio = ${ratioPerMille}/1000`,
     );
 
-    // Sanity: attacker walks away with collateral worth strictly more than
-    // they paid, even before counting the 5% premium.
-    expect(btcReceived).toBeGreaterThan(effectiveUsdPaid * 2n - effectiveUsdPaid / 20n);
-    expect(profitUsd).toBeGreaterThan(0n);
+    expect(ratioPerMille).toBeGreaterThanOrEqual(1045n);
+    expect(ratioPerMille).toBeLessThanOrEqual(1055n);
   });
 });

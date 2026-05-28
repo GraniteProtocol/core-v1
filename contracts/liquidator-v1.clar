@@ -271,8 +271,16 @@
         (open-interest (+ (get lp-open-interest open-interest-info) (get staked-open-interest open-interest-info) (get protocol-open-interest open-interest-info)))
         ;; get collateral to give to liquidator
         (collateral-to-give (get collateral-to-give liquidation-info))
-        ;; get repay amount
-        (repay-amount (get repay-amount liquidation-info))
+        ;; repay-amount-value is USD-denominated (debt-tokens * market-asset-price
+        ;; / SCALING). Convert back to raw market-asset tokens for every
+        ;; downstream consumer that is token-shaped: convert-to-debt-shares,
+        ;; calculate-interest-portions, the .mock-usdc transfer inside
+        ;; state-v1.update-liquidate-collateral-state, and withdrawal-caps repay.
+        ;; calc-collateral-to-give already consumed the USD value upstream
+        ;; (divides by collateral-price), so collateral-to-give is unchanged.
+        (repay-amount-value (get repay-amount liquidation-info))
+        (market-asset-price (unwrap! (contract-call? .pyth-adapter-v1 read-price .mock-usdc) ERR-MISSING-MARKET-PRICE))
+        (repay-amount (contract-call? .math-v1 divide-round-up (* repay-amount-value SCALING-FACTOR) market-asset-price))
         ;; convert repay amount to debt shares
         (debt-params (contract-call? .state-v1 get-debt-params))
         (paid-shares (contract-call? .math-v1 convert-to-debt-shares debt-params repay-amount false))
