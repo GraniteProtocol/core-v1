@@ -273,7 +273,9 @@
         (collateral-to-give (get collateral-to-give liquidation-info))
         (repay-amount-value (get repay-amount liquidation-info))
         (market-asset-price (unwrap! (contract-call? .pyth-adapter-v1 read-price .mock-usdc) ERR-MISSING-MARKET-PRICE))
-        (repay-amount (contract-call? .math-v1 divide-round-up (* repay-amount-value SCALING-FACTOR) market-asset-price))
+        (repay-amount-raw (contract-call? .math-v1 divide-round-up (* repay-amount-value SCALING-FACTOR) market-asset-price))
+        ;; USD->token round-up can exceed current-debt during a depeg; clamp so paid-shares never exceeds the position's debt-shares
+        (repay-amount (if (< repay-amount-raw current-debt) repay-amount-raw current-debt))
         ;; convert repay amount to debt shares
         (debt-params (contract-call? .state-v1 get-debt-params))
         (paid-shares (contract-call? .math-v1 convert-to-debt-shares debt-params repay-amount false))
@@ -383,7 +385,9 @@
         (try! (safe-div (* (+ SCALING-FACTOR liquidation-discount) collateral-liquid-ltv) SCALING-FACTOR))))
       (total-repay-amount (try! (safe-div (* (- debt total-collaterals-liquid-value) SCALING-FACTOR) denominator)))
       (repay-amount-without-discount (contract-call? .math-v1 divide-round-up (* collateral-value SCALING-FACTOR) (+ liquidation-discount SCALING-FACTOR)))
-      (repay-allowed (if (< total-repay-amount repay-amount-without-discount) total-repay-amount repay-amount-without-discount))
+      (repay-allowed-raw (if (< total-repay-amount repay-amount-without-discount) total-repay-amount repay-amount-without-discount))
+      ;; integer floor on total-collaterals-liquid-value can make repay-allowed-raw exceed debt by 1; clamp so it never over-repays
+      (repay-allowed (if (< repay-allowed-raw debt) repay-allowed-raw debt))
     )
     (ok {
         repay-allowed: repay-allowed, 
