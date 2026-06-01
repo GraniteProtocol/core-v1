@@ -1107,7 +1107,7 @@ describe("liquidation tests", () => {
       deployer
     );
     expect(accounthealthRes.result.value.data["position-health"]).toEqual(
-      Cl.uint(100001973n)
+      Cl.uint(100000000n)
     );
   });
 

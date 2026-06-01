@@ -125,8 +125,7 @@
       maybe-total-liquid-ltv
       maybe-collateral-value
       maybe-collateral-price
-    )))
-    (collateral-price (get collateral-price liquidation-info)))
+    ))))
     (try! (ensure-non-zero-repay-amount liquidator-repay-amount))
     (ok (get liquidation-info liquidation-info))))
 
@@ -258,21 +257,23 @@
         (user-position-data (contract-call? .state-v1 get-borrow-repay-params user))
         (position-for-block-check (unwrap! (get user-position user-position-data) ERR-NO-POSITION))
         ;; get liquidation info for the user
-        (liquidation-res (try! (get-liquidation-info user collateral liquidator-repay-amount none none none none)))
+        (market-asset-price (unwrap! (contract-call? .pyth-adapter-v1 read-price .mock-usdc) ERR-MISSING-MARKET-PRICE))
+        (liquidation-res (try! (get-liquidation-info user collateral liquidator-repay-amount (some market-asset-price) none none none)))
         (liquidation-info (get liquidation-info liquidation-res))
         (current-debt (get current-debt liquidation-res))
         (user-borrowed-amount (get user-borrowed-amount liquidation-res))
         (position-data (get position-data liquidation-res))
         (user-balance (get user-balance liquidation-res))
         (bad-debt (get bad-debt liquidation-res))
-        (collateral-price (get collateral-price liquidation-res))
         ;; get open interest
         (open-interest-info (contract-call? .state-v1 get-open-interest))
         (open-interest (+ (get lp-open-interest open-interest-info) (get staked-open-interest open-interest-info) (get protocol-open-interest open-interest-info)))
         ;; get collateral to give to liquidator
         (collateral-to-give (get collateral-to-give liquidation-info))
-        ;; get repay amount
-        (repay-amount (get repay-amount liquidation-info))
+        (repay-amount-value (get repay-amount liquidation-info))
+        (repay-amount-raw (contract-call? .math-v1 divide-round-up (* repay-amount-value PRICE-SCALING-FACTOR) market-asset-price))
+        ;; USD->token round-up can exceed current-debt during a depeg; clamp so paid-shares never exceeds the position's debt-shares
+        (repay-amount (if (< repay-amount-raw current-debt) repay-amount-raw current-debt))
         ;; convert repay amount to debt shares
         (debt-params (contract-call? .state-v1 get-debt-params))
         (paid-shares (contract-call? .math-v1 convert-to-debt-shares debt-params repay-amount false))
@@ -355,10 +356,9 @@
   min-collateral-expected: uint
 })) (result {collateral: <token-trait>, res: (response bool uint)}))
   (let (
-      (collateral (get collateral result))
       (prev-result (get res result))
     )
-    
+
     (if (is-err prev-result)
       result
       (match maybe-liquidation-data liquidation-data
@@ -382,7 +382,9 @@
         (try! (safe-div (* (+ SCALING-FACTOR liquidation-discount) collateral-liquid-ltv) SCALING-FACTOR))))
       (total-repay-amount (try! (safe-div (* (- debt total-collaterals-liquid-value) SCALING-FACTOR) denominator)))
       (repay-amount-without-discount (contract-call? .math-v1 divide-round-up (* collateral-value SCALING-FACTOR) (+ liquidation-discount SCALING-FACTOR)))
-      (repay-allowed (if (< total-repay-amount repay-amount-without-discount) total-repay-amount repay-amount-without-discount))
+      (repay-allowed-raw (if (< total-repay-amount repay-amount-without-discount) total-repay-amount repay-amount-without-discount))
+      ;; integer floor on total-collaterals-liquid-value can make repay-allowed-raw exceed debt by 1; clamp so it never over-repays
+      (repay-allowed (if (< repay-allowed-raw debt) repay-allowed-raw debt))
     )
     (ok {
         repay-allowed: repay-allowed, 
