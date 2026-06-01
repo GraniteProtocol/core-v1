@@ -31,6 +31,7 @@ import {
   borrow,
   initialize_staking_reward,
   initialize_lp,
+  initialize_staking,
 } from "./utils";
 import {
   init_pyth,
@@ -96,6 +97,7 @@ describe("PoC: slash-total-staked-lp-tokens underflow", () => {
     initialize_lp(deployer);
     await set_initial_price("mock-usdc", 1n, deployer);
     await set_initial_price("mock-btc", 100n, deployer);
+    initialize_staking(deployer);
   });
 
   it("bad-debt liquidation reverts when unfinalized withdrawals cause slash underflow", async () => {

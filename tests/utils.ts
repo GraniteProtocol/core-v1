@@ -213,6 +213,22 @@ export const initialize_lp = (deployer: any) => {
   expect(response.result).toBeOk(Cl.bool(true));
 };
 
+export const MINIMUM_INITIAL_STAKE = 1000n;
+
+export const initialize_staking = (deployer: any, minStake: bigint = 0n) => {
+  if (minStake > 0n) {
+    mint_token("mock-usdc", Number(minStake), deployer);
+    deposit(Number(minStake), deployer);
+  }
+  const response = simnet.callPublicFn(
+    "staking-v1",
+    "initialize",
+    [Cl.some(Cl.uint(minStake))],
+    deployer
+  );
+  expect(response.result).toBeOk(Cl.bool(true));
+};
+
 export const set_allowed_contracts = (deployer: any) => {
   let contracts = [
     Cl.contractPrincipal(deployer, "liquidity-provider-v1"),
