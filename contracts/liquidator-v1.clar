@@ -272,7 +272,6 @@
         (collateral-to-give (get collateral-to-give liquidation-info))
         (repay-amount-value (get repay-amount liquidation-info))
         (repay-amount-raw (contract-call? .math-v1 divide-round-up (* repay-amount-value PRICE-SCALING-FACTOR) market-asset-price))
-        ;; USD->token round-up can exceed current-debt during a depeg; clamp so paid-shares never exceeds the position's debt-shares
         (repay-amount (if (< repay-amount-raw current-debt) repay-amount-raw current-debt))
         ;; convert repay amount to debt shares
         (debt-params (contract-call? .state-v1 get-debt-params))
@@ -383,7 +382,6 @@
       (total-repay-amount (try! (safe-div (* (- debt total-collaterals-liquid-value) SCALING-FACTOR) denominator)))
       (repay-amount-without-discount (contract-call? .math-v1 divide-round-up (* collateral-value SCALING-FACTOR) (+ liquidation-discount SCALING-FACTOR)))
       (repay-allowed-raw (if (< total-repay-amount repay-amount-without-discount) total-repay-amount repay-amount-without-discount))
-      ;; integer floor on total-collaterals-liquid-value can make repay-allowed-raw exceed debt by 1; clamp so it never over-repays
       (repay-allowed (if (< repay-allowed-raw debt) repay-allowed-raw debt))
     )
     (ok {
@@ -524,7 +522,7 @@
         (remaining-debt (contract-call? .math-v1 convert-to-debt-assets debt-params (get debt-shares position) true))
       )
       
-      (if (> total-collateral-value u0) 
+      (if (or (> total-collateral-value u0) (is-eq remaining-debt u0))
         SUCCESS
         (let (
             (user-borrowed-amount (get borrowed-amount position))
