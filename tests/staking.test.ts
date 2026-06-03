@@ -9,6 +9,7 @@ import {
   transfer_token,
   initialize_staking_reward,
   initialize_lp,
+  initialize_staking,
   deposit_and_borrow,
   repay,
   update_supported_collateral,
@@ -134,6 +135,7 @@ describe("staking tests", () => {
     initialize_lp(deployer);
     await set_initial_price("mock-usdc", 1n, deployer);
     await set_initial_price("mock-btc", 10n, deployer);
+    initialize_staking(deployer);
   });
 
   it("should stake lp tokens", async () => {
@@ -536,7 +538,7 @@ describe("staking tests", () => {
     // accrued interest math to settle a slightly different staked-LP total.
     expectUserLpBalance(
       Cl.contractPrincipal(deployer, "staking-v1"),
-      500054691220n
+      500054682070n
     );
 
     // initiate unstake of depositor 1 at index 0
@@ -546,7 +548,7 @@ describe("staking tests", () => {
 
     // withdrawal should exist
     const withdrawal = getUserWithdrawal(depositor1, 0);
-    expect(withdrawal.data["withdrawal-shares"]).toEqual(Cl.uint(500054691220));
+    expect(withdrawal.data["withdrawal-shares"]).toEqual(Cl.uint(500054682070));
     expect(withdrawal.data["finalization-at"]).toEqual(
       Cl.uint(finalizationPeriod)
     );
@@ -558,7 +560,7 @@ describe("staking tests", () => {
 
     // depositor1 got full lp tokens of staking contract.
     // Post H-01: 2-block init shift slightly changes accrued-interest math.
-    expectUserLpBalance(Cl.principal(depositor1), 1000054691220n);
+    expectUserLpBalance(Cl.principal(depositor1), 1000054682070n);
     expectUserStakedLpBalance(Cl.principal(depositor1), 0n);
     expectUserLpBalance(Cl.contractPrincipal(deployer, "staking-v1"), 0n);
   });
