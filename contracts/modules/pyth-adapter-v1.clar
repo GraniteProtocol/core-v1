@@ -10,7 +10,7 @@
 (define-constant ERR-INVALID-EXPONENT (err u80006))
 (define-constant ERR-INVALID-TIME-DELTA (err u80007))
 
-(define-constant STACKS_BLOCK_TIME (contract-call? .constants-v1 get-stacks-block-time ))
+(define-constant STACKS_BLOCK_TIME (contract-call? 'SP3Y6GFKWN50HPA8RKRXMY0EXAJR9VXPY899P88JN.constants-v1 get-stacks-block-time ))
 ;; Minimum time delta of 15 seconds (~2 Stacks blocks). Prevents
 ;; governance from setting time-delta to 0 (which would freeze
 ;; price-dependent operations) while still allowing tight freshness
@@ -23,7 +23,7 @@
 ;; Confidence ratio scaling factor  = 100% confidence
 (define-constant CONFIDENCE_SCALING_FACTOR u10000)
 ;; Price scaling factor decimals
-(define-constant PRICE_DECIMALS (to-int (contract-call? .constants-v2 get-price-decimals)))
+(define-constant PRICE_DECIMALS (to-int (contract-call? 'SP3Y6GFKWN50HPA8RKRXMY0EXAJR9VXPY899P88JN.constants-v2 get-price-decimals)))
 
 ;; price feeds can be found in https://pyth.network/developers/price-feed-ids
 (define-map price-feeds principal {
@@ -35,7 +35,7 @@
 ;; admin-level maintenance functions
 (define-public (update-price-feed-id (token principal) (new-feed-id (buff 32)) (max-confidence-ratio uint))
   (begin 
-    (asserts! (is-eq (contract-call? .state-v1 get-governance) contract-caller) ERR-NOT-AUTHORIZED)
+    (asserts! (is-eq (contract-call? 'SP3Y6GFKWN50HPA8RKRXMY0EXAJR9VXPY899P88JN.state-v1 get-governance) contract-caller) ERR-NOT-AUTHORIZED)
     (asserts! (<= max-confidence-ratio CONFIDENCE_SCALING_FACTOR) ERR-INVALID-MAX-CONFIDENCE-RATIO)
     (map-set price-feeds token {
       feed-id: new-feed-id,
@@ -53,7 +53,7 @@
 
 (define-public (update-time-delta (delta uint))
   (begin 
-    (asserts! (is-eq (contract-call? .state-v1 get-governance) contract-caller) ERR-NOT-AUTHORIZED)
+    (asserts! (is-eq (contract-call? 'SP3Y6GFKWN50HPA8RKRXMY0EXAJR9VXPY899P88JN.state-v1 get-governance) contract-caller) ERR-NOT-AUTHORIZED)
     (asserts! (>= delta MINIMUM_TIME_DELTA) ERR-INVALID-TIME-DELTA)
     (asserts! (<= delta MAXIMUM_TIME_DELTA) ERR-INVALID-TIME-DELTA)
     (print  {
@@ -79,7 +79,7 @@
       (pyth-feed-data (unwrap! (map-get? price-feeds token) ERR-UNSUPPORTED-ASSET))
       (pyth-record 
           (try! (contract-call? 
-            .pyth-storage-v4
+            'SP1CGXWEAMG6P6FT04W66NVGJ7PQWMDAC19R7PJ0Y.pyth-storage-v4
             get-price
             (get feed-id pyth-feed-data)
           ))
@@ -93,12 +93,12 @@
   (match maybe-vaa-buffer vaa-buffer
     (begin
       (try! 
-        (contract-call? .pyth-oracle-v4 verify-and-update-price-feeds 
+        (contract-call? 'SP1CGXWEAMG6P6FT04W66NVGJ7PQWMDAC19R7PJ0Y.pyth-oracle-v4 verify-and-update-price-feeds 
           vaa-buffer
           {
-            pyth-storage-contract: .pyth-storage-v4,
-            pyth-decoder-contract: .pyth-pnau-decoder-v3,
-            wormhole-core-contract: .wormhole-core-v4
+            pyth-storage-contract: 'SP1CGXWEAMG6P6FT04W66NVGJ7PQWMDAC19R7PJ0Y.pyth-storage-v4,
+            pyth-decoder-contract: 'SP1CGXWEAMG6P6FT04W66NVGJ7PQWMDAC19R7PJ0Y.pyth-pnau-decoder-v3,
+            wormhole-core-contract: 'SP1CGXWEAMG6P6FT04W66NVGJ7PQWMDAC19R7PJ0Y.wormhole-core-v4
           }) 
       )
       SUCCESS

@@ -1,0 +1,132 @@
+---
+id: 0
+name: Staging upgrade v3 - audit-fixed upgradable contracts (fresh deployer)
+network: mainnet
+stacks-node: "https://api.hiro.so"
+bitcoin-node: "http://blockstack:blockstacksystem@bitcoin.blockstack.com:8332"
+plan:
+  batches:
+    - id: 0
+      transactions:
+        - contract-publish:
+            contract-name: linear-kinked-ir-v1
+            expected-sender: SP1GFVG62P5VRGMEZ38D8XQDD0VR9CVMXZD7Y9ATA
+            cost: 100000
+            path: contracts/modules/linear-kinked-ir-v1.clar
+            anchor-block-only: true
+            clarity-version: 3
+        - contract-publish:
+            contract-name: pyth-adapter-v1
+            expected-sender: SP1GFVG62P5VRGMEZ38D8XQDD0VR9CVMXZD7Y9ATA
+            cost: 100000
+            path: contracts/modules/pyth-adapter-v1.clar
+            anchor-block-only: true
+            clarity-version: 3
+        - contract-publish:
+            contract-name: staking-v1
+            expected-sender: SP1GFVG62P5VRGMEZ38D8XQDD0VR9CVMXZD7Y9ATA
+            cost: 100000
+            path: contracts/staking-v1.clar
+            anchor-block-only: true
+            clarity-version: 3
+        - contract-publish:
+            contract-name: withdrawal-caps-v1
+            expected-sender: SP1GFVG62P5VRGMEZ38D8XQDD0VR9CVMXZD7Y9ATA
+            cost: 100000
+            path: contracts/modules/withdrawal-caps-v1.clar
+            anchor-block-only: true
+            clarity-version: 3
+        - contract-publish:
+            contract-name: borrower-v1
+            expected-sender: SP1GFVG62P5VRGMEZ38D8XQDD0VR9CVMXZD7Y9ATA
+            cost: 100000
+            path: contracts/borrower-v1.clar
+            anchor-block-only: true
+            clarity-version: 3
+        - contract-publish:
+            contract-name: flash-loan-v1
+            expected-sender: SP1GFVG62P5VRGMEZ38D8XQDD0VR9CVMXZD7Y9ATA
+            cost: 100000
+            path: contracts/flash-loan-v1.clar
+            anchor-block-only: true
+            clarity-version: 3
+        - contract-publish:
+            contract-name: linear-kinked-ir-utility
+            expected-sender: SP1GFVG62P5VRGMEZ38D8XQDD0VR9CVMXZD7Y9ATA
+            cost: 100000
+            path: contracts/modules/linear-kinked-ir-utility.clar
+            anchor-block-only: true
+            clarity-version: 3
+      epoch: "3.0"
+    - id: 1
+      transactions:
+        - contract-publish:
+            contract-name: meta-governance-v1
+            expected-sender: SP1GFVG62P5VRGMEZ38D8XQDD0VR9CVMXZD7Y9ATA
+            cost: 100000
+            path: contracts/meta-governance-v1.clar
+            anchor-block-only: true
+            clarity-version: 3
+        - contract-publish:
+            contract-name: governance-v1
+            expected-sender: SP1GFVG62P5VRGMEZ38D8XQDD0VR9CVMXZD7Y9ATA
+            cost: 100000
+            path: contracts/governance-v1.clar
+            anchor-block-only: true
+            clarity-version: 3
+        - contract-publish:
+            contract-name: liquidator-v1
+            expected-sender: SP1GFVG62P5VRGMEZ38D8XQDD0VR9CVMXZD7Y9ATA
+            cost: 100000
+            path: contracts/liquidator-v1.clar
+            anchor-block-only: true
+            clarity-version: 3
+        - contract-publish:
+            contract-name: liquidity-provider-v1
+            expected-sender: SP1GFVG62P5VRGMEZ38D8XQDD0VR9CVMXZD7Y9ATA
+            cost: 100000
+            path: contracts/liquidity-provider-v1.clar
+            anchor-block-only: true
+            clarity-version: 3
+        - contract-publish:
+            contract-name: utility
+            expected-sender: SP1GFVG62P5VRGMEZ38D8XQDD0VR9CVMXZD7Y9ATA
+            cost: 100000
+            path: contracts/modules/utility.clar
+            anchor-block-only: true
+            clarity-version: 3
+      epoch: "3.0"
+    - id: 2
+      transactions:
+        - contract-call:
+            contract-id: SP1GFVG62P5VRGMEZ38D8XQDD0VR9CVMXZD7Y9ATA.linear-kinked-ir-v1
+            expected-sender: SP1GFVG62P5VRGMEZ38D8XQDD0VR9CVMXZD7Y9ATA
+            method: update-ir-params
+            parameters:
+              - u130000000000
+              - u2000000000000
+              - u700000000000
+              - u3000000000000
+            cost: 50000
+        - contract-call:
+            contract-id: SP1GFVG62P5VRGMEZ38D8XQDD0VR9CVMXZD7Y9ATA.staking-v1
+            expected-sender: SP1GFVG62P5VRGMEZ38D8XQDD0VR9CVMXZD7Y9ATA
+            method: initialize
+            parameters:
+              - "none"
+            cost: 50000
+        - contract-call:
+            contract-id: SP1GFVG62P5VRGMEZ38D8XQDD0VR9CVMXZD7Y9ATA.meta-governance-v1
+            expected-sender: SP1GFVG62P5VRGMEZ38D8XQDD0VR9CVMXZD7Y9ATA
+            method: initialize-governance
+            parameters:
+              - "(list (some 'SPTXMEW26M54HX1ZXF6VN7QKK4XES1038ERD40T5) (some 'SP3ZPYKVNAQK52YDSQKEHZ3MZQ5MFFZ52E0TH7TJ1) (some 'SP3XD84X3PE79SHJAZCDW1V5E9EA8JSKRBPEKAEK7))"
+            cost: 50000
+        - contract-call:
+            contract-id: SP1GFVG62P5VRGMEZ38D8XQDD0VR9CVMXZD7Y9ATA.governance-v1
+            expected-sender: SP1GFVG62P5VRGMEZ38D8XQDD0VR9CVMXZD7Y9ATA
+            method: initialize-governance
+            parameters:
+              - "(list (some 'SPTXMEW26M54HX1ZXF6VN7QKK4XES1038ERD40T5) (some 'SP3ZPYKVNAQK52YDSQKEHZ3MZQ5MFFZ52E0TH7TJ1) (some 'SP3XD84X3PE79SHJAZCDW1V5E9EA8JSKRBPEKAEK7))"
+            cost: 50000
+      epoch: "3.0"
