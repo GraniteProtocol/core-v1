@@ -17,6 +17,18 @@
 
 ;; CONSTANTS
 (define-constant one-8 (contract-call? .constants-v1 get-scaling-factor))
+;; Bilateral bound on |slope-1| and |slope-2|. Numeric ceiling (1e14) mirrors
+;; the existing `MAX-IR-PARAM` precedent in `linear-kinked-ir-v1.clar`. The
+;; symmetric lower bound is added because the slopes here are typed `int`
+;; (not `uint` like the IR slopes), so the truly missing guard is the
+;; unbounded-negative case. Without it, governance can set
+;; slope-2 = int128 min (~ -1.7e38), and
+;; `slope-2 * (staked-percentage - staked-kink)` inside `staked-geq-kink`
+;; overflows i128 and traps - bricking every call to
+;; `get-staking-reward-percentage` (DoS on staking accrual) until governance
+;; re-configures the params.
+(define-constant MAX-SLOPE (to-int u100000000000000))
+(define-constant MIN-SLOPE (- 0 MAX-SLOPE))
 
 ;; DATA-VARS 
 (define-constant contract-deployer contract-caller)
@@ -45,6 +57,8 @@
     (asserts! (< staked-kink-val one-8) ERR-INVALID-STAKED-KINK)
     (asserts! (< base-reward-val one-8) ERR-INVALID-BASE-REWARD)
     (asserts! (> slope-1-val slope-2-val) ERR-INVALID-SLOPES)
+    (asserts! (and (>= slope-1-val MIN-SLOPE) (<= slope-1-val MAX-SLOPE)) ERR-INVALID-SLOPES)
+    (asserts! (and (>= slope-2-val MIN-SLOPE) (<= slope-2-val MAX-SLOPE)) ERR-INVALID-SLOPES)
     (print {
         old-slope-1: (var-get slope-1),
         new-slope-1: slope-1-val,
