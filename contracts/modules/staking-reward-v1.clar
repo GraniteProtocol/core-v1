@@ -17,6 +17,7 @@
 
 ;; CONSTANTS
 (define-constant one-8 (contract-call? .constants-v1 get-scaling-factor))
+(define-constant MAX-REWARD-PARAM (to-int u100000000000000))
 
 ;; DATA-VARS 
 (define-constant contract-deployer contract-caller)
@@ -45,6 +46,8 @@
     (asserts! (< staked-kink-val one-8) ERR-INVALID-STAKED-KINK)
     (asserts! (< base-reward-val one-8) ERR-INVALID-BASE-REWARD)
     (asserts! (> slope-1-val slope-2-val) ERR-INVALID-SLOPES)
+    (asserts! (<= slope-1-val MAX-REWARD-PARAM) ERR-INVALID-SLOPES)
+    (asserts! (<= slope-2-val MAX-REWARD-PARAM) ERR-INVALID-SLOPES)
     (print {
         old-slope-1: (var-get slope-1),
         new-slope-1: slope-1-val,
