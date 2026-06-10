@@ -109,11 +109,10 @@ plan:
               - u3000000000000
             cost: 50000
         - contract-call:
-            contract-id: SP1GFVG62P5VRGMEZ38D8XQDD0VR9CVMXZD7Y9ATA.staking-v1
+            contract-id: SP1GFVG62P5VRGMEZ38D8XQDD0VR9CVMXZD7Y9ATA.liquidity-provider-v1
             expected-sender: SP1GFVG62P5VRGMEZ38D8XQDD0VR9CVMXZD7Y9ATA
             method: initialize
-            parameters:
-              - "none"
+            parameters: []
             cost: 50000
         - contract-call:
             contract-id: SP1GFVG62P5VRGMEZ38D8XQDD0VR9CVMXZD7Y9ATA.meta-governance-v1
