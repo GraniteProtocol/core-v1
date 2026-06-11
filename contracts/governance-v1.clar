@@ -309,7 +309,7 @@
       closed: false,
       executed: false,
       execute-at: none,
-      member-count: (contract-call? .meta-governance-v1 governance-multisig-count),
+      member-count: (contract-call? 'SP3TPHP0EMGE3ZRKKVREB7VSEHGYGWX45WS07MQ77.meta-governance-v1 governance-multisig-count),
     })
     (map-set proposal-approved-members {proposal-id: proposal-id, member: contract-caller} true)
     (print {
@@ -703,7 +703,7 @@
 
 ;; READ ONLY FUNCTIONS
 (define-read-only (is-governance-member (member principal))
-  (contract-call? .meta-governance-v1 is-governance-member member)
+  (contract-call? 'SP3TPHP0EMGE3ZRKKVREB7VSEHGYGWX45WS07MQ77.meta-governance-v1 is-governance-member member)
 )
 
 (define-read-only (is-guardian (member principal))
@@ -1225,7 +1225,7 @@
   (let (
       (proposal (unwrap! (map-get? governance-proposal proposal-id) ERR-UNKNOWN-PROPOSAL))
       (total-voted (+ (get approve-count proposal) (get deny-count proposal)))
-      (current-count (contract-call? .meta-governance-v1 governance-multisig-count))
+      (current-count (contract-call? 'SP3TPHP0EMGE3ZRKKVREB7VSEHGYGWX45WS07MQ77.meta-governance-v1 governance-multisig-count))
       (deny-threshold (try! (deny-threshold-met proposal-id)))
       (approve-threshold (try! (approve-threshold-met proposal-id)))
       (has-threshold-met (or deny-threshold approve-threshold))
@@ -1299,7 +1299,7 @@
     (try! (fold set-guardians guardians-addrs SUCCESS))
     (print {
       action: "initialize-governance",
-      meta-governance: .meta-governance-v1,
+      meta-governance: 'SP3TPHP0EMGE3ZRKKVREB7VSEHGYGWX45WS07MQ77.meta-governance-v1,
       guardians: guardians-addrs
     })
     SUCCESS
