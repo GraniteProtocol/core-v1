@@ -26,7 +26,7 @@
 
 ;; refill time window of 24 hrs
 ;; updatable through governance
-(define-data-var refill-time-window uint u86400)
+(define-data-var refill-time-window uint u36000)
 
 ;; decay time window of 3 hrs
 ;; updatable through governance

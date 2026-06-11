@@ -19,9 +19,9 @@
 ;; List of allowed contracts that are called back during the flash loan
 (define-map allowed-contracts principal bool)
 ;; Flag to allow any contract to use flash loan
-(define-data-var allow-any bool false)
+(define-data-var allow-any bool true)
 ;; Fee of 0.01% for processing flash loan scaled to 10^8
-(define-data-var fee uint u10000)
+(define-data-var fee uint u10)
 
 ;; Read only functions
 

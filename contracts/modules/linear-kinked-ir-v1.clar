@@ -32,11 +32,11 @@
 
 ;; DATA-VARS 
 (define-constant contract-deployer contract-caller)
-(define-data-var is-initialized bool false)
-(define-data-var ir-slope-1 uint u0)
-(define-data-var ir-slope-2 uint u0)
-(define-data-var utilization-kink uint u0)
-(define-data-var base-ir uint u0) ;; interest when utilization is 0
+(define-data-var is-initialized bool true)
+(define-data-var ir-slope-1 uint u130000000000)
+(define-data-var ir-slope-2 uint u2000000000000)
+(define-data-var utilization-kink uint u700000000000)
+(define-data-var base-ir uint u3000000000000) ;; interest when utilization is 0
 
 
 ;; PUBLIC FUNCTIONS 

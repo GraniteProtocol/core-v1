@@ -30,7 +30,9 @@
   feed-id: (buff 32),
   max-confidence-ratio: uint
 })
-(define-data-var time-delta uint u1800)
+(define-data-var time-delta uint u300)
+(map-set price-feeds 'SP3Y2ZSH8P7D50B0VBTSX11S7XSG24M1VB9YFQA4K.token-aeusdc {feed-id: 0xeaa020c61cc479712813461ce153894a96a6c00b21ed0cfc2798d1f9a9e9c94a, max-confidence-ratio: u100})
+(map-set price-feeds 'SM3VDXK3WZZSA84XXFKAFAF15NNZX32CTSG82JFQ4.sbtc-token {feed-id: 0xe62df6c8b4a85fe1a67db44dc12de5db330f7ac66b72dc658afedf0f4a415b43, max-confidence-ratio: u500})
 
 ;; admin-level maintenance functions
 (define-public (update-price-feed-id (token principal) (new-feed-id (buff 32)) (max-confidence-ratio uint))
