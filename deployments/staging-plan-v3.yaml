@@ -1,0 +1,121 @@
+---
+id: 0
+name: Staging upgrade v3 - audit-fixed upgradable contracts (fresh deployer)
+network: mainnet
+stacks-node: "https://api.hiro.so"
+bitcoin-node: "http://blockstack:blockstacksystem@bitcoin.blockstack.com:8332"
+plan:
+  batches:
+    - id: 0
+      transactions:
+        - contract-publish:
+            contract-name: linear-kinked-ir-v1
+            expected-sender: SP3G0BKE829S65ZN2DMED2KZ032V7Y30S01AD7CAD
+            cost: 100000
+            path: contracts/modules/linear-kinked-ir-v1.clar
+            anchor-block-only: true
+            clarity-version: 3
+        - contract-publish:
+            contract-name: pyth-adapter-v1
+            expected-sender: SP3G0BKE829S65ZN2DMED2KZ032V7Y30S01AD7CAD
+            cost: 100000
+            path: contracts/modules/pyth-adapter-v1.clar
+            anchor-block-only: true
+            clarity-version: 3
+        - contract-publish:
+            contract-name: staking-v1
+            expected-sender: SP3G0BKE829S65ZN2DMED2KZ032V7Y30S01AD7CAD
+            cost: 100000
+            path: contracts/staking-v1.clar
+            anchor-block-only: true
+            clarity-version: 3
+        - contract-publish:
+            contract-name: withdrawal-caps-v1
+            expected-sender: SP3G0BKE829S65ZN2DMED2KZ032V7Y30S01AD7CAD
+            cost: 100000
+            path: contracts/modules/withdrawal-caps-v1.clar
+            anchor-block-only: true
+            clarity-version: 3
+        - contract-publish:
+            contract-name: borrower-v1
+            expected-sender: SP3G0BKE829S65ZN2DMED2KZ032V7Y30S01AD7CAD
+            cost: 100000
+            path: contracts/borrower-v1.clar
+            anchor-block-only: true
+            clarity-version: 3
+        - contract-publish:
+            contract-name: flash-loan-v1
+            expected-sender: SP3G0BKE829S65ZN2DMED2KZ032V7Y30S01AD7CAD
+            cost: 100000
+            path: contracts/flash-loan-v1.clar
+            anchor-block-only: true
+            clarity-version: 3
+      epoch: "3.0"
+    - id: 1
+      transactions:
+        - contract-publish:
+            contract-name: governance-v1
+            expected-sender: SP3G0BKE829S65ZN2DMED2KZ032V7Y30S01AD7CAD
+            cost: 100000
+            path: contracts/governance-v1.clar
+            anchor-block-only: true
+            clarity-version: 3
+        - contract-publish:
+            contract-name: liquidator-v1
+            expected-sender: SP3G0BKE829S65ZN2DMED2KZ032V7Y30S01AD7CAD
+            cost: 100000
+            path: contracts/liquidator-v1.clar
+            anchor-block-only: true
+            clarity-version: 3
+        - contract-publish:
+            contract-name: liquidity-provider-v1
+            expected-sender: SP3G0BKE829S65ZN2DMED2KZ032V7Y30S01AD7CAD
+            cost: 100000
+            path: contracts/liquidity-provider-v1.clar
+            anchor-block-only: true
+            clarity-version: 3
+        - contract-publish:
+            contract-name: utility
+            expected-sender: SP3G0BKE829S65ZN2DMED2KZ032V7Y30S01AD7CAD
+            cost: 100000
+            path: contracts/modules/utility.clar
+            anchor-block-only: true
+            clarity-version: 3
+      epoch: "3.0"
+    - id: 2
+      transactions:
+        - contract-call:
+            contract-id: SP3G0BKE829S65ZN2DMED2KZ032V7Y30S01AD7CAD.liquidity-provider-v1
+            expected-sender: SP3G0BKE829S65ZN2DMED2KZ032V7Y30S01AD7CAD
+            method: initialize
+            parameters: []
+            cost: 50000
+        - contract-call:
+            contract-id: SP3G0BKE829S65ZN2DMED2KZ032V7Y30S01AD7CAD.governance-v1
+            expected-sender: SP3G0BKE829S65ZN2DMED2KZ032V7Y30S01AD7CAD
+            method: initialize-governance
+            parameters:
+              - "(list (some 'SPTXMEW26M54HX1ZXF6VN7QKK4XES1038ERD40T5) (some 'SP3ZPYKVNAQK52YDSQKEHZ3MZQ5MFFZ52E0TH7TJ1) (some 'SP3XD84X3PE79SHJAZCDW1V5E9EA8JSKRBPEKAEK7))"
+            cost: 50000
+      epoch: "3.0"
+    - id: 3
+      transactions:
+        - contract-call:
+            contract-id: SP3G0BKE829S65ZN2DMED2KZ032V7Y30S01AD7CAD.liquidity-provider-v1
+            expected-sender: SP3G0BKE829S65ZN2DMED2KZ032V7Y30S01AD7CAD
+            method: deposit
+            parameters:
+              - u1000000
+              - "'SP3G0BKE829S65ZN2DMED2KZ032V7Y30S01AD7CAD"
+            cost: 200000
+      epoch: "3.0"
+    - id: 4
+      transactions:
+        - contract-call:
+            contract-id: SP3G0BKE829S65ZN2DMED2KZ032V7Y30S01AD7CAD.staking-v1
+            expected-sender: SP3G0BKE829S65ZN2DMED2KZ032V7Y30S01AD7CAD
+            method: initialize
+            parameters:
+              - "(some u1000)"
+            cost: 200000
+      epoch: "3.0"
