@@ -1,3 +1,0 @@
-[submodule "contracts/pyth"]
-	path = contracts/pyth
-	url = https://github.com/Trust-Machines/stacks-pyth-bridge

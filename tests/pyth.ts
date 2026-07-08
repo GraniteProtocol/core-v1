@@ -1,21 +1,18 @@
 import { expect } from "vitest";
 import { Cl, ClarityType } from "@stacks/transactions";
-import { pyth } from "../contracts/pyth/unit-tests/pyth/helpers";
-import { wormhole } from "../contracts/pyth/unit-tests/wormhole/helpers";
 import { scalingFactor } from "./utils";
 
-export const pythDecoderPnauContractName = "pyth-pnau-decoder-v3";
-export const pythGovernanceContractName = "pyth-governance-v3";
-export const pythStorageContractName = "pyth-storage-v4";
-export const wormholeCoreContractName = "wormhole-core-v4";
-export const guardianSet = wormhole.generateGuardianSetKeychain(19);
+// Lazer publish-time is microseconds; the adapter divides by this for its
+// seconds-based staleness. Tests write publish-time = T * MICROS_PER_SECOND.
+const MICROS_PER_SECOND = 1_000_000n;
 
-// Monotonically increasing publish time counter to ensure unique timestamps
+// Monotonically increasing publish time (microseconds) so a later seed always
+// reads as fresher than an earlier one.
 let lastPublishTime = 0n;
 
 /**
  * Returns the current simnet block time by reading the faucet helper.
- * This is aligned with the simnet's internal clock, not wall-clock time.
+ * Aligned with the simnet's internal clock, not wall-clock time.
  */
 const getSimnetBlockTime = (): bigint => {
   const r = simnet.callReadOnlyFn(
@@ -27,48 +24,22 @@ const getSimnetBlockTime = (): bigint => {
   return r.result.value as bigint;
 };
 
-export const init_pyth = (sender: any) => {
+export const init_pyth = (_sender: any) => {
   lastPublishTime = 0n;
-
-  wormhole.applyGuardianSetUpdate(
-    guardianSet,
-    1,
-    sender,
-    wormholeCoreContractName
-  );
-
-  pyth.applyGovernanceDataSourceUpdate(
-    pyth.DefaultGovernanceDataSourceUpdate,
-    pyth.InitialGovernanceDataSource,
-    guardianSet,
-    sender,
-    pythGovernanceContractName,
-    wormholeCoreContractName,
-    2n
-  );
-
-  pyth.applyPricesDataSourceUpdate(
-    pyth.DefaultPricesDataSources,
-    pyth.DefaultGovernanceDataSource,
-    guardianSet,
-    sender,
-    pythGovernanceContractName,
-    wormholeCoreContractName,
-    3n
-  );
 };
 
-export const get_token_feed = (token: string) => {
-  if (token.includes("btc")) return pyth.BtcPriceIdentifier;
-  else if (token.includes("eth")) return pyth.StxPriceIdentifier;
-  else if (token.includes("usdc")) return pyth.UsdcPriceIdentifier;
+export const get_token_feed = (token: string): bigint => {
+  // Placeholder Lazer numeric feed ids; the real catalog ids come from Hiro at bake time.
+  if (token.includes("btc")) return 1n;
+  else if (token.includes("eth")) return 2n;
+  else if (token.includes("usdc")) return 3n;
   else throw "invalid token feed";
 };
 
 export const get_token_min_confidence_ratio = (token: string) => {
   if (token.includes("btc")) return 500; // 5%
-  else if (token.includes("eth")) return 500; // 5%;
-  else if (token.includes("usdc")) return 100; // 1 %;
+  else if (token.includes("eth")) return 500; // 5%
+  else if (token.includes("usdc")) return 100; // 1%
   else throw "invalid token feed";
 };
 
@@ -82,11 +53,7 @@ export const set_initial_price = async (
   const res = simnet.callPublicFn(
     "pyth-adapter-v1",
     "update-price-feed-id",
-    [
-      Cl.contractPrincipal(deployer, token),
-      Cl.buffer(feed),
-      Cl.uint(minConfidenceRatio),
-    ],
+    [Cl.contractPrincipal(deployer, token), Cl.uint(feed), Cl.uint(minConfidenceRatio)],
     deployer
   );
   expect(res.result).toHaveClarityType(ClarityType.ResponseOk);
@@ -105,14 +72,44 @@ export const set_pyth_time_delta = async (delta: number, deployer: any) => {
 };
 
 /**
- * Returns a publish time aligned with simnet block time.
- * Ensures monotonically increasing timestamps for pyth updates.
+ * Publish time (microseconds) aligned with simnet block time, kept strictly
+ * monotonic across seeds.
  */
-const getPublishTime = (): bigint => {
-  const blockTime = getSimnetBlockTime();
-  const publishTime = blockTime > lastPublishTime ? blockTime : lastPublishTime + 1n;
+const getPublishTimeMicros = (): bigint => {
+  const blockTimeMicros = getSimnetBlockTime() * MICROS_PER_SECOND;
+  const publishTime =
+    blockTimeMicros > lastPublishTime ? blockTimeMicros : lastPublishTime + 1n;
   lastPublishTime = publishTime;
   return publishTime;
+};
+
+/**
+ * Seeds a feed's price via the storage mock's public setter (the production read
+ * path is `get-price`; this is the test-only way to populate it). Returns the
+ * publish-time in SECONDS.
+ */
+export const set_price_at = (
+  feed: bigint,
+  price: bigint,
+  expo: number,
+  publishTimeMicros: bigint,
+  deployer: any,
+  conf: bigint = 0n
+): bigint => {
+  const res = simnet.callPublicFn(
+    "pyth-lazer-storage",
+    "set-price",
+    [
+      Cl.uint(feed),
+      Cl.int(price),
+      Cl.int(expo),
+      Cl.uint(publishTimeMicros),
+      Cl.some(Cl.uint(conf)),
+    ],
+    deployer
+  );
+  expect(res.result).toBeOk(Cl.bool(true));
+  return publishTimeMicros / MICROS_PER_SECOND;
 };
 
 export const set_price = async (
@@ -123,44 +120,7 @@ export const set_price = async (
   prevPublishTime?: bigint
 ): Promise<bigint> => {
   const feed = get_token_feed(token);
-  const publishTime = getPublishTime();
-  let actualPricesUpdates = pyth.buildPriceUpdateBatch([
-    [
-      feed,
-      { price: price * scalingFactor, expo, publishTime, prevPublishTime },
-    ],
-  ]);
-  let actualPricesUpdatesVaaPayload =
-    pyth.buildAuwvVaaPayload(actualPricesUpdates);
-  let payload = pyth.serializeAuwvVaaPayloadToBuffer(
-    actualPricesUpdatesVaaPayload
-  );
-  let vaaBody = wormhole.buildValidVaaBodySpecs({
-    payload,
-    emitter: pyth.DefaultPricesDataSources[0],
-  });
-  let vaaHeader = wormhole.buildValidVaaHeader(guardianSet, vaaBody, {
-    version: 1,
-    guardianSetId: 1,
-  });
-  let vaa = wormhole.serializeVaaToBuffer(vaaHeader, vaaBody);
-  let pnauHeader = pyth.buildPnauHeader();
-  let pricesUpdatesToSubmit = [feed];
-  let pnau = pyth.serializePnauToBuffer(pnauHeader, {
-    vaa,
-    pricesUpdates: actualPricesUpdates,
-    pricesUpdatesToSubmit,
-  });
-
-  const res = simnet.callPublicFn(
-    "pyth-adapter-v1",
-    "update-pyth",
-    [Cl.some(Cl.buffer(pnau))],
-    deployer
-  );
-  expect(res.result).toHaveClarityType(ClarityType.ResponseOk);
-
-  return publishTime;
+  return set_price_at(feed, price * scalingFactor, expo, getPublishTimeMicros(), deployer);
 };
 
 export const set_price_without_scaling = async (
@@ -171,39 +131,5 @@ export const set_price_without_scaling = async (
   prevPublishTime?: bigint
 ): Promise<bigint> => {
   const feed = get_token_feed(token);
-  const publishTime = getPublishTime();
-  let actualPricesUpdates = pyth.buildPriceUpdateBatch([
-    [feed, { price: price, expo, publishTime, prevPublishTime }],
-  ]);
-  let actualPricesUpdatesVaaPayload =
-    pyth.buildAuwvVaaPayload(actualPricesUpdates);
-  let payload = pyth.serializeAuwvVaaPayloadToBuffer(
-    actualPricesUpdatesVaaPayload
-  );
-  let vaaBody = wormhole.buildValidVaaBodySpecs({
-    payload,
-    emitter: pyth.DefaultPricesDataSources[0],
-  });
-  let vaaHeader = wormhole.buildValidVaaHeader(guardianSet, vaaBody, {
-    version: 1,
-    guardianSetId: 1,
-  });
-  let vaa = wormhole.serializeVaaToBuffer(vaaHeader, vaaBody);
-  let pnauHeader = pyth.buildPnauHeader();
-  let pricesUpdatesToSubmit = [feed];
-  let pnau = pyth.serializePnauToBuffer(pnauHeader, {
-    vaa,
-    pricesUpdates: actualPricesUpdates,
-    pricesUpdatesToSubmit,
-  });
-
-  const res = simnet.callPublicFn(
-    "pyth-adapter-v1",
-    "update-pyth",
-    [Cl.some(Cl.buffer(pnau))],
-    deployer
-  );
-  expect(res.result).toHaveClarityType(ClarityType.ResponseOk);
-
-  return publishTime;
+  return set_price_at(feed, price, expo, getPublishTimeMicros(), deployer);
 };

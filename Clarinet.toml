@@ -75,33 +75,13 @@ path = 'contracts/test/mock-usdc.clar'
 clarity_version = 3
 epoch = 3.0
 
-[contracts.pyth-governance-v3]
-path = 'contracts/pyth/contracts/pyth-governance-v3.clar'
-clarity_version = 3
-epoch = 3.0
-
 [contracts.pyth-adapter-v1]
 path = 'contracts/modules/pyth-adapter-v1.clar'
 clarity_version = 3
 epoch = 3.0
 
-[contracts.pyth-oracle-v4]
-path = 'contracts/pyth/contracts/pyth-oracle-v4.clar'
-clarity_version = 3
-epoch = 3.0
-
-[contracts.pyth-pnau-decoder-v3]
-path = 'contracts/pyth/contracts/pyth-pnau-decoder-v3.clar'
-clarity_version = 3
-epoch = 3.0
-
-[contracts.pyth-storage-v4]
-path = 'contracts/pyth/contracts/pyth-storage-v4.clar'
-clarity_version = 3
-epoch = 3.0
-
-[contracts.pyth-traits-v2]
-path = 'contracts/pyth/contracts/pyth-traits-v2.clar'
+[contracts.pyth-lazer-storage]
+path = 'contracts/test/pyth-lazer-storage.clar'
 clarity_version = 3
 epoch = 3.0
 
@@ -132,16 +112,6 @@ epoch = 3.0
 
 [contracts.utility]
 path = 'contracts/modules/utility.clar'
-clarity_version = 3
-epoch = 3.0
-
-[contracts.wormhole-core-v4]
-path = 'contracts/pyth/contracts/wormhole/wormhole-core-v4.clar'
-clarity_version = 3
-epoch = 3.0
-
-[contracts.wormhole-traits-v2]
-path = 'contracts/pyth/contracts/wormhole/wormhole-traits-v2.clar'
 clarity_version = 3
 epoch = 3.0
 

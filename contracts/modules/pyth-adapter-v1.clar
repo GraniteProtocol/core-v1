@@ -24,17 +24,19 @@
 (define-constant CONFIDENCE_SCALING_FACTOR u10000)
 ;; Price scaling factor decimals
 (define-constant PRICE_DECIMALS (to-int (contract-call? .constants-v2 get-price-decimals)))
+;; Lazer publish-time is microseconds; the staleness check works in seconds.
+(define-constant MICROS_PER_SECOND u1000000)
 
-;; price feeds can be found in https://pyth.network/developers/price-feed-ids
+;; Lazer numeric feed ids (from the Lazer symbol catalog), keyed by token.
 (define-map price-feeds principal {
-  feed-id: (buff 32),
+  feed-id: uint,
   max-confidence-ratio: uint
 })
 (define-data-var time-delta uint u1800)
 
 ;; admin-level maintenance functions
-(define-public (update-price-feed-id (token principal) (new-feed-id (buff 32)) (max-confidence-ratio uint))
-  (begin 
+(define-public (update-price-feed-id (token principal) (new-feed-id uint) (max-confidence-ratio uint))
+  (begin
     (asserts! (is-eq (contract-call? .state-v1 get-governance) contract-caller) ERR-NOT-AUTHORIZED)
     (asserts! (<= max-confidence-ratio CONFIDENCE_SCALING_FACTOR) ERR-INVALID-MAX-CONFIDENCE-RATIO)
     (map-set price-feeds token {
@@ -52,7 +54,7 @@
 ))
 
 (define-public (update-time-delta (delta uint))
-  (begin 
+  (begin
     (asserts! (is-eq (contract-call? .state-v1 get-governance) contract-caller) ERR-NOT-AUTHORIZED)
     (asserts! (>= delta MINIMUM_TIME_DELTA) ERR-INVALID-TIME-DELTA)
     (asserts! (<= delta MAXIMUM_TIME_DELTA) ERR-INVALID-TIME-DELTA)
@@ -74,35 +76,32 @@
 (define-read-only (get-pyth-minimum-time-delta) MINIMUM_TIME_DELTA)
 
 (define-read-only (read-price (token principal))
-  (let 
+  (let
     (
-      (pyth-feed-data (unwrap! (map-get? price-feeds token) ERR-UNSUPPORTED-ASSET))
-      (pyth-record 
-          (try! (contract-call? 
-            .pyth-storage-v4
+      (feed-data (unwrap! (map-get? price-feeds token) ERR-UNSUPPORTED-ASSET))
+      (record
+          (try! (contract-call?
+            .pyth-lazer-storage
             get-price
-            (get feed-id pyth-feed-data)
+            (get feed-id feed-data)
           ))
         )
     )
-    (decode-pyth pyth-record (get max-confidence-ratio pyth-feed-data))
+    (decode-lazer
+      (get price record)
+      (get exponent record)
+      (get publish-time record)
+      (get confidence record)
+      (get max-confidence-ratio feed-data))
   )
 )
 
-(define-public (update-pyth (maybe-vaa-buffer (optional (buff 8192))))
-  (match maybe-vaa-buffer vaa-buffer
-    (begin
-      (try! 
-        (contract-call? .pyth-oracle-v4 verify-and-update-price-feeds 
-          vaa-buffer
-          {
-            pyth-storage-contract: .pyth-storage-v4,
-            pyth-decoder-contract: .pyth-pnau-decoder-v3,
-            wormhole-core-contract: .wormhole-core-v4
-          }) 
-      )
-      SUCCESS
-    )
+;; Push model: the Lazer relayer keeps pyth-lazer-storage fresh out-of-band, so this
+;; is a no-op kept for interface compatibility. Reads enforce staleness, so a lagging
+;; relayer fails safe. The asserts! pins the response err type to uint so callers can try! it.
+(define-public (update-pyth (maybe-update-buffer (optional (buff 8192))))
+  (begin
+    (asserts! true ERR-NOT-AUTHORIZED)
     SUCCESS
   )
 )
@@ -121,16 +120,10 @@
   )
 )
 
-(define-private (decode-pyth (pyth-record 
-  {conf: uint, ema-conf: uint, ema-price: int, expo: int, prev-publish-time: uint, price: int, publish-time: uint}
-) (max-confidence-ratio uint)) 
-  (let 
+(define-private (decode-lazer (price int) (expo int) (publish-time-us uint) (confidence (optional uint)) (max-confidence-ratio uint))
+  (let
     (
-      (timestamp (get publish-time pyth-record))
-      (expo (get expo pyth-record))
-      (price (get price pyth-record))
-      (price-conf (get conf pyth-record))
-      
+      (timestamp (/ publish-time-us MICROS_PER_SECOND))
     )
     (asserts! (> price 0) ERR-INVALID-PRICE)
     ;; Upper bound 11 is the max safe value: pyth_max_int64 (~9.2e18)
@@ -139,15 +132,13 @@
     ;; below the overflow threshold for any valid Pyth price.
     (asserts! (and (>= expo -18) (<= expo 11)) ERR-INVALID-EXPONENT)
     (asserts! (is-valid timestamp) ERR-PYTH-PRICE-STALE)
-    (try! (check-confidence (to-uint price) price-conf max-confidence-ratio))
+    ;; Lazer confidence is optional; enforce the bound only when present (v1 always provides it).
+    (asserts! (match confidence conf (confidence-ok (to-uint price) conf max-confidence-ratio) true) ERR-PRICE-CONFIDENCE-LOW)
     (ok (to-uint (convert-res price expo PRICE_DECIMALS)))
 ))
 
-(define-private (check-confidence (price uint) (confidence uint) (max-confidence-ratio uint))
-  (if (<= confidence (/ (* price max-confidence-ratio) CONFIDENCE_SCALING_FACTOR))
-    (ok true)
-    ERR-PRICE-CONFIDENCE-LOW
-  )
+(define-private (confidence-ok (price uint) (confidence uint) (max-confidence-ratio uint))
+  (<= confidence (/ (* price max-confidence-ratio) CONFIDENCE_SCALING_FACTOR))
 )
 
 (define-private (is-valid (timestamp uint))
@@ -166,8 +157,8 @@
   (if (>= expo 0)
     (* price (pow 10 (+ expo resolution-digits)))
     (let ((diff (- resolution-digits (abs expo))))
-      (if (is-eq diff 0) 
-        price 
+      (if (is-eq diff 0)
+        price
         (if (> diff 0) (* price (pow 10 diff)) (/ price (pow 10 (abs diff))))
     ))
 ))

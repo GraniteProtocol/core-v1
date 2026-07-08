@@ -538,7 +538,7 @@ describe("staking tests", () => {
     // accrued interest math to settle a slightly different staked-LP total.
     expectUserLpBalance(
       Cl.contractPrincipal(deployer, "staking-v1"),
-      500054682070n
+      500054709521n
     );
 
     // initiate unstake of depositor 1 at index 0
@@ -548,7 +548,7 @@ describe("staking tests", () => {
 
     // withdrawal should exist
     const withdrawal = getUserWithdrawal(depositor1, 0);
-    expect(withdrawal.data["withdrawal-shares"]).toEqual(Cl.uint(500054682070));
+    expect(withdrawal.data["withdrawal-shares"]).toEqual(Cl.uint(500054709521));
     expect(withdrawal.data["finalization-at"]).toEqual(
       Cl.uint(finalizationPeriod)
     );
@@ -560,7 +560,7 @@ describe("staking tests", () => {
 
     // depositor1 got full lp tokens of staking contract.
     // Post H-01: 2-block init shift slightly changes accrued-interest math.
-    expectUserLpBalance(Cl.principal(depositor1), 1000054682070n);
+    expectUserLpBalance(Cl.principal(depositor1), 1000054709521n);
     expectUserStakedLpBalance(Cl.principal(depositor1), 0n);
     expectUserLpBalance(Cl.contractPrincipal(deployer, "staking-v1"), 0n);
   });

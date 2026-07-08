@@ -1,20 +1,16 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { Cl, ClarityType } from "@stacks/transactions";
-import {
-  init_pyth,
-  set_pyth_time_delta,
-  guardianSet,
-  get_token_feed,
-} from "../pyth";
-import { pyth } from "../../contracts/pyth/unit-tests/pyth/helpers";
-import { wormhole } from "../../contracts/pyth/unit-tests/wormhole/helpers";
+import { init_pyth, set_pyth_time_delta, get_token_feed, set_price_at } from "../pyth";
 
 const accounts = simnet.getAccounts();
 const deployer = accounts.get("deployer")!;
 const address1 = accounts.get("wallet_1")!;
 
+// Lazer publish-time is microseconds; the adapter divides by this for seconds.
+const MICROS_PER_SECOND = 1_000_000n;
+
 /**
- * Returns the current simnet block time.
+ * Returns the current simnet block time (seconds).
  */
 const getSimnetBlockTime = (): bigint => {
   const r = simnet.callReadOnlyFn(
@@ -27,8 +23,7 @@ const getSimnetBlockTime = (): bigint => {
 };
 
 /**
- * Helper to submit a raw price update to pyth storage with custom price/expo values.
- * Uses simnet-aligned timestamps.
+ * Seeds a raw price into the storage mock at the current simnet block time.
  */
 const set_raw_price = async (
   token: string,
@@ -37,45 +32,14 @@ const set_raw_price = async (
   conf?: bigint
 ): Promise<bigint> => {
   const feed = get_token_feed(token);
-  const publishTime = getSimnetBlockTime();
-  let actualPricesUpdates = pyth.buildPriceUpdateBatch([
-    [feed, { price, expo, publishTime, conf }],
-  ]);
-  let actualPricesUpdatesVaaPayload =
-    pyth.buildAuwvVaaPayload(actualPricesUpdates);
-  let payload = pyth.serializeAuwvVaaPayloadToBuffer(
-    actualPricesUpdatesVaaPayload
-  );
-  let vaaBody = wormhole.buildValidVaaBodySpecs({
-    payload,
-    emitter: pyth.DefaultPricesDataSources[0],
-  });
-  let vaaHeader = wormhole.buildValidVaaHeader(guardianSet, vaaBody, {
-    version: 1,
-    guardianSetId: 1,
-  });
-  let vaa = wormhole.serializeVaaToBuffer(vaaHeader, vaaBody);
-  let pnauHeader = pyth.buildPnauHeader();
-  let pricesUpdatesToSubmit = [feed];
-  let pnau = pyth.serializePnauToBuffer(pnauHeader, {
-    vaa,
-    pricesUpdates: actualPricesUpdates,
-    pricesUpdatesToSubmit,
-  });
-
-  const res = simnet.callPublicFn(
-    "pyth-adapter-v1",
-    "update-pyth",
-    [Cl.some(Cl.buffer(pnau))],
-    deployer
-  );
-  expect(res.result).toHaveClarityType(ClarityType.ResponseOk);
-
-  return publishTime;
+  const publishTimeMicros = getSimnetBlockTime() * MICROS_PER_SECOND;
+  set_price_at(feed, price, expo, publishTimeMicros, deployer, conf ?? 0n);
+  return publishTimeMicros / MICROS_PER_SECOND;
 };
 
 /**
- * Helper to submit a price update with a custom publish time.
+ * Seeds a price at a caller-supplied publish time. The value is SECONDS
+ * (tests pass second-scale values like blockTime+3600); stored as microseconds.
  */
 const set_price_with_time = async (
   token: string,
@@ -84,38 +48,7 @@ const set_price_with_time = async (
   expo: number = -8
 ): Promise<void> => {
   const feed = get_token_feed(token);
-  let actualPricesUpdates = pyth.buildPriceUpdateBatch([
-    [feed, { price, expo, publishTime }],
-  ]);
-  let actualPricesUpdatesVaaPayload =
-    pyth.buildAuwvVaaPayload(actualPricesUpdates);
-  let payload = pyth.serializeAuwvVaaPayloadToBuffer(
-    actualPricesUpdatesVaaPayload
-  );
-  let vaaBody = wormhole.buildValidVaaBodySpecs({
-    payload,
-    emitter: pyth.DefaultPricesDataSources[0],
-  });
-  let vaaHeader = wormhole.buildValidVaaHeader(guardianSet, vaaBody, {
-    version: 1,
-    guardianSetId: 1,
-  });
-  let vaa = wormhole.serializeVaaToBuffer(vaaHeader, vaaBody);
-  let pnauHeader = pyth.buildPnauHeader();
-  let pricesUpdatesToSubmit = [feed];
-  let pnau = pyth.serializePnauToBuffer(pnauHeader, {
-    vaa,
-    pricesUpdates: actualPricesUpdates,
-    pricesUpdatesToSubmit,
-  });
-
-  const res = simnet.callPublicFn(
-    "pyth-adapter-v1",
-    "update-pyth",
-    [Cl.some(Cl.buffer(pnau))],
-    deployer
-  );
-  expect(res.result).toHaveClarityType(ClarityType.ResponseOk);
+  set_price_at(feed, price, expo, publishTime * MICROS_PER_SECOND, deployer);
 };
 
 describe("pyth-adapter-v1 oracle hardening tests", () => {
@@ -130,7 +63,7 @@ describe("pyth-adapter-v1 oracle hardening tests", () => {
       "update-price-feed-id",
       [
         Cl.contractPrincipal(deployer, "mock-btc"),
-        Cl.buffer(feed),
+        Cl.uint(feed),
         Cl.uint(500),
       ],
       deployer

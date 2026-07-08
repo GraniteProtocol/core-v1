@@ -880,9 +880,7 @@ describe("governance tests", () => {
   it("governance can update pyth price feeds", async () => {
     state_set_governance_contract(deployer);
 
-    const priceIdentifier = Cl.bufferFromHex(
-      "b0948a5e5313200c632b51bb5ca32f6de0d36e9950a942d19751e833f70dabfd"
-    );
+    const priceIdentifier = Cl.uint(3);
     let response = simnet.callPublicFn(
       "governance-v1",
       "initiate-proposal-to-update-pyth-feed",
@@ -899,7 +897,7 @@ describe("governance tests", () => {
     // the mock-usdc principal.
     expect(response.result).toBeOk(
       Cl.bufferFromHex(
-        "8a12529c357ba3d294fd399cb799125badb2b1864e37c9aab31a6bd48f280f14"
+        "12f5697a42933bc9f777d6d6c367aebd24c187a9c535f33268193d7923c823c1"
       )
     );
   });
@@ -913,9 +911,7 @@ describe("governance tests", () => {
   it("M-02 timelock: pyth feed update cannot execute in the same block", async () => {
     state_set_governance_contract(deployer);
 
-    const priceIdentifier = Cl.bufferFromHex(
-      "b0948a5e5313200c632b51bb5ca32f6de0d36e9950a942d19751e833f70dabfd"
-    );
+    const priceIdentifier = Cl.uint(999);
     const usdcPrincipal = Cl.contractPrincipal(deployer, "mock-usdc");
 
     // Snapshot the pre-update price-feed entry to verify behavioral change.
@@ -1019,9 +1015,7 @@ describe("governance tests", () => {
   it("M-02 hash-includes-token: distinct tokens with same feed produce distinct proposal-ids", async () => {
     state_set_governance_contract(deployer);
 
-    const sameFeed = Cl.bufferFromHex(
-      "b0948a5e5313200c632b51bb5ca32f6de0d36e9950a942d19751e833f70dabfd"
-    );
+    const sameFeed = Cl.uint(3);
     const sameMaxConfidence = Cl.uint(100);
     const sameExpiresIn = Cl.uint(10);
 
