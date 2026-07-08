@@ -89,7 +89,7 @@ describe("PoC E-M-02: socialize-bad-debt DivisionByZero on full-payoff bad-debt 
     const result = simnet.callPublicFn(
       "liquidator-v1",
       "liquidate-collateral",
-      [Cl.none(), btc_collateral, Cl.principal(borrower), Cl.uint(1_000_000), Cl.uint(1)],
+      [btc_collateral, Cl.principal(borrower), Cl.uint(1_000_000), Cl.uint(1)],
       liquidator,
     );
     console.log(`[E-M-02] liquidate result type=${result.result.type} value=${JSON.stringify(result.result.value)}`);

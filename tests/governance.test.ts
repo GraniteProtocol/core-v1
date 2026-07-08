@@ -189,7 +189,6 @@ describe("governance tests", () => {
       "borrower-v1",
       "remove-collateral",
       [
-        Cl.none(),
         Cl.contractPrincipal(deployer, "mock-btc"),
         Cl.uint(1),
         Cl.none(),
@@ -2080,7 +2079,7 @@ describe("governance tests", () => {
     let borrow = simnet.callPublicFn(
       "borrower-v1",
       "borrow",
-      [Cl.none(), Cl.uint(10000000000), Cl.none()],
+      [Cl.uint(10000000000), Cl.none()],
       borrower1
     );
     expect(borrow.result).toBeOk(Cl.bool(true));
@@ -2128,7 +2127,6 @@ describe("governance tests", () => {
       "borrower-v1",
       "remove-collateral",
       [
-        Cl.none(),
         Cl.contractPrincipal(deployer, "mock-btc"),
         Cl.uint(10000000000),
         Cl.none(),
@@ -2161,7 +2159,6 @@ describe("governance tests", () => {
       "borrower-v1",
       "remove-collateral",
       [
-        Cl.none(),
         Cl.contractPrincipal(deployer, "mock-btc"),
         Cl.uint(20000000000),
         Cl.none(),

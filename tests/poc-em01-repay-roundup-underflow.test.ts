@@ -135,7 +135,7 @@ describe("PoC E-M-01: integer-floor repay-allowed > debt underflow", () => {
     const result = simnet.callPublicFn(
       "liquidator-v1",
       "liquidate-collateral",
-      [Cl.none(), btc_collateral, Cl.principal(borrower), Cl.uint(1_000_000), Cl.uint(1)],
+      [btc_collateral, Cl.principal(borrower), Cl.uint(1_000_000), Cl.uint(1)],
       liquidator,
     );
     console.log(`[B] liquidate result type=${result.result.type} value=${JSON.stringify(result.result.value)}`);

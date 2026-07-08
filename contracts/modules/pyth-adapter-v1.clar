@@ -96,16 +96,6 @@
   )
 )
 
-;; Push model: the Lazer relayer keeps pyth-lazer-storage fresh out-of-band, so this
-;; is a no-op kept for interface compatibility. Reads enforce staleness, so a lagging
-;; relayer fails safe. The asserts! pins the response err type to uint so callers can try! it.
-(define-public (update-pyth (maybe-update-buffer (optional (buff 8192))))
-  (begin
-    (asserts! true ERR-NOT-AUTHORIZED)
-    SUCCESS
-  )
-)
-
 (define-read-only (bulk-read-collateral-prices (collaterals (list 10 principal)))
   (fold check-collateral-price-exists collaterals (ok (list)))
 )

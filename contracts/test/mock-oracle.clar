@@ -37,14 +37,9 @@
 )
 
 (define-public (set-price (ticker principal) (new-price uint))
-  (begin 
+  (begin
     (unwrap! (map-get? price-feeds ticker) ERR-TOKEN-NOT-ADDED)
     (map-set price-feeds ticker new-price)
     SUCCESS
   )
-)
-
-(define-public (update-pyth (maybe-vaa-buffer (optional (buff 8192))))
-  ;; testing oracle with no price verification
-  (match maybe-vaa-buffer vaa-buffer (if (< u1 (len vaa-buffer)) ERR-INVALID-BUFFER SUCCESS) SUCCESS)
 )

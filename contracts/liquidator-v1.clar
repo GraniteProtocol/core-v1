@@ -30,21 +30,19 @@
 (define-constant ERR-LIQUIDATION-NOT-ALLOWED (err u30011))
 
 ;; PUBLIC FUNCTIONS
-(define-public (batch-liquidate (pyth-price-feed-data (optional (buff 8192))) (collateral <token-trait>) (batch (list 20 (optional {
+(define-public (batch-liquidate (collateral <token-trait>) (batch (list 20 (optional {
   user: principal,
   liquidator-repay-amount: uint,
   min-collateral-expected: uint
 }))))
   (begin
-  (try! (contract-call? .pyth-adapter-v1 update-pyth pyth-price-feed-data))
   (try! (accrue-interest))
   (try! (get res (fold fold-execute-liquidation batch {collateral: collateral, res: (ok true)})))
   SUCCESS
 ))
 
-(define-public (liquidate-collateral (pyth-price-feed-data (optional (buff 8192))) (collateral <token-trait>) (user principal) (liquidator-repay-amount uint) (min-collateral-expected uint))
+(define-public (liquidate-collateral (collateral <token-trait>) (user principal) (liquidator-repay-amount uint) (min-collateral-expected uint))
   (begin
-    (try! (contract-call? .pyth-adapter-v1 update-pyth pyth-price-feed-data))
     (try! (accrue-interest))
     (execute-liquidation user collateral liquidator-repay-amount min-collateral-expected)
 ))

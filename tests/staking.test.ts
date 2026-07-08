@@ -668,7 +668,6 @@ describe("staking tests", () => {
       "liquidator-v1",
       "liquidate-collateral",
       [
-        Cl.none(),
         Cl.contractPrincipal(deployer, "mock-eth"),
         Cl.principal(borrower1),
         Cl.uint(1000),
@@ -730,7 +729,6 @@ describe("staking tests", () => {
       "liquidator-v1",
       "liquidate-collateral",
       [
-        Cl.none(),
         Cl.contractPrincipal(deployer, "mock-btc"),
         Cl.principal(borrower1),
         Cl.uint(1000),
@@ -935,7 +933,6 @@ describe("staking tests", () => {
       "liquidator-v1",
       "liquidate-collateral",
       [
-        Cl.none(),
         Cl.contractPrincipal(deployer, "mock-eth"),
         Cl.principal(borrower1),
         Cl.uint(1000),
@@ -1011,7 +1008,6 @@ describe("staking tests", () => {
       "liquidator-v1",
       "liquidate-collateral",
       [
-        Cl.none(),
         Cl.contractPrincipal(deployer, "mock-btc"),
         Cl.principal(borrower1),
         Cl.uint(1000),
@@ -1244,7 +1240,6 @@ describe("staking tests", () => {
       "liquidator-v1",
       "liquidate-collateral",
       [
-        Cl.none(),
         Cl.contractPrincipal(deployer, "mock-eth"),
         Cl.principal(borrower1),
         Cl.uint(1000),
@@ -1320,7 +1315,6 @@ describe("staking tests", () => {
       "liquidator-v1",
       "liquidate-collateral",
       [
-        Cl.none(),
         Cl.contractPrincipal(deployer, "mock-btc"),
         Cl.principal(borrower1),
         Cl.uint(1000),
@@ -1513,7 +1507,6 @@ describe("staking tests", () => {
       "liquidator-v1",
       "liquidate-collateral",
       [
-        Cl.none(),
         Cl.contractPrincipal(deployer, "mock-eth"),
         Cl.principal(borrower1),
         Cl.uint(1000),
@@ -1543,7 +1536,6 @@ describe("staking tests", () => {
       "liquidator-v1",
       "liquidate-collateral",
       [
-        Cl.none(),
         Cl.contractPrincipal(deployer, "mock-btc"),
         Cl.principal(borrower1),
         Cl.uint(1000),
@@ -1654,7 +1646,6 @@ describe("staking tests", () => {
       "liquidator-v1",
       "liquidate-collateral",
       [
-        Cl.none(),
         Cl.contractPrincipal(deployer, "mock-eth"),
         Cl.principal(borrower1),
         Cl.uint(1000),
@@ -1684,7 +1675,6 @@ describe("staking tests", () => {
       "liquidator-v1",
       "liquidate-collateral",
       [
-        Cl.none(),
         Cl.contractPrincipal(deployer, "mock-btc"),
         Cl.principal(borrower1),
         Cl.uint(1000),
@@ -1855,7 +1845,6 @@ describe("staking tests", () => {
       "liquidator-v1",
       "liquidate-collateral",
       [
-        Cl.none(),
         Cl.contractPrincipal(deployer, "mock-eth"),
         Cl.principal(borrower1),
         Cl.uint(1000),
@@ -1939,7 +1928,6 @@ describe("staking tests", () => {
       "liquidator-v1",
       "liquidate-collateral",
       [
-        Cl.none(),
         Cl.contractPrincipal(deployer, "mock-btc"),
         Cl.principal(borrower1),
         Cl.uint(1000),

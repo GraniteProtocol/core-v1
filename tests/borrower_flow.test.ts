@@ -85,7 +85,6 @@ describe("Borrower User flow tests", () => {
       "borrower-v1",
       "remove-collateral",
       [
-        Cl.none(),
         Cl.contractPrincipal(deployer, "mock-btc"),
         Cl.uint(40),
         Cl.none(),
@@ -98,7 +97,6 @@ describe("Borrower User flow tests", () => {
       "borrower-v1",
       "remove-collateral",
       [
-        Cl.none(),
         Cl.contractPrincipal(deployer, "mock-eth"),
         Cl.uint(490),
         Cl.none(),
@@ -132,7 +130,6 @@ describe("Borrower User flow tests", () => {
       "borrower-v1",
       "remove-collateral",
       [
-        Cl.none(),
         Cl.contractPrincipal(deployer, "mock-btc"),
         Cl.uint(60),
         Cl.none(),
@@ -145,7 +142,6 @@ describe("Borrower User flow tests", () => {
       "borrower-v1",
       "remove-collateral",
       [
-        Cl.none(),
         Cl.contractPrincipal(deployer, "mock-eth"),
         Cl.uint(1000),
         Cl.none(),
@@ -216,7 +212,6 @@ describe("Borrower User flow tests", () => {
       "liquidator-v1",
       "liquidate-collateral",
       [
-        Cl.none(),
         Cl.contractPrincipal(deployer, "mock-eth"),
         Cl.principal(borrower1),
         Cl.uint(1386),
@@ -258,7 +253,6 @@ describe("Borrower User flow tests", () => {
       "borrower-v1",
       "remove-collateral",
       [
-        Cl.none(),
         Cl.contractPrincipal(deployer, "mock-btc"),
         Cl.uint(100),
         Cl.none(),
@@ -271,7 +265,6 @@ describe("Borrower User flow tests", () => {
       "borrower-v1",
       "remove-collateral",
       [
-        Cl.none(),
         Cl.contractPrincipal(deployer, "mock-eth"),
         Cl.uint(744),
         Cl.none(),
@@ -416,7 +409,6 @@ describe("Borrower User flow tests", () => {
       "liquidator-v1",
       "liquidate-collateral",
       [
-        Cl.none(),
         Cl.contractPrincipal(deployer, "mock-eth"),
         Cl.principal(borrower1),
         Cl.uint(1000),
@@ -468,7 +460,6 @@ describe("Borrower User flow tests", () => {
       "liquidator-v1",
       "liquidate-collateral",
       [
-        Cl.none(),
         Cl.contractPrincipal(deployer, "mock-btc"),
         Cl.principal(borrower1),
         Cl.uint(1000),

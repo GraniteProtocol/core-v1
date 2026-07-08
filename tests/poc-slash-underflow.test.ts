@@ -192,7 +192,7 @@ describe("PoC: slash-total-staked-lp-tokens underflow", () => {
       "liquidator-v1",
       "liquidate-collateral",
       [
-        Cl.none(),                   // pyth price feed data
+        // pyth price feed data
         btc,                         // collateral token
         Cl.principal(borrower1),     // user to liquidate
         Cl.uint(20_000_000_000),     // liquidator-repay-amount

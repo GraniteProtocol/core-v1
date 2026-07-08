@@ -376,7 +376,6 @@ describe("liquidation tests", () => {
       "liquidator-v1",
       "liquidate-collateral",
       [
-        Cl.none(),
         btc_collateral_contract,
         Cl.principal(borrower1),
         Cl.uint(18181818181),
@@ -465,7 +464,6 @@ describe("liquidation tests", () => {
       "liquidator-v1",
       "liquidate-collateral",
       [
-        Cl.none(),
         btc_collateral_contract,
         Cl.principal(borrower1),
         Cl.uint(0),
@@ -515,7 +513,7 @@ describe("liquidation tests", () => {
       tx.callPublicFn(
         "borrower-v1",
         "borrow",
-        [Cl.none(), Cl.uint(18000000000), Cl.none()],
+        [Cl.uint(18000000000), Cl.none()],
         borrower1
       ),
       // make position insolvant
@@ -543,7 +541,6 @@ describe("liquidation tests", () => {
         "liquidator-v1",
         "liquidate-collateral",
         [
-          Cl.none(),
           btc_collateral_contract,
           Cl.principal(borrower1),
           Cl.uint(18181818181),
@@ -636,7 +633,6 @@ describe("liquidation tests", () => {
       "liquidator-v1",
       "liquidate-collateral",
       [
-        Cl.none(),
         btc_collateral_contract,
         Cl.principal(borrower1),
         Cl.uint(17777777777),
@@ -650,7 +646,6 @@ describe("liquidation tests", () => {
       "liquidator-v1",
       "liquidate-collateral",
       [
-        Cl.none(),
         btc_collateral_contract,
         Cl.principal(borrower1),
         Cl.uint(17777777777),
@@ -688,7 +683,7 @@ describe("liquidation tests", () => {
     simnet.callPublicFn(
       "borrower-v1",
       "borrow",
-      [Cl.none(), Cl.uint(10000000000), Cl.none()],
+      [Cl.uint(10000000000), Cl.none()],
       borrower1
     );
 
@@ -769,7 +764,6 @@ describe("liquidation tests", () => {
       "liquidator-v1",
       "liquidate-collateral",
       [
-        Cl.none(),
         btc_collateral_contract,
         Cl.principal(borrower1),
         Cl.uint(18181818181),
@@ -852,7 +846,6 @@ describe("liquidation tests", () => {
       "liquidator-v1",
       "liquidate-collateral",
       [
-        Cl.none(),
         btc_collateral_contract,
         Cl.principal(borrower1),
         Cl.uint(39000013190),
@@ -989,7 +982,7 @@ describe("liquidation tests", () => {
     let liquidate = simnet.callPublicFn(
       "liquidator-v1",
       "batch-liquidate",
-      [Cl.none(), btc_collateral_contract, Cl.list(batchData)],
+      [btc_collateral_contract, Cl.list(batchData)],
       depositor
     );
     expect(liquidate.result).toBeOk(Cl.bool(true));
@@ -1021,7 +1014,6 @@ describe("liquidation tests", () => {
       "liquidator-v1",
       "liquidate-collateral",
       [
-        Cl.none(),
         btc_collateral_contract,
         Cl.principal(borrower1),
         Cl.uint(0),
@@ -1090,7 +1082,6 @@ describe("liquidation tests", () => {
       "liquidator-v1",
       "liquidate-collateral",
       [
-        Cl.none(),
         contractPrincipalCV(deployer, "mock-eth"),
         Cl.principal(borrower1),
         Cl.uint(2500000000000),
@@ -1166,7 +1157,6 @@ describe("liquidation tests", () => {
       "liquidator-v1",
       "liquidate-collateral",
       [
-        Cl.none(),
         btc_collateral_contract,
         Cl.principal(borrower1),
         Cl.uint(18181818181),
@@ -1243,7 +1233,6 @@ describe("liquidation tests", () => {
       "liquidator-v1",
       "liquidate-collateral",
       [
-        Cl.none(),
         btc_collateral_contract,
         Cl.principal(borrower1),
         Cl.uint(18181818181),
@@ -1319,7 +1308,6 @@ describe("liquidation tests", () => {
       "liquidator-v1",
       "liquidate-collateral",
       [
-        Cl.none(),
         btc_collateral_contract,
         Cl.principal(borrower1),
         Cl.uint(18181818181),
@@ -1395,7 +1383,6 @@ describe("liquidation tests", () => {
       "liquidator-v1",
       "liquidate-collateral",
       [
-        Cl.none(),
         btc_collateral_contract,
         Cl.principal(borrower1),
         Cl.uint(18181818181),
@@ -1512,7 +1499,6 @@ describe("liquidation tests", () => {
       "mock-liquidator-with-flash-loan",
       "liquidate-collateral",
       [
-        Cl.none(),
         Cl.principal(borrower1),
         Cl.uint(repayAmount),
         Cl.uint(1),
@@ -1580,7 +1566,6 @@ describe("liquidation tests", () => {
       "liquidator-v1",
       "liquidate-collateral",
       [
-        Cl.none(),
         btc_collateral_contract,
         Cl.principal(borrower1),
         Cl.uint(0),
