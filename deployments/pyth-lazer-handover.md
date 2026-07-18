@@ -73,3 +73,8 @@ Collect approvals to threshold, wait the 24h time-lock, then `shim.execute(<prop
 - Guardians can be rotated post-deploy through the shim: `initiate-proposal-to-update-guardian` with
   action 6 (add, 24h time-locked) or 7 (remove, instant so a compromised pause key can be dropped
   fast).
+- Confidence is best-effort upstream: about 15% of Lazer updates omit the confidence property even
+  for BTC/ETH/SOL (it is requestable but not guaranteed, no API flag forces it). The adapter enforces
+  the spread bound only when confidence is present and accepts the update when it is absent (it emits
+  a `confidence-absent` print for monitoring); price, exponent, freshness and the Pyth signature
+  still gate every read. Clients that want the tighter check can prefer a with-confidence update.

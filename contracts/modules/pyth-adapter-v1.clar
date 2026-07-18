@@ -218,8 +218,10 @@
   (let (
       (price (get price feed))
       (expo (get exponent feed))
-      ;; A signed Lazer feed may omit confidence; treat absent as zero (no bound to violate).
-      (price-conf (default-to u0 (get confidence feed)))
+      (maybe-conf (get confidence feed))
+      ;; Confidence is best-effort upstream (~15% of Lazer updates omit it); the spread bound is
+      ;; enforced only when present. price, exponent, freshness and the signature still gate every read.
+      (price-conf (default-to u0 maybe-conf))
     )
     (asserts! (> price 0) ERR-INVALID-PRICE)
     ;; Upper bound 11 is the max safe value: pyth_max_int64 (~9.2e18)
@@ -229,6 +231,8 @@
     (asserts! (and (>= expo -18) (<= expo 11)) ERR-INVALID-EXPONENT)
     (asserts! (is-valid timestamp) ERR-PYTH-PRICE-STALE)
     (try! (check-confidence (to-uint price) price-conf max-confidence-ratio))
+    ;; Surface the no-confidence case for off-chain monitoring.
+    (and (is-none maybe-conf) (begin (print { event: "confidence-absent", feed-id: (get feed-id feed) }) true))
     (ok (to-uint (convert-res price expo PRICE_DECIMALS)))
   )
 )
