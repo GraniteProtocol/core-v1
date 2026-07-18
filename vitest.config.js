@@ -4,7 +4,7 @@ import { defineConfig } from "vite";
 import {
   vitestSetupFilePath,
   getClarinetVitestsArgv,
-} from "@hirosystems/clarinet-sdk/vitest";
+} from "@stacks/clarinet-sdk/vitest";
 
 /*
   In this file, Vitest is configured so that it works seamlessly with Clarinet and the Simnet.
@@ -22,6 +22,12 @@ import {
 */
 
 export default defineConfig({
+  resolve: {
+    alias: {
+      // The pinned pyth submodule imports the pre-rename package name.
+      "@hirosystems/clarinet-sdk": "@stacks/clarinet-sdk",
+    },
+  },
   test: {
     include: ["./tests/**/*.test.ts"],
     environment: "clarinet", // use vitest-environment-clarinet
