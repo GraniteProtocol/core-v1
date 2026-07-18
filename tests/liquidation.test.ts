@@ -18,7 +18,7 @@ import {
   expectUserBTCBalance,
   state_set_governance_contract,
 } from "./utils";
-import { tx } from "@hirosystems/clarinet-sdk";
+import { tx } from "@stacks/clarinet-sdk";
 import {
   init_pyth,
   set_initial_price,
@@ -81,11 +81,11 @@ describe("liquidation tests", () => {
       args,
       borrower1
     );
-    expect(result.result.value.data["repay-amount"]).toStrictEqual(
+    expect(result.result.value.value["repay-amount"]).toStrictEqual(
       Cl.uint(100000000000)
     );
     const collateralToGive =
-      result.result.value.data["collateral-to-give"].value;
+      result.result.value.value["collateral-to-give"].value;
     expect(collateralToGive).toStrictEqual(4888888n);
     expect(collateralToGive).toBeLessThan(depositedCollateral);
   });
@@ -119,11 +119,11 @@ describe("liquidation tests", () => {
       args,
       borrower1
     );
-    expect(result.result.value.data["repay-amount"]).toStrictEqual(
+    expect(result.result.value.value["repay-amount"]).toStrictEqual(
       Cl.uint(53714866n)
     );
     const collateralToGive =
-      result.result.value.data["collateral-to-give"].value;
+      result.result.value.value["collateral-to-give"].value;
     expect(collateralToGive).toStrictEqual(10776689600n);
     expect(collateralToGive).toBeLessThan(depositedCollateral);
   });
@@ -157,11 +157,11 @@ describe("liquidation tests", () => {
       args,
       borrower1
     );
-    expect(result.result.value.data["repay-amount"]).toStrictEqual(
+    expect(result.result.value.value["repay-amount"]).toStrictEqual(
       Cl.uint(90378500n)
     );
     const collateralToGive =
-      result.result.value.data["collateral-to-give"].value;
+      result.result.value.value["collateral-to-give"].value;
     expect(collateralToGive).toStrictEqual(1816556n);
     expect(collateralToGive).toBeLessThan(depositedCollateral);
   });
@@ -195,10 +195,10 @@ describe("liquidation tests", () => {
       args,
       borrower1
     );
-    expect(result.result.value.data["repay-amount"]).toStrictEqual(
+    expect(result.result.value.value["repay-amount"]).toStrictEqual(
       Cl.uint(147272727273)
     );
-    expect(result.result.value.data["collateral-to-give"]).toStrictEqual(
+    expect(result.result.value.value["collateral-to-give"]).toStrictEqual(
       Cl.uint(depositedCollateral)
     );
   });
@@ -232,10 +232,10 @@ describe("liquidation tests", () => {
       args,
       borrower1
     );
-    expect(result.result.value.data["repay-amount"]).toStrictEqual(
+    expect(result.result.value.value["repay-amount"]).toStrictEqual(
       Cl.uint(147272727273)
     );
-    expect(result.result.value.data["collateral-to-give"]).toStrictEqual(
+    expect(result.result.value.value["collateral-to-give"]).toStrictEqual(
       Cl.uint(depositedCollateral)
     );
   });
@@ -269,10 +269,10 @@ describe("liquidation tests", () => {
       args,
       borrower1
     );
-    expect(result.result.value.data["repay-amount"]).toStrictEqual(
+    expect(result.result.value.value["repay-amount"]).toStrictEqual(
       Cl.uint(2241187273n)
     );
-    expect(result.result.value.data["collateral-to-give"]).toStrictEqual(
+    expect(result.result.value.value["collateral-to-give"]).toStrictEqual(
       Cl.uint(depositedCollateral)
     );
   });
@@ -306,10 +306,10 @@ describe("liquidation tests", () => {
       args,
       borrower1
     );
-    expect(result.result.value.data["repay-amount"]).toStrictEqual(
+    expect(result.result.value.value["repay-amount"]).toStrictEqual(
       Cl.uint(69592592592)
     );
-    expect(result.result.value.data["collateral-to-give"]).toStrictEqual(
+    expect(result.result.value.value["collateral-to-give"]).toStrictEqual(
       Cl.uint(3897185)
     );
   });
@@ -347,7 +347,7 @@ describe("liquidation tests", () => {
       [Cl.principal(borrower1), Cl.none(), Cl.none()],
       deployer
     );
-    expect(accounthealthRes.result.value.data["position-health"]).toEqual(
+    expect(accounthealthRes.result.value.value["position-health"]).toEqual(
       Cl.uint(105555555n)
     );
 
@@ -366,7 +366,7 @@ describe("liquidation tests", () => {
       [Cl.principal(borrower1), Cl.none(), Cl.none()],
       deployer
     );
-    expect(accounthealthRes.result.value.data["position-health"]).toEqual(
+    expect(accounthealthRes.result.value.value["position-health"]).toEqual(
       Cl.uint(55555555n)
     );
 
@@ -392,7 +392,7 @@ describe("liquidation tests", () => {
       [Cl.principal(borrower1), Cl.none(), Cl.none()],
       deployer
     );
-    expect(accounthealthRes.result.value.data["position-health"]).toEqual(
+    expect(accounthealthRes.result.value.value["position-health"]).toEqual(
       Cl.uint(100000000n)
     );
   });
@@ -430,7 +430,7 @@ describe("liquidation tests", () => {
       [Cl.principal(borrower1), Cl.none(), Cl.none()],
       deployer
     );
-    expect(accounthealthRes.result.value.data["position-health"]).toEqual(
+    expect(accounthealthRes.result.value.value["position-health"]).toEqual(
       Cl.uint(105555555n)
     );
 
@@ -449,7 +449,7 @@ describe("liquidation tests", () => {
       [Cl.principal(borrower1), Cl.none(), Cl.none()],
       deployer
     );
-    expect(accounthealthRes.result.value.data["position-health"]).toEqual(
+    expect(accounthealthRes.result.value.value["position-health"]).toEqual(
       Cl.uint(55555555n)
     );
 
@@ -490,7 +490,7 @@ describe("liquidation tests", () => {
       [Cl.principal(borrower1), Cl.none(), Cl.none()],
       deployer
     );
-    expect(accounthealthRes.result.value.data["position-health"]).toEqual(
+    expect(accounthealthRes.result.value.value["position-health"]).toEqual(
       Cl.uint(55555555n)
     );
   });
@@ -606,7 +606,7 @@ describe("liquidation tests", () => {
       [Cl.principal(borrower1), Cl.none(), Cl.none()],
       deployer
     );
-    expect(accounthealthRes.result.value.data["position-health"]).toEqual(
+    expect(accounthealthRes.result.value.value["position-health"]).toEqual(
       Cl.uint(110256410n)
     );
 
@@ -625,7 +625,7 @@ describe("liquidation tests", () => {
       [Cl.principal(borrower1), Cl.none(), Cl.none()],
       deployer
     );
-    expect(accounthealthRes.result.value.data["position-health"]).toEqual(
+    expect(accounthealthRes.result.value.value["position-health"]).toEqual(
       Cl.uint(87179487n)
     );
 
@@ -666,7 +666,7 @@ describe("liquidation tests", () => {
       [Cl.principal(borrower1), Cl.none(), Cl.none()],
       deployer
     );
-    expect(accounthealthRes.result.value.data["position-health"]).toEqual(
+    expect(accounthealthRes.result.value.value["position-health"]).toEqual(
       Cl.uint(100000000n)
     );
   });
@@ -700,7 +700,7 @@ describe("liquidation tests", () => {
       [Cl.principal(borrower1), Cl.none(), Cl.none()],
       deployer
     );
-    expect(accounthealthRes.result.value.data["position-health"]).toEqual(
+    expect(accounthealthRes.result.value.value["position-health"]).toEqual(
       Cl.uint(3n)
     );
 
@@ -740,7 +740,7 @@ describe("liquidation tests", () => {
       [Cl.principal(borrower1), Cl.none(), Cl.none()],
       deployer
     );
-    expect(accounthealthRes.result.value.data["position-health"]).toEqual(
+    expect(accounthealthRes.result.value.value["position-health"]).toEqual(
       Cl.uint(105555555n)
     );
 
@@ -759,7 +759,7 @@ describe("liquidation tests", () => {
       [Cl.principal(borrower1), Cl.none(), Cl.none()],
       deployer
     );
-    expect(accounthealthRes.result.value.data["position-health"]).toEqual(
+    expect(accounthealthRes.result.value.value["position-health"]).toEqual(
       Cl.uint(55555555n)
     );
 
@@ -823,7 +823,7 @@ describe("liquidation tests", () => {
       [Cl.principal(borrower1), Cl.none(), Cl.none()],
       deployer
     );
-    expect(accounthealthRes.result.value.data["position-health"]).toEqual(
+    expect(accounthealthRes.result.value.value["position-health"]).toEqual(
       Cl.uint(110256410n)
     );
 
@@ -842,7 +842,7 @@ describe("liquidation tests", () => {
       [Cl.principal(borrower1), Cl.none(), Cl.none()],
       deployer
     );
-    expect(accounthealthRes.result.value.data["position-health"]).toEqual(
+    expect(accounthealthRes.result.value.value["position-health"]).toEqual(
       Cl.uint(87179487n)
     );
 
@@ -919,7 +919,7 @@ describe("liquidation tests", () => {
       [Cl.principal(borrower1), Cl.none(), Cl.none()],
       deployer
     );
-    expect(accounthealthRes.result.value.data["position-health"]).toEqual(
+    expect(accounthealthRes.result.value.value["position-health"]).toEqual(
       Cl.uint(110256394n)
     );
 
@@ -929,7 +929,7 @@ describe("liquidation tests", () => {
       [Cl.principal(borrower2), Cl.none(), Cl.none()],
       deployer
     );
-    expect(accounthealthRes.result.value.data["position-health"]).toEqual(
+    expect(accounthealthRes.result.value.value["position-health"]).toEqual(
       Cl.uint(110256410n)
     );
 
@@ -948,7 +948,7 @@ describe("liquidation tests", () => {
       [Cl.principal(borrower1), Cl.none(), Cl.none()],
       deployer
     );
-    expect(accounthealthRes.result.value.data["position-health"]).toEqual(
+    expect(accounthealthRes.result.value.value["position-health"]).toEqual(
       Cl.uint(87179474n)
     );
 
@@ -958,7 +958,7 @@ describe("liquidation tests", () => {
       [Cl.principal(borrower2), Cl.none(), Cl.none()],
       deployer
     );
-    expect(accounthealthRes.result.value.data["position-health"]).toEqual(
+    expect(accounthealthRes.result.value.value["position-health"]).toEqual(
       Cl.uint(87179487n)
     );
 
@@ -1068,7 +1068,7 @@ describe("liquidation tests", () => {
       [Cl.principal(borrower1), Cl.none(), Cl.none()],
       deployer
     );
-    expect(accounthealthRes.result.value.data["position-health"]).toEqual(
+    expect(accounthealthRes.result.value.value["position-health"]).toEqual(
       Cl.uint(106250000n)
     );
 
@@ -1080,7 +1080,7 @@ describe("liquidation tests", () => {
       [Cl.principal(borrower1), Cl.none(), Cl.none()],
       deployer
     );
-    expect(accounthealthRes.result.value.data["position-health"]).toEqual(
+    expect(accounthealthRes.result.value.value["position-health"]).toEqual(
       Cl.uint(69000229n)
     );
 
@@ -1106,7 +1106,7 @@ describe("liquidation tests", () => {
       [Cl.principal(borrower1), Cl.none(), Cl.none()],
       deployer
     );
-    expect(accounthealthRes.result.value.data["position-health"]).toEqual(
+    expect(accounthealthRes.result.value.value["position-health"]).toEqual(
       Cl.uint(100000000n)
     );
   });
@@ -1143,7 +1143,7 @@ describe("liquidation tests", () => {
       [Cl.principal(borrower1), Cl.none(), Cl.none()],
       deployer
     );
-    expect(accounthealthRes.result.value.data["position-health"]).toEqual(
+    expect(accounthealthRes.result.value.value["position-health"]).toEqual(
       Cl.uint(114285714n)
     );
 
@@ -1156,7 +1156,7 @@ describe("liquidation tests", () => {
       [Cl.principal(borrower1), Cl.none(), Cl.none()],
       deployer
     );
-    expect(accounthealthRes.result.value.data["position-health"]).toEqual(
+    expect(accounthealthRes.result.value.value["position-health"]).toEqual(
       Cl.uint(99551591n)
     );
 
@@ -1183,7 +1183,7 @@ describe("liquidation tests", () => {
       deployer
     );
     // H-01 burn dust shifts position-health rounding by 1 micro-unit.
-    expect(accounthealthRes.result.value.data["position-health"]).toEqual(
+    expect(accounthealthRes.result.value.value["position-health"]).toEqual(
       Cl.uint(100000001n)
     );
   });
@@ -1220,7 +1220,7 @@ describe("liquidation tests", () => {
       [Cl.principal(borrower1), Cl.none(), Cl.none()],
       deployer
     );
-    expect(accounthealthRes.result.value.data["position-health"]).toEqual(
+    expect(accounthealthRes.result.value.value["position-health"]).toEqual(
       Cl.uint(114285714n)
     );
 
@@ -1233,7 +1233,7 @@ describe("liquidation tests", () => {
       [Cl.principal(borrower1), Cl.none(), Cl.none()],
       deployer
     );
-    expect(accounthealthRes.result.value.data["position-health"]).toEqual(
+    expect(accounthealthRes.result.value.value["position-health"]).toEqual(
       Cl.uint(81543219n)
     );
 
@@ -1259,7 +1259,7 @@ describe("liquidation tests", () => {
       [Cl.principal(borrower1), Cl.none(), Cl.none()],
       deployer
     );
-    expect(accounthealthRes.result.value.data["position-health"]).toEqual(
+    expect(accounthealthRes.result.value.value["position-health"]).toEqual(
       Cl.uint(100000000n)
     );
   });
@@ -1296,7 +1296,7 @@ describe("liquidation tests", () => {
       [Cl.principal(borrower1), Cl.none(), Cl.none()],
       deployer
     );
-    expect(accounthealthRes.result.value.data["position-health"]).toEqual(
+    expect(accounthealthRes.result.value.value["position-health"]).toEqual(
       Cl.uint(114285715n)
     );
 
@@ -1309,7 +1309,7 @@ describe("liquidation tests", () => {
       [Cl.principal(borrower1), Cl.none(), Cl.none()],
       deployer
     );
-    expect(accounthealthRes.result.value.data["position-health"]).toEqual(
+    expect(accounthealthRes.result.value.value["position-health"]).toEqual(
       Cl.uint(99733496n)
     );
 
@@ -1335,7 +1335,7 @@ describe("liquidation tests", () => {
       [Cl.principal(borrower1), Cl.none(), Cl.none()],
       deployer
     );
-    expect(accounthealthRes.result.value.data["position-health"]).toEqual(
+    expect(accounthealthRes.result.value.value["position-health"]).toEqual(
       Cl.uint(100000000n)
     );
   });
@@ -1372,7 +1372,7 @@ describe("liquidation tests", () => {
       [Cl.principal(borrower1), Cl.none(), Cl.none()],
       deployer
     );
-    expect(accounthealthRes.result.value.data["position-health"]).toEqual(
+    expect(accounthealthRes.result.value.value["position-health"]).toEqual(
       Cl.uint(114285715n)
     );
 
@@ -1385,7 +1385,7 @@ describe("liquidation tests", () => {
       [Cl.principal(borrower1), Cl.none(), Cl.none()],
       deployer
     );
-    expect(accounthealthRes.result.value.data["position-health"]).toEqual(
+    expect(accounthealthRes.result.value.value["position-health"]).toEqual(
       Cl.uint(81543222n)
     );
 
@@ -1411,7 +1411,7 @@ describe("liquidation tests", () => {
       [Cl.principal(borrower1), Cl.none(), Cl.none()],
       deployer
     );
-    expect(accounthealthRes.result.value.data["position-health"]).toEqual(
+    expect(accounthealthRes.result.value.value["position-health"]).toEqual(
       Cl.uint(100000000n)
     );
   });
@@ -1443,7 +1443,7 @@ describe("liquidation tests", () => {
       [Cl.principal(borrower1), Cl.none(), Cl.none()],
       deployer
     );
-    expect(accounthealthRes.result.value.data["position-health"]).toEqual(
+    expect(accounthealthRes.result.value.value["position-health"]).toEqual(
       Cl.uint(105555555n)
     );
 
@@ -1462,7 +1462,7 @@ describe("liquidation tests", () => {
       [Cl.principal(borrower1), Cl.none(), Cl.none()],
       deployer
     );
-    expect(accounthealthRes.result.value.data["position-health"]).toEqual(
+    expect(accounthealthRes.result.value.value["position-health"]).toEqual(
       Cl.uint(55555555n)
     );
 

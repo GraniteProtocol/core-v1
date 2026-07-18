@@ -26,7 +26,7 @@ describe("linear kinked interest rate module update-ir-params tests", () => {
       [],
       address1
     );
-    const returnedBaseIR = res.result.data["base-ir"];
+    const returnedBaseIR = res.result.value["base-ir"];
     expect(init.result).toBeOk(Cl.bool(true)); // SUCCESS code
 
     expect(returnedBaseIR).toStrictEqual(baseIR);

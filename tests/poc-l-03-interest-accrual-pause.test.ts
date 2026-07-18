@@ -51,7 +51,7 @@ function getLpOpenInterest(): bigint {
     deployer
   );
   // get-open-interest returns a tuple
-  return (r.result as any).data["lp-open-interest"].value as bigint;
+  return (r.result as any).value["lp-open-interest"].value as bigint;
 }
 
 function setupBorrowerWithDebt() {
@@ -137,12 +137,12 @@ describe("L-03 — interest-accrual pause settles pending interest", () => {
     // initiate-proposal-to-set-market-state does NOT auto-execute on threshold
     // met the way set-market-feature does (existing tests confirm); explicit
     // execute is needed after time-lock window passes.
-    const proposal_id = (r.result as any).value.buffer;
+    const proposal_id = (r.result as any).value.value;
     simnet.mineEmptyBlocks(21600);
     const exec = simnet.callPublicFn(
       "governance-v1",
       "execute",
-      [Cl.buffer(proposal_id)],
+      [Cl.bufferFromHex(proposal_id)],
       governance_account
     );
     expect(exec.result).toBeOk(Cl.bool(true));

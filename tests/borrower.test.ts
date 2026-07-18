@@ -157,7 +157,7 @@ describe("borrower tests", () => {
       [Cl.principal(borrower1)],
       borrower1
     );
-    expect(position.result.value.data.collaterals.list[0]).toStrictEqual(
+    expect(position.result.value.value.collaterals.value[0]).toStrictEqual(
       Cl.contractPrincipal(deployer, "mock-btc")
     );
 
@@ -169,7 +169,7 @@ describe("borrower tests", () => {
       [Cl.principal(borrower1)],
       borrower1
     );
-    expect(position.result.value.data.collaterals.list.length).toBe(0);
+    expect(position.result.value.value.collaterals.value.length).toBe(0);
   });
 
   it("should not allow adding collateral with 0 maxltv", async () => {
@@ -219,13 +219,13 @@ describe("borrower tests", () => {
       [Cl.principal(borrower1)],
       borrower1
     );
-    expect(position.result.value.data.collaterals.list[0]).toStrictEqual(
+    expect(position.result.value.value.collaterals.value[0]).toStrictEqual(
       Cl.contractPrincipal(deployer, "mock-btc")
     );
-    expect(position.result.value.data.collaterals.list[1]).toStrictEqual(
+    expect(position.result.value.value.collaterals.value[1]).toStrictEqual(
       Cl.contractPrincipal(deployer, "mock-eth")
     );
-    expect(position.result.value.data.collaterals.list.length).toBe(2);
+    expect(position.result.value.value.collaterals.value.length).toBe(2);
 
     const collateralVal = simnet.callReadOnlyFn(
       "borrower-v1",
@@ -243,13 +243,13 @@ describe("borrower tests", () => {
       [Cl.principal(borrower1)],
       borrower1
     );
-    expect(position.result.value.data.collaterals.list[0]).toStrictEqual(
+    expect(position.result.value.value.collaterals.value[0]).toStrictEqual(
       Cl.contractPrincipal(deployer, "mock-btc")
     );
-    expect(position.result.value.data.collaterals.list[1]).toStrictEqual(
+    expect(position.result.value.value.collaterals.value[1]).toStrictEqual(
       Cl.contractPrincipal(deployer, "mock-eth")
     );
-    expect(position.result.value.data.collaterals.list.length).toBe(2);
+    expect(position.result.value.value.collaterals.value.length).toBe(2);
 
     // mock eth should be removed from the array as it was totally withdrawn
     remove_collateral("mock-eth", 90000000000, deployer, borrower1);
@@ -259,10 +259,10 @@ describe("borrower tests", () => {
       [Cl.principal(borrower1)],
       borrower1
     );
-    expect(position.result.value.data.collaterals.list[0]).toStrictEqual(
+    expect(position.result.value.value.collaterals.value[0]).toStrictEqual(
       Cl.contractPrincipal(deployer, "mock-btc")
     );
-    expect(position.result.value.data.collaterals.list.length).toBe(1);
+    expect(position.result.value.value.collaterals.value.length).toBe(1);
   });
 
   it("should correctly borrow", async () => {
@@ -403,7 +403,7 @@ describe("borrower tests", () => {
       [Cl.principal(borrower1)],
       borrower1
     );
-    expect(position.result.value.data.collaterals.list[0]).toStrictEqual(
+    expect(position.result.value.value.collaterals.value[0]).toStrictEqual(
       Cl.contractPrincipal(deployer, "mock-btc")
     );
 
@@ -425,7 +425,7 @@ describe("borrower tests", () => {
       [Cl.principal(borrower1)],
       borrower1
     );
-    expect(position.result.value.data.collaterals.list.length).toBe(0);
+    expect(position.result.value.value.collaterals.value.length).toBe(0);
 
     contractBalance = simnet.callReadOnlyFn(
       "mock-btc",
@@ -554,7 +554,7 @@ describe("borrower tests", () => {
       [],
       deployer
     );
-    expect(open_interest.result.data["lp-open-interest"].value).toBe(
+    expect(open_interest.result.value["lp-open-interest"].value).toBe(
       170000007825n
     );
 
@@ -599,7 +599,7 @@ describe("borrower tests", () => {
       [Cl.principal(borrower1)],
       borrower1
     );
-    expect(initialDebtShares.result.value.data["debt-shares"].value).toEqual(
+    expect(initialDebtShares.result.value.value["debt-shares"].value).toEqual(
       10000000000n
     );
 
@@ -637,7 +637,7 @@ describe("borrower tests", () => {
       [Cl.principal(borrower1)],
       borrower1
     );
-    expect(userDebtShares.result.value.data["debt-shares"].value).toEqual(
+    expect(userDebtShares.result.value.value["debt-shares"].value).toEqual(
       5000000595n
     );
 
@@ -650,7 +650,7 @@ describe("borrower tests", () => {
       borrower1
     );
     expect(borrow.result).toBeOk(Cl.bool(true));
-    let repaidAmount = repay.events[3].data.value.data.assets.value;
+    let repaidAmount = repay.events[3].data.value.value.assets.value;
     let remainingAmount = BigInt(6000000000) - repaidAmount;
 
     // user should have zero debt shares
@@ -660,7 +660,7 @@ describe("borrower tests", () => {
       [Cl.principal(borrower1)],
       borrower1
     );
-    expect(userDebtShares.result.value.data["debt-shares"].value).toEqual(0n);
+    expect(userDebtShares.result.value.value["debt-shares"].value).toEqual(0n);
 
     // User should have close to 9.7 assets post full repay including interest
     userBalancePostBorrow = simnet.callReadOnlyFn(
@@ -701,7 +701,7 @@ describe("borrower tests", () => {
       [Cl.principal(borrower1)],
       borrower1
     );
-    expect(initialDebtShares.result.value.data["debt-shares"].value).toEqual(
+    expect(initialDebtShares.result.value.value["debt-shares"].value).toEqual(
       10000000000n
     );
 
@@ -724,7 +724,7 @@ describe("borrower tests", () => {
     );
     expect(borrow.result).toBeOk(Cl.bool(true));
 
-    let repaidAmount = repay.events[3].data.value.data.assets.value;
+    let repaidAmount = repay.events[3].data.value.value.assets.value;
     let remainingAmount = BigInt(11000000000) - repaidAmount;
 
     // user should have zero debt shares
@@ -734,7 +734,7 @@ describe("borrower tests", () => {
       [Cl.principal(borrower1)],
       borrower1
     );
-    expect(userDebtShares.result.value.data["debt-shares"].value).toEqual(0n);
+    expect(userDebtShares.result.value.value["debt-shares"].value).toEqual(0n);
 
     // User should have close to 9.7 assets post full repay including interest
     userBalancePostBorrow = simnet.callReadOnlyFn(
@@ -777,7 +777,7 @@ describe("borrower tests", () => {
       [Cl.principal(borrower1)],
       borrower1
     );
-    expect(initialDebtShares.result.value.data["debt-shares"].value).toEqual(
+    expect(initialDebtShares.result.value.value["debt-shares"].value).toEqual(
       10000000000n
     );
 
@@ -808,7 +808,7 @@ describe("borrower tests", () => {
       [Cl.principal(borrower1)],
       borrower1
     );
-    expect(userDebtShares.result.value.data["debt-shares"].value).toEqual(0n);
+    expect(userDebtShares.result.value.value["debt-shares"].value).toEqual(0n);
   });
 
   it("Stock price manipulation through free-liquidity should not happen", async () => {
@@ -1019,7 +1019,7 @@ describe("borrower tests", () => {
       [Cl.principal(borrower1)],
       borrower1
     );
-    expect(userDebtShares.result.value.data["debt-shares"].value).toEqual(0n);
+    expect(userDebtShares.result.value.value["debt-shares"].value).toEqual(0n);
 
     remove_collateral("mock-btc", 54994875, deployer, borrower1);
   });
@@ -1088,7 +1088,7 @@ describe("borrower tests", () => {
       [Cl.principal(borrower1)],
       borrower1
     );
-    expect(userDebtShares.result.value.data["debt-shares"].value).toEqual(0n);
+    expect(userDebtShares.result.value.value["debt-shares"].value).toEqual(0n);
 
     remove_collateral("mock-btc", 549948753641, deployer, borrower1);
   });
@@ -1149,7 +1149,7 @@ describe("borrower tests", () => {
           [],
           deployer
         );
-        let currentTotalAssets = lpParams.result?.data?.["total-assets"].value;
+        let currentTotalAssets = lpParams.result?.value?.["total-assets"].value;
         let depositAmount = 2n * currentTotalAssets - 1n; // 2 * totalAssets - 1
         depositResult = simnet.callPublicFn(
           "liquidity-provider-v1",
@@ -1174,7 +1174,7 @@ describe("borrower tests", () => {
         [],
         deployer
       );
-      let finalTotalAssets = lpParams.result?.data?.["total-assets"]?.value;
+      let finalTotalAssets = lpParams.result?.value?.["total-assets"]?.value;
       let victimDepositAmountFinal = (19n * finalTotalAssets) / 10n;
       let victimDeposit = simnet.callPublicFn(
         "liquidity-provider-v1",
@@ -1198,9 +1198,9 @@ describe("borrower tests", () => {
         deployer
       );
       let finalAssetsAfterVictim =
-        finalLpParams.result?.data?.["total-assets"]?.value;
+        finalLpParams.result?.value?.["total-assets"]?.value;
       let finalSharesAfterVictim =
-        finalLpParams.result?.data?.["total-shares"]?.value;
+        finalLpParams.result?.value?.["total-shares"]?.value;
 
       let shareValueFinal =
         Number(finalAssetsAfterVictim) / Number(finalSharesAfterVictim);
@@ -1423,7 +1423,7 @@ describe("M-01 interest-dust no-stakers regression", () => {
     const socializedEvent = res.events.find(
       (e: any) =>
         e.event === "print_event" &&
-        e.data?.value?.data?.action?.data === "socialized-bad-debt"
+        e.data?.value?.value?.action?.value === "socialized-bad-debt"
     );
     expect(socializedEvent).toBeDefined();
   });

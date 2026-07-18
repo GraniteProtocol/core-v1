@@ -41,7 +41,7 @@ const second   = accounts.get("wallet_2")!;
 
 const getLpParams = () => {
   const r = simnet.callReadOnlyFn("state-v1", "get-lp-params", [], deployer);
-  const data = (r.result as any).data;
+  const data = (r.result as any).value;
   return {
     totalAssets: data["total-assets"].value as bigint,
     totalShares: data["total-shares"].value as bigint,

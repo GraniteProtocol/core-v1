@@ -28,7 +28,7 @@ describe("update-reward-params tests", () => {
       [],
       address1
     );
-    const returnedBaseIR = res.result.data["base-reward"];
+    const returnedBaseIR = res.result.value["base-reward"];
     expect(returnedBaseIR).toStrictEqual(baseReward);
   });
 
