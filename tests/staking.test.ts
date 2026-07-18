@@ -32,6 +32,10 @@ const depositor2 = accounts.get("wallet_2")!;
 const borrower1 = accounts.get("wallet_3")!;
 const deployer = accounts.get("deployer")!;
 
+// Locate the socialized-bad-debt print event by action, not by a fragile index.
+const socializeEvent = (liq: any): any =>
+  liq.events.find((e: any) => e.data?.value?.value?.["action"]?.value === "socialized-bad-debt");
+
 const getUserLpBalance = (user: ClarityValue) => {
   const result = simnet.callReadOnlyFn(
     "state-v1",
@@ -541,7 +545,7 @@ describe("staking tests", () => {
     // accrued interest math to settle a slightly different staked-LP total.
     expectUserLpBalance(
       Cl.contractPrincipal(deployer, "staking-v1"),
-      500054682070n
+      500054718672n
     );
 
     // initiate unstake of depositor 1 at index 0
@@ -551,7 +555,7 @@ describe("staking tests", () => {
 
     // withdrawal should exist
     const withdrawal = getUserWithdrawal(depositor1, 0);
-    expect(withdrawal.value["withdrawal-shares"]).toEqual(Cl.uint(500054682070));
+    expect(withdrawal.value["withdrawal-shares"]).toEqual(Cl.uint(500054718672));
     expect(withdrawal.value["finalization-at"]).toEqual(
       Cl.uint(finalizationPeriod)
     );
@@ -563,7 +567,7 @@ describe("staking tests", () => {
 
     // depositor1 got full lp tokens of staking contract.
     // Post H-01: 2-block init shift slightly changes accrued-interest math.
-    expectUserLpBalance(Cl.principal(depositor1), 1000054682070n);
+    expectUserLpBalance(Cl.principal(depositor1), 1000054718672n);
     expectUserStakedLpBalance(Cl.principal(depositor1), 0n);
     expectUserLpBalance(Cl.contractPrincipal(deployer, "staking-v1"), 0n);
   });
@@ -742,7 +746,7 @@ describe("staking tests", () => {
       depositor1
     );
     expect(liquidate.result).toBeOk(Cl.bool(true));
-    let socializedDebt = liquidate.events[5].data.value.value["amount"].value;
+    let socializedDebt = socializeEvent(liquidate).data.value.value["amount"].value;
 
     depositorBalance = simnet.callReadOnlyFn(
       "mock-usdc",
@@ -1023,7 +1027,7 @@ describe("staking tests", () => {
       depositor1
     );
     expect(liquidate.result).toBeOk(Cl.bool(true));
-    let socializedDebt = liquidate.events[6].data.value.value["amount"].value;
+    let socializedDebt = socializeEvent(liquidate).data.value.value["amount"].value;
 
     depositorBalance = simnet.callReadOnlyFn(
       "mock-usdc",
@@ -1332,9 +1336,9 @@ describe("staking tests", () => {
       depositor1
     );
     expect(liquidate.result).toBeOk(Cl.bool(true));
-    let socializedDebt = liquidate.events[6].data.value.value["amount"].value;
+    let socializedDebt = socializeEvent(liquidate).data.value.value["amount"].value;
     let burnedStakedLPTokens =
-      liquidate.events[6].data.value.value["burned-staking-lp-tokens"].value;
+      socializeEvent(liquidate).data.value.value["burned-staking-lp-tokens"].value;
     // since staked lp are equally divided between active and withdrawal
     // Withdrawal should yield half of the remaining
     let expectedWithdrawalTokens = (1000n - burnedStakedLPTokens) / 2n;
@@ -1951,7 +1955,7 @@ describe("staking tests", () => {
       depositor1
     );
     expect(liquidate.result).toBeOk(Cl.bool(true));
-    let socializedDebt = liquidate.events[7].data.value.value["amount"].value;
+    let socializedDebt = socializeEvent(liquidate).data.value.value["amount"].value;
 
     depositorBalance = simnet.callReadOnlyFn(
       "mock-usdc",

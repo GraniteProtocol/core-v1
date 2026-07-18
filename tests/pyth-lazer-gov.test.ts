@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from "vitest";
-import { Cl } from "@stacks/transactions";
+import { Cl, ClarityType } from "@stacks/transactions";
 import { TEST_PUBKEY } from "./lazer";
 
 const accounts = simnet.getAccounts();
@@ -18,7 +18,7 @@ const TIMELOCK = 21600;
 const shimPrincipal = Cl.contractPrincipal(deployer, SHIM);
 const decoderPrincipal = Cl.contractPrincipal(deployer, "pyth-lazer-decoder-v1");
 
-const proposalId = (res: any): Uint8Array => res.result.value.buffer;
+const proposalId = (res: any): string => res.result.value.value;
 
 const signers = (pubkey: Uint8Array) =>
   Cl.list([Cl.tuple({ pubkey: Cl.buffer(pubkey), "expires-at": Cl.uint(FAR_FUTURE) })]);
@@ -55,7 +55,7 @@ describe("pyth-lazer-gov instant actions", () => {
 
   it("set-fee executes immediately for a single-member multisig", () => {
     const res = simnet.callPublicFn(SHIM, "initiate-proposal-to-set-fee", [Cl.uint(500), Cl.uint(10)], member);
-    expect(res.result.type).toBe("ok");
+    expect(res.result.type).toBe(ClarityType.ResponseOk);
     expect(simnet.callReadOnlyFn(ORACLE, "get-fee", [], deployer).result).toBeUint(500);
   });
 
@@ -84,9 +84,9 @@ describe("pyth-lazer-gov timelocked actions", () => {
     const id = proposalId(res);
     // not applied yet
     expect(simnet.callReadOnlyFn(ORACLE, "get-stale-price-threshold", [], deployer).result).not.toBeUint(3600);
-    expect(simnet.callPublicFn(SHIM, "execute", [Cl.buffer(id)], member).result).toBeErr(Cl.uint(140017)); // TIME-LOCKED
+    expect(simnet.callPublicFn(SHIM, "execute", [Cl.bufferFromHex(id)], member).result).toBeErr(Cl.uint(140017)); // TIME-LOCKED
     simnet.mineEmptyBlocks(TIMELOCK);
-    expect(simnet.callPublicFn(SHIM, "execute", [Cl.buffer(id)], member).result).toBeOk(Cl.bool(true));
+    expect(simnet.callPublicFn(SHIM, "execute", [Cl.bufferFromHex(id)], member).result).toBeOk(Cl.bool(true));
     expect(simnet.callReadOnlyFn(ORACLE, "get-stale-price-threshold", [], deployer).result).toBeUint(3600);
   });
 
@@ -99,7 +99,7 @@ describe("pyth-lazer-gov timelocked actions", () => {
     );
     const id = proposalId(res);
     simnet.mineEmptyBlocks(TIMELOCK);
-    expect(simnet.callPublicFn(SHIM, "execute", [Cl.buffer(id)], member).result).toBeOk(Cl.bool(true));
+    expect(simnet.callPublicFn(SHIM, "execute", [Cl.bufferFromHex(id)], member).result).toBeOk(Cl.bool(true));
     expect(simnet.callReadOnlyFn(ORACLE, "has-role", [Cl.principal(outsider), ROLE_PAUSE], deployer).result).toBeBool(true);
   });
 
@@ -108,9 +108,9 @@ describe("pyth-lazer-gov timelocked actions", () => {
     const id = proposalId(res);
     simnet.mineEmptyBlocks(TIMELOCK);
     // the generic executor rejects the decoder action
-    expect(simnet.callPublicFn(SHIM, "execute", [Cl.buffer(id)], member).result).toBeErr(Cl.uint(140000)); // INVALID-ACTION
+    expect(simnet.callPublicFn(SHIM, "execute", [Cl.bufferFromHex(id)], member).result).toBeErr(Cl.uint(140000)); // INVALID-ACTION
     expect(
-      simnet.callPublicFn(SHIM, "execute-set-decoder", [Cl.buffer(id), decoderPrincipal], member).result
+      simnet.callPublicFn(SHIM, "execute-set-decoder", [Cl.bufferFromHex(id), decoderPrincipal], member).result
     ).toBeOk(Cl.bool(true));
     expect(simnet.callReadOnlyFn(ORACLE, "get-decoder", [], deployer).result).toBePrincipal(`${deployer}.pyth-lazer-decoder-v1`);
   });
@@ -147,7 +147,7 @@ describe("pyth-lazer-gov guardian rotation", () => {
     const id = proposalId(res);
     expect(simnet.callReadOnlyFn(SHIM, "is-guardian", [Cl.principal(outsider)], deployer).result).toBeErr(Cl.uint(140001));
     simnet.mineEmptyBlocks(TIMELOCK);
-    expect(simnet.callPublicFn(SHIM, "execute", [Cl.buffer(id)], member).result).toBeOk(Cl.bool(true));
+    expect(simnet.callPublicFn(SHIM, "execute", [Cl.bufferFromHex(id)], member).result).toBeOk(Cl.bool(true));
     expect(simnet.callReadOnlyFn(SHIM, "is-guardian", [Cl.principal(outsider)], deployer).result).toBeOk(Cl.bool(true));
   });
 
@@ -158,7 +158,7 @@ describe("pyth-lazer-gov guardian rotation", () => {
       [Cl.uint(ACTION_REMOVE_GUARDIAN), Cl.principal(guardian), Cl.uint(50000)],
       member
     );
-    expect(res.result.type).toBe("ok"); // single-member multisig executes on propose
+    expect(res.result.type).toBe(ClarityType.ResponseOk); // single-member multisig executes on propose
     expect(simnet.callReadOnlyFn(SHIM, "is-guardian", [Cl.principal(guardian)], deployer).result).toBeErr(Cl.uint(140001));
   });
 });
@@ -179,7 +179,7 @@ describe("pyth-lazer-gov deployer handover", () => {
       );
       const id = proposalId(res);
       simnet.mineEmptyBlocks(TIMELOCK);
-      expect(simnet.callPublicFn(SHIM, "execute", [Cl.buffer(id)], member).result).toBeOk(Cl.bool(true));
+      expect(simnet.callPublicFn(SHIM, "execute", [Cl.bufferFromHex(id)], member).result).toBeOk(Cl.bool(true));
     };
     revoke(ROLE_GOVERNANCE);
     revoke(ROLE_PAUSE);

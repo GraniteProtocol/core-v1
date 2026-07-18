@@ -1,5 +1,5 @@
 import { expect } from "vitest";
-import { Cl, ClarityType, ClarityValue, cvToValue } from "@stacks/transactions";
+import { Cl, ClarityType, ClarityValue, cvToString } from "@stacks/transactions";
 import { buildEvmUpdate, buildLazerPayload, TEST_PUBKEY, PROP, FeedSpec } from "./lazer";
 import { scalingFactor } from "./utils";
 
@@ -121,14 +121,11 @@ export const market_price_cv = (): ClarityValue => Cl.uint(converted_price("mock
 // Converted collateral prices aligned to a user's on-chain position collaterals, for read-only
 // views. Reads the position so the injected list always matches the contract's collateral order.
 export const collateral_prices_cv = (user: string, deployer: any): ClarityValue => {
-  const pos = simnet.callReadOnlyFn("state-v1", "get-user-position", [Cl.principal(user)], deployer).result;
-  const val: any = cvToValue(pos, true);
-  const collaterals: any[] = val?.collaterals ?? val?.value?.collaterals ?? [];
+  const pos: any = simnet.callReadOnlyFn("state-v1", "get-user-position", [Cl.principal(user)], deployer).result;
+  // (optional {collaterals: (list principal), ...}); none -> no collaterals
+  const collaterals: any[] = pos?.value?.value?.collaterals?.value ?? [];
   return Cl.list(
-    collaterals.map((c) => {
-      const name = String(typeof c === "string" ? c : c?.value ?? c).split(".").pop() as string;
-      return Cl.uint(converted_price(name));
-    })
+    collaterals.map((c) => Cl.uint(converted_price(cvToString(c).split(".").pop() as string)))
   );
 };
 
