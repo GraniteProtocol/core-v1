@@ -300,8 +300,10 @@
       ;; slippage check
       (asserts! (>= collateral-to-give min-collateral-expected) ERR-SLIPPAGE)
       (let (
-          ;; Re-price against the post-liquidation collateral set (collateral may have been fully seized).
-          (post-liq-collateral-prices (try! (align-prices updated-collaterals-list tokens verified-prices)))
+          ;; Re-price against a fresh read of the post-liquidation collateral set, so the injected
+          ;; prices line up one-to-one with what account-health and socialize-bad-debt read back.
+          (post-liq-collaterals (get collaterals (unwrap! (get user-position (contract-call? .state-v1 get-borrow-repay-params user)) ERR-NO-POSITION)))
+          (post-liq-collateral-prices (try! (align-prices post-liq-collaterals tokens verified-prices)))
           (account-health-data (try! (account-health user market-asset-price post-liq-collateral-prices)))
           (position-health (get position-health account-health-data))
         )
@@ -557,28 +559,29 @@
 ;; Used to re-align verified prices to a collateral set that may differ from what was verified
 ;; (e.g. after a collateral is fully seized during liquidation).
 (define-private (align-prices (collaterals (list 10 principal)) (tokens (list 11 principal)) (prices (list 11 uint)))
-  (ok (get out (try! (fold accumulate-aligned-price collaterals (ok {
-    tokens: tokens,
-    prices: prices,
-    out: (list),
-  })))))
+  (let ((result (fold accumulate-aligned-price collaterals {
+      tokens: tokens,
+      prices: prices,
+      out: (list),
+      ok: true,
+    })))
+    (if (get ok result) (ok (get out result)) ERR-INVALID-ORACLE-PRICE)
+  )
 )
 
 (define-private (accumulate-aligned-price
     (collateral principal)
-    (acc (response {
+    (acc {
       tokens: (list 11 principal),
       prices: (list 11 uint),
       out: (list 10 uint),
-    } uint))
+      ok: bool,
+    })
   )
-  (let (
-      (state (try! acc))
-      (idx (unwrap! (index-of? (get tokens state) collateral) ERR-INVALID-ORACLE-PRICE))
-      (price (unwrap! (element-at? (get prices state) idx) ERR-INVALID-ORACLE-PRICE))
-    )
-    (ok (merge state {
-      out: (unwrap! (as-max-len? (append (get out state) price) u10) ERR-INVALID-ORACLE-PRICE),
-    }))
+  (match (index-of? (get tokens acc) collateral)
+    idx (match (element-at? (get prices acc) idx)
+          price (merge acc { out: (unwrap-panic (as-max-len? (append (get out acc) price) u10)) })
+          (merge acc { ok: false }))
+    (merge acc { ok: false })
   )
 )

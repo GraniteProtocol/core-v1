@@ -231,9 +231,13 @@
   (concat (list .mock-usdc) collaterals)
 )
 
-;; The collateral slice of a verified price list (drops the leading market-asset price).
+;; The collateral slice of a verified price list (drops the leading market-asset price);
+;; empty when the position has no collateral, since `slice?` has no valid range on one element.
 (define-private (collateral-prices-from (prices (list 11 uint)))
-  (unwrap-panic (as-max-len? (unwrap-panic (slice? prices u1 (len prices))) u10))
+  (if (<= (len prices) u1)
+    (list)
+    (unwrap-panic (as-max-len? (unwrap-panic (slice? prices u1 (len prices))) u10))
+  )
 )
 
 (define-private (accrue-interest)
