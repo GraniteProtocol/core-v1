@@ -23,10 +23,9 @@
 (define-constant PRICE-SCALING-FACTOR (contract-call? .constants-v2 get-price-scaling-factor))
 
 ;; PUBLIC FUNCTIONS
-(define-public (borrow (pyth-price-feed-data (optional (buff 8192))) (amount uint) (maybe-user (optional principal)))
+(define-public (borrow (update (buff 8192)) (amount uint) (maybe-user (optional principal)))
   (begin
     (try! (contract-call? .withdrawal-caps-v1 check-withdrawal-debt-cap amount))
-    (try! (contract-call? .pyth-adapter-v1 update-pyth pyth-price-feed-data))
     (try! (accrue-interest))
     (asserts! (>= (contract-call? .state-v1 get-borrowable-balance) amount) ERR-INSUFFICIENT-FREE-LIQUIDITY)
     (let
@@ -41,11 +40,13 @@
         (new-debt-shares (contract-call? .math-v1 convert-to-debt-shares debt-params amount true))
         (total-user-debt-shares (+ new-debt-shares (get debt-shares position)))
         (position-collaterals (get collaterals position))
-        (collateral-prices (try! (contract-call? .pyth-adapter-v1 bulk-read-collateral-prices position-collaterals)))
+        ;; Verify the Lazer update once: prices[0] is the market asset, prices[1..] align to collaterals.
+        (prices (try! (contract-call? .pyth-adapter-v1 verify-and-get-prices update (market-and-collaterals position-collaterals))))
+        (market-asset-price (unwrap! (element-at? prices u0) ERR-MISSING-MARKET-PRICE))
+        (collateral-prices (collateral-prices-from prices))
         (user-list (unwrap-panic (slice? (list user user user user user user user user user user) u0 (len collateral-prices))))
         (total-max-ltv (fold + (map iterate-collateral-value position-collaterals collateral-prices user-list) u0))
         (new-current-debt (+ amount current-debt))
-        (market-asset-price (unwrap! (contract-call? .pyth-adapter-v1 read-price .mock-usdc) ERR-MISSING-MARKET-PRICE))
         (new-current-debt-adjusted (contract-call? .math-v1 get-market-asset-value market-asset-price new-current-debt))
       )
       (asserts! (<= new-current-debt-adjusted total-max-ltv) ERR-MAX-LTV)
@@ -173,10 +174,9 @@
     )
 ))
 
-(define-public (remove-collateral (pyth-price-feed-data (optional (buff 8192))) (collateral <token-trait>) (amount uint) (maybe-user (optional principal)))
+(define-public (remove-collateral (update (buff 8192)) (collateral <token-trait>) (amount uint) (maybe-user (optional principal)))
   (begin
     (try! (contract-call? .withdrawal-caps-v1 check-withdrawal-collateral-cap collateral amount))
-    (try! (contract-call? .pyth-adapter-v1 update-pyth pyth-price-feed-data))
     (try! (accrue-interest))
     (let
       (
@@ -188,12 +188,15 @@
         (prev-amount (get amount user-balance))
         (position (get user-position remove-collateral-params))
         (remove-user-collateral-info (try! (remove-user-collateral user prev-amount amount collateral-token (get debt-shares position) (get collaterals position) (get borrowed-amount position) (get borrowed-block position))))
-        (collateral-prices (try! (contract-call? .pyth-adapter-v1 bulk-read-collateral-prices (get position-collaterals remove-user-collateral-info))))
+        (position-collaterals (get position-collaterals remove-user-collateral-info))
+        ;; Verify against the post-removal collateral set: prices[0] market asset, prices[1..] collaterals.
+        (prices (try! (contract-call? .pyth-adapter-v1 verify-and-get-prices update (market-and-collaterals position-collaterals))))
+        (market-asset-price (unwrap! (element-at? prices u0) ERR-MISSING-MARKET-PRICE))
+        (collateral-prices (collateral-prices-from prices))
         (user-list (unwrap-panic (slice? (list user user user user user user user user user user) u0 (len collateral-prices))))
-        (total-max-ltv (fold + (map iterate-collateral-value (get position-collaterals remove-user-collateral-info) collateral-prices user-list) u0))
+        (total-max-ltv (fold + (map iterate-collateral-value position-collaterals collateral-prices user-list) u0))
         (debt-params (contract-call? .state-v1 get-debt-params))
         (current-debt (contract-call? .math-v1 convert-to-debt-assets debt-params (get debt-shares position) true))
-        (market-asset-price (unwrap! (contract-call? .pyth-adapter-v1 read-price .mock-usdc) ERR-MISSING-MARKET-PRICE))
         (current-debt-adjusted (contract-call? .math-v1 get-market-asset-value market-asset-price current-debt))
       )
       (asserts! (<= current-debt-adjusted total-max-ltv) ERR-MAX-LTV)
@@ -212,24 +215,26 @@
 ))
 
 ;; READ-ONLY FUNCTIONS
-(define-read-only (get-user-collaterals-value (account principal))
-  (match (contract-call? .state-v1 get-user-position account) 
+(define-read-only (get-user-collaterals-value (account principal) (collateral-prices (list 10 uint)))
+  (match (contract-call? .state-v1 get-user-position account)
   position
-  (let
-    (
-      (posted-collaterals (get collaterals position))
-      (collateral-prices (try! (contract-call? .pyth-adapter-v1 bulk-read-collateral-prices posted-collaterals)))
-    )
-    (begin
-      (ok (fold + (map get-collateral-value posted-collaterals (list
-        account account account account account account account account account account
-      ) collateral-prices) u0))
-    )
-  )
+    (ok (fold + (map get-collateral-value (get collaterals position) (list
+      account account account account account account account account account account
+    ) collateral-prices) u0))
   ERR-NO-POSITION
 ))
 
 ;; PRIVATE FUNCTIONS
+
+;; Token list for a verify-and-get-prices call: market asset first, then the collaterals.
+(define-private (market-and-collaterals (collaterals (list 10 principal)))
+  (concat (list .mock-usdc) collaterals)
+)
+
+;; The collateral slice of a verified price list (drops the leading market-asset price).
+(define-private (collateral-prices-from (prices (list 11 uint)))
+  (unwrap-panic (as-max-len? (unwrap-panic (slice? prices u1 (len prices))) u10))
+)
 
 (define-private (accrue-interest)
   (let (
