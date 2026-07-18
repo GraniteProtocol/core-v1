@@ -23,22 +23,31 @@ const proposalId = (res: any): Uint8Array => res.result.value.buffer;
 const signers = (pubkey: Uint8Array) =>
   Cl.list([Cl.tuple({ pubkey: Cl.buffer(pubkey), "expires-at": Cl.uint(FAR_FUTURE) })]);
 
-// meta-governance-v1 membership + shim guardians + grant the shim the oracle roles it holds in production.
-const setup = () => {
+const initMetaGov = () =>
   simnet.callPublicFn(
     "meta-governance-v1",
     "initialize-governance",
     [Cl.list([Cl.some(Cl.principal(member)), Cl.none(), Cl.none(), Cl.none(), Cl.none()])],
     deployer
   );
-  simnet.callPublicFn(
-    SHIM,
-    "initialize",
-    [Cl.list([Cl.some(Cl.principal(guardian)), Cl.none(), Cl.none(), Cl.none(), Cl.none()])],
-    deployer
-  );
+
+// The deployer holds both oracle roles by default and grants them to the shim.
+const grantShimRoles = () => {
   simnet.callPublicFn(ORACLE, "set-role", [shimPrincipal, ROLE_GOVERNANCE, Cl.bool(true)], deployer);
   simnet.callPublicFn(ORACLE, "set-role", [shimPrincipal, ROLE_PAUSE, Cl.bool(true)], deployer);
+};
+
+const guardianList = (...addrs: string[]) =>
+  Cl.list([...addrs.map((a) => Cl.some(Cl.principal(a))), ...Array(5 - addrs.length).fill(Cl.none())]);
+
+const initShim = (guardians = guardianList(guardian)) =>
+  simnet.callPublicFn(SHIM, "initialize", [guardians], deployer);
+
+// Deploy order: grant the shim its oracle roles, then initialize (which asserts it holds them).
+const setup = () => {
+  initMetaGov();
+  grantShimRoles();
+  initShim();
 };
 
 describe("pyth-lazer-gov instant actions", () => {
@@ -119,5 +128,79 @@ describe("pyth-lazer-gov guardian pause", () => {
 
   it("non-guardian cannot pause", () => {
     expect(simnet.callPublicFn(SHIM, "guardian-pause", [], outsider).result).toBeErr(Cl.uint(140001)); // NOT-GUARDIAN
+  });
+});
+
+const ACTION_ADD_GUARDIAN = 6;
+const ACTION_REMOVE_GUARDIAN = 7;
+
+describe("pyth-lazer-gov guardian rotation", () => {
+  beforeEach(setup);
+
+  it("adds a guardian through a time-locked proposal", () => {
+    const res = simnet.callPublicFn(
+      SHIM,
+      "initiate-proposal-to-update-guardian",
+      [Cl.uint(ACTION_ADD_GUARDIAN), Cl.principal(outsider), Cl.uint(50000)],
+      member
+    );
+    const id = proposalId(res);
+    expect(simnet.callReadOnlyFn(SHIM, "is-guardian", [Cl.principal(outsider)], deployer).result).toBeErr(Cl.uint(140001));
+    simnet.mineEmptyBlocks(TIMELOCK);
+    expect(simnet.callPublicFn(SHIM, "execute", [Cl.buffer(id)], member).result).toBeOk(Cl.bool(true));
+    expect(simnet.callReadOnlyFn(SHIM, "is-guardian", [Cl.principal(outsider)], deployer).result).toBeOk(Cl.bool(true));
+  });
+
+  it("removes a compromised guardian instantly", () => {
+    const res = simnet.callPublicFn(
+      SHIM,
+      "initiate-proposal-to-update-guardian",
+      [Cl.uint(ACTION_REMOVE_GUARDIAN), Cl.principal(guardian), Cl.uint(50000)],
+      member
+    );
+    expect(res.result.type).toBe("ok"); // single-member multisig executes on propose
+    expect(simnet.callReadOnlyFn(SHIM, "is-guardian", [Cl.principal(guardian)], deployer).result).toBeErr(Cl.uint(140001));
+  });
+});
+
+describe("pyth-lazer-gov deployer handover", () => {
+  beforeEach(setup);
+
+  it("revokes the deployer's oracle roles through the shim after the time-lock", () => {
+    // deployer still holds both roles after granting them to the shim
+    expect(simnet.callReadOnlyFn(ORACLE, "has-role", [Cl.principal(deployer), ROLE_GOVERNANCE], deployer).result).toBeBool(true);
+
+    const revoke = (role: any) => {
+      const res = simnet.callPublicFn(
+        SHIM,
+        "initiate-proposal-to-set-role",
+        [Cl.principal(deployer), role, Cl.bool(false), Cl.uint(50000)],
+        member
+      );
+      const id = proposalId(res);
+      simnet.mineEmptyBlocks(TIMELOCK);
+      expect(simnet.callPublicFn(SHIM, "execute", [Cl.buffer(id)], member).result).toBeOk(Cl.bool(true));
+    };
+    revoke(ROLE_GOVERNANCE);
+    revoke(ROLE_PAUSE);
+
+    // deployer holds neither, the shim holds both
+    expect(simnet.callReadOnlyFn(ORACLE, "has-role", [Cl.principal(deployer), ROLE_GOVERNANCE], deployer).result).toBeBool(false);
+    expect(simnet.callReadOnlyFn(ORACLE, "has-role", [Cl.principal(deployer), ROLE_PAUSE], deployer).result).toBeBool(false);
+    expect(simnet.callReadOnlyFn(ORACLE, "has-role", [shimPrincipal, ROLE_GOVERNANCE], deployer).result).toBeBool(true);
+    expect(simnet.callReadOnlyFn(ORACLE, "has-role", [shimPrincipal, ROLE_PAUSE], deployer).result).toBeBool(true);
+  });
+});
+
+describe("pyth-lazer-gov initialize guards", () => {
+  it("fails when the shim has not been granted the oracle roles", () => {
+    initMetaGov();
+    expect(initShim().result).toBeErr(Cl.uint(140022)); // MISSING-ORACLE-ROLE
+  });
+
+  it("fails when no guardian is supplied", () => {
+    initMetaGov();
+    grantShimRoles();
+    expect(initShim(guardianList()).result).toBeErr(Cl.uint(140023)); // NO-GUARDIANS
   });
 });

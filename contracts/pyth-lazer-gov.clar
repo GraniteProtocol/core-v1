@@ -14,6 +14,12 @@
 (define-constant ACTION_SET_FEE_RECIPIENT u3)
 (define-constant ACTION_SET_STALE_THRESHOLD u4)
 (define-constant ACTION_SET_ROLE u5)
+(define-constant ACTION_ADD_GUARDIAN u6)
+(define-constant ACTION_REMOVE_GUARDIAN u7)
+
+;; Oracle role ids (mirror pyth-lazer-oracle)
+(define-constant ROLE_GOVERNANCE 0x00)
+(define-constant ROLE_PAUSE 0x01)
 
 ;; Approve/deny threshold: 60% and above
 (define-constant THRESHOLD u60)
@@ -46,6 +52,8 @@
 (define-constant ERR-CANNOT-VOTE (err u140019))
 (define-constant ERR-ALREADY-GUARDIAN (err u140020))
 (define-constant ERR-DECODER-MISMATCH (err u140021))
+(define-constant ERR-MISSING-ORACLE-ROLE (err u140022))
+(define-constant ERR-NO-GUARDIANS (err u140023))
 
 ;; DATA VARS / MAPS
 (define-data-var next-proposal-nonce uint u0)
@@ -83,6 +91,7 @@
   role: (buff 1),
   enabled: bool,
 })
+(define-map guardian-data (buff 32) principal)
 
 ;; contract deployer. No permissions except to initialize the contract
 (define-constant contract-deployer contract-caller)
@@ -167,6 +176,7 @@
     (asserts! (not (is-eq action ACTION_SET_FEE_RECIPIENT)) (execute-set-fee-recipient proposal-id))
     (asserts! (not (is-eq action ACTION_SET_STALE_THRESHOLD)) (execute-set-stale-threshold proposal-id))
     (asserts! (not (is-eq action ACTION_SET_ROLE)) (execute-set-role proposal-id))
+    (asserts! (not (and (>= action ACTION_ADD_GUARDIAN) (<= action ACTION_REMOVE_GUARDIAN))) (execute-update-guardian proposal-id action))
     ERR-INVALID-ACTION
 ))
 
@@ -235,6 +245,10 @@
   (default-to false (map-get? guardians account))
 )
 
+(define-private (is-some-principal (account (optional principal)))
+  (is-some account)
+)
+
 (define-private (add-guardian (guardian principal))
   (begin
     (asserts! (not (is-already-guardian guardian)) ERR-ALREADY-GUARDIAN)
@@ -243,10 +257,25 @@
     SUCCESS
 ))
 
+(define-private (remove-guardian (guardian principal))
+  (begin
+    (asserts! (is-already-guardian guardian) ERR-NOT-GUARDIAN)
+    (map-delete guardians guardian)
+    (print { action: "remove-guardian", guardian: guardian })
+    SUCCESS
+))
+
 (define-private (set-guardians (maybe-account (optional principal)) (res (response bool uint)))
   (if (is-err res)
     res
     (match maybe-account account (add-guardian account) res)
+))
+
+(define-private (execute-update-guardian (proposal-id (buff 32)) (action uint))
+  (let ((guardian (unwrap-panic (map-get? guardian-data proposal-id))))
+    (asserts! (not (is-eq action ACTION_ADD_GUARDIAN)) (add-guardian guardian))
+    (asserts! (not (is-eq action ACTION_REMOVE_GUARDIAN)) (remove-guardian guardian))
+    ERR-INVALID-ACTION
 ))
 
 ;; READ ONLY FUNCTIONS
@@ -361,6 +390,23 @@
     (ok proposal-id)
 ))
 
+(define-public (initiate-proposal-to-update-guardian (action uint) (guardian principal) (expires-in uint))
+  (let (
+      (proposal-id (keccak256 (unwrap! (to-consensus-buff? {
+        sender: contract-caller,
+        nonce: (var-get next-proposal-nonce),
+        action: action,
+        expires-in: expires-in,
+        data: guardian,
+      }) ERR-FAILED-TO-GENERATE-PROPOSAL-ID)))
+    )
+    (asserts! (or (is-eq action ACTION_ADD_GUARDIAN) (is-eq action ACTION_REMOVE_GUARDIAN)) ERR-INVALID-ACTION)
+    (try! (create-proposal proposal-id action expires-in))
+    (map-set guardian-data proposal-id guardian)
+    (try! (execute-if-approve-threshold-met proposal-id))
+    (ok proposal-id)
+))
+
 (define-public (approve (proposal-id (buff 32)))
   (let ((proposal (unwrap! (map-get? governance-proposal proposal-id) ERR-UNKNOWN-PROPOSAL)))
     (try! (is-governance-member contract-caller))
@@ -440,10 +486,16 @@
     SUCCESS
 ))
 
+;; Requires the shim to already hold the oracle roles it will exercise, so a forgotten grant
+;; fails here instead of silently at the first proposal execution. Deploy order is therefore:
+;; deploy the stack, grant the shim ROLE_GOVERNANCE + ROLE_PAUSE, then initialize.
 (define-public (initialize (guardians-addrs (list 5 (optional principal))))
   (begin
     (asserts! (not (var-get initialized)) ERR-CONTRACT-ALREADY-INITIALIZED)
     (asserts! (is-eq contract-caller contract-deployer) ERR-NOT-CONTRACT-DEPLOYER)
+    (asserts! (contract-call? .pyth-lazer-oracle has-role (as-contract tx-sender) ROLE_GOVERNANCE) ERR-MISSING-ORACLE-ROLE)
+    (asserts! (contract-call? .pyth-lazer-oracle has-role (as-contract tx-sender) ROLE_PAUSE) ERR-MISSING-ORACLE-ROLE)
+    (asserts! (> (len (filter is-some-principal guardians-addrs)) u0) ERR-NO-GUARDIANS)
     (var-set initialized true)
     (try! (fold set-guardians guardians-addrs SUCCESS))
     (print { action: "initialize", meta-governance: .meta-governance-v1, guardians: guardians-addrs })
@@ -468,3 +520,5 @@
 (map-set time-locked ACTION_SET_DECODER true)
 (map-set time-locked ACTION_SET_STALE_THRESHOLD true)
 (map-set time-locked ACTION_SET_ROLE true)
+;; Adding a guardian is deliberate (time-locked); removing a compromised one is instant.
+(map-set time-locked ACTION_ADD_GUARDIAN true)
