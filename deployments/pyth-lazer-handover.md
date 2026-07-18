@@ -72,7 +72,9 @@ Collect approvals to threshold, wait the 24h time-lock, then `shim.execute(<prop
   count from it, so it must be live and initialized before any shim proposal.
 - Guardians can be rotated post-deploy through the shim: `initiate-proposal-to-update-guardian` with
   action 6 (add, 24h time-locked) or 7 (remove, instant so a compromised pause key can be dropped
-  fast).
+  fast). There is no on-chain floor on guardian count by design, so keep at least two guardians in
+  production and rotate by adding the replacement before removing the old key. Removing the last
+  guardian leaves no emergency pause until a new add clears its 24h time-lock.
 - Confidence is best-effort upstream: about 15% of Lazer updates omit the confidence property even
   for BTC/ETH/SOL (it is requestable but not guaranteed, no API flag forces it). The adapter enforces
   the spread bound only when confidence is present and accepts the update when it is absent (it emits
