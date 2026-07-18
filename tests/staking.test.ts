@@ -21,6 +21,9 @@ import {
   set_initial_price,
   set_price,
   set_pyth_time_delta,
+  build_price_update,
+  market_price_cv,
+  collateral_prices_cv,
 } from "./pyth";
 
 const accounts = simnet.getAccounts();
@@ -600,7 +603,7 @@ describe("staking tests", () => {
     let accounthealthRes = simnet.callReadOnlyFn(
       "liquidator-v1",
       "account-health",
-      [Cl.principal(borrower1), Cl.none(), Cl.none()],
+      [Cl.principal(borrower1), market_price_cv(), collateral_prices_cv(borrower1, deployer)],
       deployer
     );
     expect(accounthealthRes.result.value.value["position-health"]).toEqual(
@@ -634,7 +637,7 @@ describe("staking tests", () => {
     let collateralVal = simnet.callReadOnlyFn(
       "borrower-v1",
       "get-user-collaterals-value",
-      [Cl.principal(borrower1)],
+      [Cl.principal(borrower1), collateral_prices_cv(borrower1, deployer)],
       borrower1
     );
     expect(collateralVal.result.value.value).toBe(750n);
@@ -643,7 +646,7 @@ describe("staking tests", () => {
     accounthealthRes = simnet.callReadOnlyFn(
       "liquidator-v1",
       "account-health",
-      [Cl.principal(borrower1), Cl.none(), Cl.none()],
+      [Cl.principal(borrower1), market_price_cv(), collateral_prices_cv(borrower1, deployer)],
       deployer
     );
     expect(accounthealthRes.result.value.value["position-health"]).toEqual(
@@ -668,7 +671,7 @@ describe("staking tests", () => {
       "liquidator-v1",
       "liquidate-collateral",
       [
-        Cl.none(),
+        Cl.buffer(build_price_update()),
         Cl.contractPrincipal(deployer, "mock-eth"),
         Cl.principal(borrower1),
         Cl.uint(1000),
@@ -730,7 +733,7 @@ describe("staking tests", () => {
       "liquidator-v1",
       "liquidate-collateral",
       [
-        Cl.none(),
+        Cl.buffer(build_price_update()),
         Cl.contractPrincipal(deployer, "mock-btc"),
         Cl.principal(borrower1),
         Cl.uint(1000),
@@ -760,7 +763,7 @@ describe("staking tests", () => {
     accounthealthRes = simnet.callReadOnlyFn(
       "liquidator-v1",
       "account-health",
-      [Cl.principal(borrower1), Cl.none(), Cl.none()],
+      [Cl.principal(borrower1), market_price_cv(), collateral_prices_cv(borrower1, deployer)],
       deployer
     );
     expect(accounthealthRes.result.value.value["position-health"]).toEqual(
@@ -867,7 +870,7 @@ describe("staking tests", () => {
     let accounthealthRes = simnet.callReadOnlyFn(
       "liquidator-v1",
       "account-health",
-      [Cl.principal(borrower1), Cl.none(), Cl.none()],
+      [Cl.principal(borrower1), market_price_cv(), collateral_prices_cv(borrower1, deployer)],
       deployer
     );
     expect(accounthealthRes.result.value.value["position-health"]).toEqual(
@@ -901,7 +904,7 @@ describe("staking tests", () => {
     let collateralVal = simnet.callReadOnlyFn(
       "borrower-v1",
       "get-user-collaterals-value",
-      [Cl.principal(borrower1)],
+      [Cl.principal(borrower1), collateral_prices_cv(borrower1, deployer)],
       borrower1
     );
     expect(collateralVal.result.value.value).toBe(750n);
@@ -910,7 +913,7 @@ describe("staking tests", () => {
     accounthealthRes = simnet.callReadOnlyFn(
       "liquidator-v1",
       "account-health",
-      [Cl.principal(borrower1), Cl.none(), Cl.none()],
+      [Cl.principal(borrower1), market_price_cv(), collateral_prices_cv(borrower1, deployer)],
       deployer
     );
     expect(accounthealthRes.result.value.value["position-health"]).toEqual(
@@ -935,7 +938,7 @@ describe("staking tests", () => {
       "liquidator-v1",
       "liquidate-collateral",
       [
-        Cl.none(),
+        Cl.buffer(build_price_update()),
         Cl.contractPrincipal(deployer, "mock-eth"),
         Cl.principal(borrower1),
         Cl.uint(1000),
@@ -1011,7 +1014,7 @@ describe("staking tests", () => {
       "liquidator-v1",
       "liquidate-collateral",
       [
-        Cl.none(),
+        Cl.buffer(build_price_update()),
         Cl.contractPrincipal(deployer, "mock-btc"),
         Cl.principal(borrower1),
         Cl.uint(1000),
@@ -1041,7 +1044,7 @@ describe("staking tests", () => {
     accounthealthRes = simnet.callReadOnlyFn(
       "liquidator-v1",
       "account-health",
-      [Cl.principal(borrower1), Cl.none(), Cl.none()],
+      [Cl.principal(borrower1), market_price_cv(), collateral_prices_cv(borrower1, deployer)],
       deployer
     );
     expect(accounthealthRes.result.value.value["position-health"]).toEqual(
@@ -1164,7 +1167,7 @@ describe("staking tests", () => {
     let accounthealthRes = simnet.callReadOnlyFn(
       "liquidator-v1",
       "account-health",
-      [Cl.principal(borrower1), Cl.none(), Cl.none()],
+      [Cl.principal(borrower1), market_price_cv(), collateral_prices_cv(borrower1, deployer)],
       deployer
     );
     expect(accounthealthRes.result.value.value["position-health"]).toEqual(
@@ -1210,7 +1213,7 @@ describe("staking tests", () => {
     let collateralVal = simnet.callReadOnlyFn(
       "borrower-v1",
       "get-user-collaterals-value",
-      [Cl.principal(borrower1)],
+      [Cl.principal(borrower1), collateral_prices_cv(borrower1, deployer)],
       borrower1
     );
     expect(collateralVal.result.value.value).toBe(750n);
@@ -1219,7 +1222,7 @@ describe("staking tests", () => {
     accounthealthRes = simnet.callReadOnlyFn(
       "liquidator-v1",
       "account-health",
-      [Cl.principal(borrower1), Cl.none(), Cl.none()],
+      [Cl.principal(borrower1), market_price_cv(), collateral_prices_cv(borrower1, deployer)],
       deployer
     );
     expect(accounthealthRes.result.value.value["position-health"]).toEqual(
@@ -1244,7 +1247,7 @@ describe("staking tests", () => {
       "liquidator-v1",
       "liquidate-collateral",
       [
-        Cl.none(),
+        Cl.buffer(build_price_update()),
         Cl.contractPrincipal(deployer, "mock-eth"),
         Cl.principal(borrower1),
         Cl.uint(1000),
@@ -1320,7 +1323,7 @@ describe("staking tests", () => {
       "liquidator-v1",
       "liquidate-collateral",
       [
-        Cl.none(),
+        Cl.buffer(build_price_update()),
         Cl.contractPrincipal(deployer, "mock-btc"),
         Cl.principal(borrower1),
         Cl.uint(1000),
@@ -1355,7 +1358,7 @@ describe("staking tests", () => {
     accounthealthRes = simnet.callReadOnlyFn(
       "liquidator-v1",
       "account-health",
-      [Cl.principal(borrower1), Cl.none(), Cl.none()],
+      [Cl.principal(borrower1), market_price_cv(), collateral_prices_cv(borrower1, deployer)],
       deployer
     );
     expect(accounthealthRes.result.value.value["position-health"]).toEqual(
@@ -1513,7 +1516,7 @@ describe("staking tests", () => {
       "liquidator-v1",
       "liquidate-collateral",
       [
-        Cl.none(),
+        Cl.buffer(build_price_update()),
         Cl.contractPrincipal(deployer, "mock-eth"),
         Cl.principal(borrower1),
         Cl.uint(1000),
@@ -1543,7 +1546,7 @@ describe("staking tests", () => {
       "liquidator-v1",
       "liquidate-collateral",
       [
-        Cl.none(),
+        Cl.buffer(build_price_update()),
         Cl.contractPrincipal(deployer, "mock-btc"),
         Cl.principal(borrower1),
         Cl.uint(1000),
@@ -1654,7 +1657,7 @@ describe("staking tests", () => {
       "liquidator-v1",
       "liquidate-collateral",
       [
-        Cl.none(),
+        Cl.buffer(build_price_update()),
         Cl.contractPrincipal(deployer, "mock-eth"),
         Cl.principal(borrower1),
         Cl.uint(1000),
@@ -1684,7 +1687,7 @@ describe("staking tests", () => {
       "liquidator-v1",
       "liquidate-collateral",
       [
-        Cl.none(),
+        Cl.buffer(build_price_update()),
         Cl.contractPrincipal(deployer, "mock-btc"),
         Cl.principal(borrower1),
         Cl.uint(1000),
@@ -1787,7 +1790,7 @@ describe("staking tests", () => {
     let accounthealthRes = simnet.callReadOnlyFn(
       "liquidator-v1",
       "account-health",
-      [Cl.principal(borrower1), Cl.none(), Cl.none()],
+      [Cl.principal(borrower1), market_price_cv(), collateral_prices_cv(borrower1, deployer)],
       deployer
     );
     expect(accounthealthRes.result.value.value["position-health"]).toEqual(
@@ -1821,7 +1824,7 @@ describe("staking tests", () => {
     let collateralVal = simnet.callReadOnlyFn(
       "borrower-v1",
       "get-user-collaterals-value",
-      [Cl.principal(borrower1)],
+      [Cl.principal(borrower1), collateral_prices_cv(borrower1, deployer)],
       borrower1
     );
     expect(collateralVal.result.value.value).toBe(750n);
@@ -1830,7 +1833,7 @@ describe("staking tests", () => {
     accounthealthRes = simnet.callReadOnlyFn(
       "liquidator-v1",
       "account-health",
-      [Cl.principal(borrower1), Cl.none(), Cl.none()],
+      [Cl.principal(borrower1), market_price_cv(), collateral_prices_cv(borrower1, deployer)],
       deployer
     );
     expect(accounthealthRes.result.value.value["position-health"]).toEqual(
@@ -1855,7 +1858,7 @@ describe("staking tests", () => {
       "liquidator-v1",
       "liquidate-collateral",
       [
-        Cl.none(),
+        Cl.buffer(build_price_update()),
         Cl.contractPrincipal(deployer, "mock-eth"),
         Cl.principal(borrower1),
         Cl.uint(1000),
@@ -1939,7 +1942,7 @@ describe("staking tests", () => {
       "liquidator-v1",
       "liquidate-collateral",
       [
-        Cl.none(),
+        Cl.buffer(build_price_update()),
         Cl.contractPrincipal(deployer, "mock-btc"),
         Cl.principal(borrower1),
         Cl.uint(1000),
@@ -1969,7 +1972,7 @@ describe("staking tests", () => {
     accounthealthRes = simnet.callReadOnlyFn(
       "liquidator-v1",
       "account-health",
-      [Cl.principal(borrower1), Cl.none(), Cl.none()],
+      [Cl.principal(borrower1), market_price_cv(), collateral_prices_cv(borrower1, deployer)],
       deployer
     );
     expect(accounthealthRes.result.value.value["position-health"]).toEqual(

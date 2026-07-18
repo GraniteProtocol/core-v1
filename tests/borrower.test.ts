@@ -1,5 +1,5 @@
-import { assert, beforeEach, describe, expect, it } from "vitest";
-import { Cl, contractPrincipalCV, SomeCV, UIntCV } from "@stacks/transactions";
+import { beforeEach, describe, expect, it } from "vitest";
+import { Cl, contractPrincipalCV } from "@stacks/transactions";
 import {
   add_collateral,
   borrow,
@@ -15,6 +15,8 @@ import {
   initialize_lp,
 } from "./utils";
 import {
+  build_price_update,
+  collateral_prices_cv,
   init_pyth,
   set_initial_price,
   set_price,
@@ -86,7 +88,7 @@ describe("borrower tests", () => {
     const borrow = simnet.callPublicFn(
       "borrower-v1",
       "borrow",
-      [Cl.none(), Cl.uint(70000000000), Cl.none()],
+      [Cl.buffer(build_price_update()), Cl.uint(70000000000), Cl.none()],
       borrower1
     );
     expect(borrow.result).toBeOk(Cl.bool(true));
@@ -95,7 +97,7 @@ describe("borrower tests", () => {
       "borrower-v1",
       "remove-collateral",
       [
-        Cl.none(),
+        Cl.buffer(build_price_update()),
         Cl.contractPrincipal(deployer, "mock-btc"),
         Cl.uint(50000000000n),
         Cl.none(),
@@ -141,7 +143,7 @@ describe("borrower tests", () => {
       "borrower-v1",
       "remove-collateral",
       [
-        Cl.none(),
+        Cl.buffer(build_price_update()),
         Cl.contractPrincipal(deployer, "mock-btc"),
         Cl.uint(10000000001n),
         Cl.none(),
@@ -230,7 +232,7 @@ describe("borrower tests", () => {
     const collateralVal = simnet.callReadOnlyFn(
       "borrower-v1",
       "get-user-collaterals-value",
-      [Cl.principal(borrower1)],
+      [Cl.principal(borrower1), collateral_prices_cv(borrower1, deployer)],
       borrower1
     );
     expect(collateralVal.result.value.value).toBe(200000000000n);
@@ -284,7 +286,7 @@ describe("borrower tests", () => {
     let borrow = simnet.callPublicFn(
       "borrower-v1",
       "borrow",
-      [Cl.none(), Cl.uint(100000000000), Cl.none()],
+      [Cl.buffer(build_price_update()), Cl.uint(100000000000), Cl.none()],
       borrower1
     );
     expect(borrow.result).toBeErr(Cl.uint(20002));
@@ -294,7 +296,7 @@ describe("borrower tests", () => {
     borrow = simnet.callPublicFn(
       "borrower-v1",
       "borrow",
-      [Cl.none(), Cl.uint(10000000000), Cl.none()],
+      [Cl.buffer(build_price_update()), Cl.uint(10000000000), Cl.none()],
       borrower1
     );
     expect(borrow.result).toBeOk(Cl.bool(true));
@@ -334,7 +336,7 @@ describe("borrower tests", () => {
     let borrow = simnet.callPublicFn(
       "borrower-proxy",
       "borrow",
-      [Cl.none(), Cl.uint(10000000000)],
+      [Cl.buffer(build_price_update()), Cl.uint(10000000000)],
       borrower1
     );
     expect(borrow.result).toBeOk(Cl.bool(true));
@@ -381,7 +383,7 @@ describe("borrower tests", () => {
       "borrower-proxy",
       "remove-collateral",
       [
-        Cl.none(),
+        Cl.buffer(build_price_update()),
         Cl.contractPrincipal(deployer, "mock-btc"),
         Cl.uint(90000000000),
       ],
@@ -411,7 +413,7 @@ describe("borrower tests", () => {
       "borrower-proxy",
       "remove-collateral",
       [
-        Cl.none(),
+        Cl.buffer(build_price_update()),
         Cl.contractPrincipal(deployer, "mock-btc"),
         Cl.uint(10000000000),
       ],
@@ -455,7 +457,7 @@ describe("borrower tests", () => {
     const borrow = simnet.callPublicFn(
       "borrower-v1",
       "borrow",
-      [Cl.none(), Cl.uint(10000000000), Cl.none()],
+      [Cl.buffer(build_price_update()), Cl.uint(10000000000), Cl.none()],
       borrower1
     );
     expect(borrow.result).toBeOk(Cl.bool(true));
@@ -488,7 +490,7 @@ describe("borrower tests", () => {
     const borrow = simnet.callPublicFn(
       "borrower-v1",
       "borrow",
-      [Cl.none(), Cl.uint(1000000000), Cl.none()],
+      [Cl.buffer(build_price_update()), Cl.uint(1000000000), Cl.none()],
       borrower1
     );
     expect(borrow.result).toBeOk(Cl.bool(true));
@@ -520,7 +522,7 @@ describe("borrower tests", () => {
     let borrow = simnet.callPublicFn(
       "borrower-v1",
       "borrow",
-      [Cl.none(), Cl.uint(11000000000), Cl.none()],
+      [Cl.buffer(build_price_update()), Cl.uint(11000000000), Cl.none()],
       borrower1
     );
     expect(borrow.result).toBeErr(Cl.uint(20001));
@@ -587,7 +589,7 @@ describe("borrower tests", () => {
     const borrow = simnet.callPublicFn(
       "borrower-v1",
       "borrow",
-      [Cl.none(), Cl.uint(10000000000), Cl.none()],
+      [Cl.buffer(build_price_update()), Cl.uint(10000000000), Cl.none()],
       borrower1
     );
     expect(borrow.result).toBeOk(Cl.bool(true));
@@ -689,7 +691,7 @@ describe("borrower tests", () => {
     const borrow = simnet.callPublicFn(
       "borrower-v1",
       "borrow",
-      [Cl.none(), Cl.uint(10000000000), Cl.none()],
+      [Cl.buffer(build_price_update()), Cl.uint(10000000000), Cl.none()],
       borrower1
     );
     expect(borrow.result).toBeOk(Cl.bool(true));
@@ -765,7 +767,7 @@ describe("borrower tests", () => {
     const borrow = simnet.callPublicFn(
       "borrower-v1",
       "borrow",
-      [Cl.none(), Cl.uint(10000000000), Cl.none()],
+      [Cl.buffer(build_price_update()), Cl.uint(10000000000), Cl.none()],
       borrower1
     );
     expect(borrow.result).toBeOk(Cl.bool(true));
@@ -864,7 +866,7 @@ describe("borrower tests", () => {
     const borrow = simnet.callPublicFn(
       "borrower-v1",
       "borrow",
-      [Cl.none(), Cl.uint(0.99999991e8), Cl.none()],
+      [Cl.buffer(build_price_update()), Cl.uint(0.99999991e8), Cl.none()],
       borrower1
     );
     expect(borrow.result).toBeErr(Cl.uint(20001));
@@ -908,13 +910,6 @@ describe("borrower tests", () => {
     expect(userBalancePostBorrow.result.value.value).toBe(1n);
   });
 
-  function getTimeForBlock(block: `u${number}`): bigint {
-    const clTime: SomeCV<UIntCV> = Cl.deserialize(
-      simnet.runSnippet(`(get-stacks-block-info? time ${block})`)
-    );
-    return clTime.value.value;
-  }
-
   it("should fail to borrow due to pyth stale price", async () => {
     mint_token("mock-usdc", 100000000000, depositor);
     deposit(100000000000, depositor);
@@ -930,29 +925,19 @@ describe("borrower tests", () => {
     mint_token("mock-btc", 100000000000, borrower1);
     add_collateral("mock-btc", 10000000000, deployer, borrower1);
 
-    let publishedTime = await set_price("mock-btc", 1n, deployer);
-    simnet.mineEmptyBlocks(1000);
-    let blockTime = getTimeForBlock("u1000");
-    assert(publishedTime < blockTime - 1n);
+    await set_price("mock-btc", 1n, deployer);
+    await set_price("mock-usdc", 1n, deployer);
+    set_pyth_time_delta(15, deployer);
 
-    // pyth read price should fail
-    let readPrice = simnet.callReadOnlyFn(
-      "pyth-adapter-v1",
-      "read-price",
-      [Cl.contractPrincipal(deployer, "mock-btc")],
-      deployer
+    // A blob timestamped 100s in the past is older than the 15s freshness window, so borrow
+    // rejects it at verify time.
+    const res = simnet.callPublicFn(
+      "borrower-v1",
+      "borrow",
+      [Cl.buffer(build_price_update(-100n)), Cl.uint(100000000000), Cl.none()],
+      borrower1
     );
-    expect(readPrice.result).toBeErr(Cl.uint(80002));
-
-    // borrow should panic due to stale price
-    try {
-      simnet.callPublicFn(
-        "borrower-v1",
-        "borrow",
-        [Cl.none(), Cl.uint(100000000000), Cl.none()],
-        borrower1
-      );
-    } catch (err) {}
+    expect(res.result).toBeErr(Cl.uint(80002)); // ERR-PYTH-PRICE-STALE
   });
 
   it("should correctly borrow when market-decimals > collateral decimals", async () => {
@@ -973,7 +958,7 @@ describe("borrower tests", () => {
     let borrow = simnet.callPublicFn(
       "borrower-v1",
       "borrow",
-      [Cl.none(), Cl.uint(2418649660), Cl.none()],
+      [Cl.buffer(build_price_update()), Cl.uint(2418649660), Cl.none()],
       borrower1
     );
 
@@ -1042,7 +1027,7 @@ describe("borrower tests", () => {
     let borrow = simnet.callPublicFn(
       "borrower-v1",
       "borrow",
-      [Cl.none(), Cl.uint(2418649660), Cl.none()],
+      [Cl.buffer(build_price_update()), Cl.uint(2418649660), Cl.none()],
       borrower1
     );
 
@@ -1126,7 +1111,7 @@ describe("borrower tests", () => {
       let borrowResult = simnet.callPublicFn(
         "borrower-v1",
         "borrow",
-        [Cl.none(), Cl.uint(1), Cl.none()],
+        [Cl.buffer(build_price_update()), Cl.uint(1), Cl.none()],
         borrower1
       ); // Borrow the 1 wei
       expect(borrowResult.result).toBeOk(Cl.bool(true));
@@ -1344,7 +1329,7 @@ describe("M-01 interest-dust no-stakers regression", () => {
       "liquidator-v1",
       "liquidate-collateral",
       [
-        Cl.none(),
+        Cl.buffer(build_price_update()),
         btc_collateral_contract,
         Cl.principal(borrower1),
         Cl.uint(18_181_818_181),
@@ -1406,7 +1391,7 @@ describe("M-01 interest-dust no-stakers regression", () => {
       "liquidator-v1",
       "liquidate-collateral",
       [
-        Cl.none(),
+        Cl.buffer(build_price_update()),
         btc_collateral_contract,
         Cl.principal(borrower1),
         Cl.uint(18_181_818_181),

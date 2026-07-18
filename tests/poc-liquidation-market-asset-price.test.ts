@@ -40,6 +40,7 @@ import {
   set_initial_price,
   set_price_without_scaling,
   set_pyth_time_delta,
+  build_price_update,
 } from "./pyth";
 
 const accounts = simnet.getAccounts();
@@ -129,7 +130,7 @@ function callLiquidate(
     "liquidator-v1",
     "liquidate-collateral",
     [
-      Cl.none(),
+      Cl.buffer(build_price_update()),
       btc_collateral,
       Cl.principal(borrower),
       Cl.uint(liquidatorRepayAmount),
@@ -444,7 +445,7 @@ describe("PoC: liquidator-v1 USD-value vs raw-token denomination", () => {
       "liquidator-v1",
       "liquidate-collateral",
       [
-        Cl.none(),
+        Cl.buffer(build_price_update()),
         btc_collateral,
         Cl.principal(borrower),
         Cl.uint(LIQUIDATOR_REPAY_INPUT),
