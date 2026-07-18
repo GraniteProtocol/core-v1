@@ -16,6 +16,7 @@ const deployer = accounts.get("deployer")!;
 
 const btc = Cl.contractPrincipal(deployer, "mock-btc");
 const eth = Cl.contractPrincipal(deployer, "mock-eth");
+const usdc = Cl.contractPrincipal(deployer, "mock-usdc");
 
 const register = (token: string) =>
   simnet.callPublicFn(
@@ -54,6 +55,22 @@ describe("pyth-adapter-v1 verify-and-get-prices", () => {
   it("valid update returns converted fixed-point prices in requested order", () => {
     set_raw_feed("mock-btc", 10000000000n, -8);
     expect(verify([btc])).toBeOk(Cl.list([Cl.uint(converted_price("mock-btc"))]));
+  });
+
+  it("returns prices positionally, matching the requested token order for 3+ tokens", () => {
+    register("mock-eth");
+    register("mock-usdc");
+    set_raw_feed("mock-btc", 6000000000000n, -8);
+    set_raw_feed("mock-eth", 300000000000n, -8);
+    set_raw_feed("mock-usdc", 100000000n, -8);
+    // request in a scrambled order; the returned list must align to it, not to feed-id or blob order
+    expect(verify([eth, usdc, btc])).toBeOk(
+      Cl.list([
+        Cl.uint(converted_price("mock-eth")),
+        Cl.uint(converted_price("mock-usdc")),
+        Cl.uint(converted_price("mock-btc")),
+      ])
+    );
   });
 
   it("negative price rejected", () => {
