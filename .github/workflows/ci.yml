@@ -13,10 +13,6 @@ jobs:
         uses: docker://hirosystems/clarinet:latest
         with:
           args: check
-      - name: "Restore deployment plan"
-        # clarinet check rewrites the simnet plan into a format the sdk
-        # cannot parse; restore the committed one before vitest.
-        run: git checkout -- deployments/default.simnet-plan.yaml
       - name: "Setup Node.js"
         uses: actions/setup-node@v4
         with:
