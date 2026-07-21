@@ -1018,7 +1018,7 @@ describe("liquidation tests", () => {
     await set_price("mock-btc", 0n, deployer);
 
     // A zero price is collapsed to `none` by the Lazer decoder, so the feed is dropped from the
-    // update and verify-and-get-prices reverts with ERR-MISSING-FEED, blocking the liquidation.
+    // update and prices-for reverts with ERR-MISSING-FEED, blocking the liquidation.
     let liquidate = simnet.callPublicFn(
       "liquidator-v1",
       "liquidate-collateral",
