@@ -194,7 +194,8 @@
     (asserts! (and (>= expo -18) (<= expo 11)) ERR-INVALID-EXPONENT)
     (asserts! (is-valid timestamp) ERR-PYTH-PRICE-STALE)
     (try! (check-confidence (to-uint price) price-conf max-confidence-ratio))
-    ;; Surface the no-confidence case for off-chain monitoring.
+    ;; Surface the no-confidence case for off-chain monitoring. Can fire more than once per tx for a
+    ;; feed on the liquidation re-price path (post-seizure collaterals are priced again); dedupe by (tx, feed-id).
     (and (is-none maybe-conf) (begin (print { event: "confidence-absent", feed-id: (get feed-id feed) }) true))
     (ok (to-uint (convert-res price expo PRICE_DECIMALS)))
   )
