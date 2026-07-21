@@ -7,7 +7,7 @@
 (define-constant ERR-NO-STORAGE (err u60001))
 
 (define-data-var liquidator-data (optional {
-  pyth-price-feed-data: (optional (buff 8192)),
+  update: (buff 8192),
   repay-amount: uint,
   min-collateral-expected: uint,
   user: principal
@@ -17,19 +17,19 @@
 (define-public (on-granite-flash-loan (amount uint) (fee uint) (data (optional (buff 20480))))
   (let (
       (ldata (unwrap! (var-get liquidator-data) ERR-NO-STORAGE))
-      (pyth-price-feed (get pyth-price-feed-data ldata))
+      (update (get update ldata))
       (user (get user ldata))
       (repay-amount (get repay-amount ldata))
       (min-collateral-expected (get min-collateral-expected ldata))
     )
-    (try! (contract-call? .liquidator-v1 liquidate-collateral pyth-price-feed .mock-btc user repay-amount min-collateral-expected))
+    (try! (contract-call? .liquidator-v1 liquidate-collateral update .mock-btc user repay-amount min-collateral-expected))
     (ok true)
   )
 )
 
 
-(define-public (liquidate-collateral 
-  (pyth-price-feed-data (optional (buff 8192)))
+(define-public (liquidate-collateral
+  (update (buff 8192))
   (user principal)
   (liquidator-repay-amount uint)
   (min-collateral-expected uint)
@@ -37,7 +37,7 @@
 )
   (begin
     (var-set liquidator-data (some {
-      pyth-price-feed-data: pyth-price-feed-data,
+      update: update,
       repay-amount: liquidator-repay-amount,
       min-collateral-expected: min-collateral-expected,
       user: user,

@@ -38,6 +38,9 @@ import {
   set_initial_price,
   set_price,
   set_pyth_time_delta,
+  build_price_update,
+  market_price_cv,
+  collateral_prices_cv,
 } from "./pyth";
 
 /* ── accounts ── */
@@ -149,7 +152,7 @@ describe("PoC: slash-total-staked-lp-tokens underflow", () => {
     let healthRes = simnet.callReadOnlyFn(
       "liquidator-v1",
       "account-health",
-      [Cl.principal(borrower1), Cl.none(), Cl.none()],
+      [Cl.principal(borrower1), market_price_cv(), collateral_prices_cv(borrower1, deployer)],
       deployer
     );
     const healthBefore = healthRes.result.value.value["position-health"].value;
@@ -168,7 +171,7 @@ describe("PoC: slash-total-staked-lp-tokens underflow", () => {
     healthRes = simnet.callReadOnlyFn(
       "liquidator-v1",
       "account-health",
-      [Cl.principal(borrower1), Cl.none(), Cl.none()],
+      [Cl.principal(borrower1), market_price_cv(), collateral_prices_cv(borrower1, deployer)],
       deployer
     );
     const healthAfter = healthRes.result.value.value["position-health"].value;
@@ -192,7 +195,7 @@ describe("PoC: slash-total-staked-lp-tokens underflow", () => {
       "liquidator-v1",
       "liquidate-collateral",
       [
-        Cl.none(),                   // pyth price feed data
+        Cl.buffer(build_price_update()), // pyth price feed data
         btc,                         // collateral token
         Cl.principal(borrower1),     // user to liquidate
         Cl.uint(20_000_000_000),     // liquidator-repay-amount

@@ -35,7 +35,7 @@ import {
   set_asset_cap,
   update_supported_collateral,
 } from "./utils";
-import { init_pyth, set_pyth_time_delta, set_initial_price } from "./pyth";
+import { init_pyth, set_pyth_time_delta, set_initial_price, build_price_update } from "./pyth";
 
 const initialize_ir_zero = (deployer: string) => {
   const res = simnet.callPublicFn(
@@ -89,7 +89,7 @@ describe("PoC E-M-02: socialize-bad-debt DivisionByZero on full-payoff bad-debt 
     const result = simnet.callPublicFn(
       "liquidator-v1",
       "liquidate-collateral",
-      [Cl.none(), btc_collateral, Cl.principal(borrower), Cl.uint(1_000_000), Cl.uint(1)],
+      [Cl.buffer(build_price_update()), btc_collateral, Cl.principal(borrower), Cl.uint(1_000_000), Cl.uint(1)],
       liquidator,
     );
     console.log(`[E-M-02] liquidate result type=${result.result.type} value=${JSON.stringify(result.result.value)}`);

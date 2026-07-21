@@ -233,7 +233,7 @@
 ;; Reserve token feed data
 (define-map update-pyth-feed (buff 32) {
   token: principal,
-  feed: (buff 32),
+  feed: uint,
   max-confidence-ratio: uint,
 })
 
@@ -1269,7 +1269,7 @@
     SUCCESS
 ))
 
-(define-public (initiate-proposal-to-update-pyth-feed (token principal) (feed (buff 32)) (max-confidence-ratio uint) (expires-in uint))
+(define-public (initiate-proposal-to-update-pyth-feed (token principal) (feed uint) (max-confidence-ratio uint) (expires-in uint))
     (let (
       (proposal-nonce (var-get next-proposal-nonce))
       (proposal-id (keccak256 (unwrap! (to-consensus-buff? {

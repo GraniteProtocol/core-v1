@@ -3,262 +3,166 @@ import { Cl, ClarityType } from "@stacks/transactions";
 import {
   init_pyth,
   set_pyth_time_delta,
-  guardianSet,
-  get_token_feed,
+  set_raw_feed,
+  build_price_update,
+  get_token_feed_id,
+  converted_price,
+  getSimnetBlockTime,
 } from "../pyth";
-import { pyth } from "../../contracts/pyth/unit-tests/pyth/helpers";
-import { wormhole } from "../../contracts/pyth/unit-tests/wormhole/helpers";
+import { buildEvmUpdate, buildLazerPayload, PROP, OTHER_PRIVKEY } from "../lazer";
 
 const accounts = simnet.getAccounts();
 const deployer = accounts.get("deployer")!;
-const address1 = accounts.get("wallet_1")!;
 
-/**
- * Returns the current simnet block time.
- */
-const getSimnetBlockTime = (): bigint => {
-  const r = simnet.callReadOnlyFn(
-    "faucet",
-    "get-block-time",
-    [],
-    deployer
-  );
-  return r.result.value as bigint;
-};
+const btc = Cl.contractPrincipal(deployer, "mock-btc");
+const eth = Cl.contractPrincipal(deployer, "mock-eth");
+const usdc = Cl.contractPrincipal(deployer, "mock-usdc");
 
-/**
- * Helper to submit a raw price update to pyth storage with custom price/expo values.
- * Uses simnet-aligned timestamps.
- */
-const set_raw_price = async (
-  token: string,
-  price: bigint,
-  expo: number = -8,
-  conf?: bigint
-): Promise<bigint> => {
-  const feed = get_token_feed(token);
-  const publishTime = getSimnetBlockTime();
-  let actualPricesUpdates = pyth.buildPriceUpdateBatch([
-    [feed, { price, expo, publishTime, conf }],
-  ]);
-  let actualPricesUpdatesVaaPayload =
-    pyth.buildAuwvVaaPayload(actualPricesUpdates);
-  let payload = pyth.serializeAuwvVaaPayloadToBuffer(
-    actualPricesUpdatesVaaPayload
-  );
-  let vaaBody = wormhole.buildValidVaaBodySpecs({
-    payload,
-    emitter: pyth.DefaultPricesDataSources[0],
-  });
-  let vaaHeader = wormhole.buildValidVaaHeader(guardianSet, vaaBody, {
-    version: 1,
-    guardianSetId: 1,
-  });
-  let vaa = wormhole.serializeVaaToBuffer(vaaHeader, vaaBody);
-  let pnauHeader = pyth.buildPnauHeader();
-  let pricesUpdatesToSubmit = [feed];
-  let pnau = pyth.serializePnauToBuffer(pnauHeader, {
-    vaa,
-    pricesUpdates: actualPricesUpdates,
-    pricesUpdatesToSubmit,
-  });
-
-  const res = simnet.callPublicFn(
+const register = (token: string) =>
+  simnet.callPublicFn(
     "pyth-adapter-v1",
-    "update-pyth",
-    [Cl.some(Cl.buffer(pnau))],
+    "update-price-feed-id",
+    [Cl.contractPrincipal(deployer, token), Cl.uint(get_token_feed_id(token)), Cl.uint(500)],
     deployer
   );
-  expect(res.result).toHaveClarityType(ClarityType.ResponseOk);
 
-  return publishTime;
-};
-
-/**
- * Helper to submit a price update with a custom publish time.
- */
-const set_price_with_time = async (
-  token: string,
-  price: bigint,
-  publishTime: bigint,
-  expo: number = -8
-): Promise<void> => {
-  const feed = get_token_feed(token);
-  let actualPricesUpdates = pyth.buildPriceUpdateBatch([
-    [feed, { price, expo, publishTime }],
-  ]);
-  let actualPricesUpdatesVaaPayload =
-    pyth.buildAuwvVaaPayload(actualPricesUpdates);
-  let payload = pyth.serializeAuwvVaaPayloadToBuffer(
-    actualPricesUpdatesVaaPayload
-  );
-  let vaaBody = wormhole.buildValidVaaBodySpecs({
-    payload,
-    emitter: pyth.DefaultPricesDataSources[0],
-  });
-  let vaaHeader = wormhole.buildValidVaaHeader(guardianSet, vaaBody, {
-    version: 1,
-    guardianSetId: 1,
-  });
-  let vaa = wormhole.serializeVaaToBuffer(vaaHeader, vaaBody);
-  let pnauHeader = pyth.buildPnauHeader();
-  let pricesUpdatesToSubmit = [feed];
-  let pnau = pyth.serializePnauToBuffer(pnauHeader, {
-    vaa,
-    pricesUpdates: actualPricesUpdates,
-    pricesUpdatesToSubmit,
-  });
-
-  const res = simnet.callPublicFn(
+// Verify the update once, then extract prices for the requested tokens from the verified set.
+const verify = (tokens: any[], update?: Uint8Array) => {
+  const verified = simnet.callPublicFn(
     "pyth-adapter-v1",
-    "update-pyth",
-    [Cl.some(Cl.buffer(pnau))],
+    "verify-update",
+    [Cl.buffer(update ?? build_price_update())],
     deployer
-  );
-  expect(res.result).toHaveClarityType(ClarityType.ResponseOk);
+  ).result;
+  if (verified.type === ClarityType.ResponseErr) return verified;
+  return simnet.callPublicFn(
+    "pyth-adapter-v1",
+    "prices-for",
+    [(verified as any).value, Cl.list(tokens)],
+    deployer
+  ).result;
 };
 
-describe("pyth-adapter-v1 oracle hardening tests", () => {
-  beforeEach(async () => {
+// Build a single-feed blob with an explicit timestamp / signer for the timing + signature tests.
+const build_at = (feedId: number, price: bigint, expo: number, tsMicros: bigint, privKey?: Uint8Array) =>
+  buildEvmUpdate(
+    buildLazerPayload({
+      timestamp: tsMicros,
+      channel: 1,
+      feeds: [{ id: feedId, props: [[PROP.Price, price], [PROP.Exponent, BigInt(expo)], [PROP.PublisherCount, 1n]] }],
+    }),
+    privKey
+  );
+
+describe("pyth-adapter-v1 verify-update / prices-for", () => {
+  beforeEach(() => {
     init_pyth(deployer);
     set_pyth_time_delta(7200, deployer);
+    register("mock-btc");
+  });
 
-    // Register BTC price feed
-    const feed = get_token_feed("mock-btc");
-    simnet.callPublicFn(
-      "pyth-adapter-v1",
-      "update-price-feed-id",
-      [
-        Cl.contractPrincipal(deployer, "mock-btc"),
-        Cl.buffer(feed),
-        Cl.uint(500),
-      ],
-      deployer
+  it("valid update returns converted fixed-point prices in requested order", () => {
+    set_raw_feed("mock-btc", 10000000000n, -8);
+    expect(verify([btc])).toBeOk(Cl.list([Cl.uint(converted_price("mock-btc"))]));
+  });
+
+  it("returns prices positionally, matching the requested token order for 3+ tokens", () => {
+    register("mock-eth");
+    register("mock-usdc");
+    set_raw_feed("mock-btc", 6000000000000n, -8);
+    set_raw_feed("mock-eth", 300000000000n, -8);
+    set_raw_feed("mock-usdc", 100000000n, -8);
+    // request in a scrambled order; the returned list must align to it, not to feed-id or blob order
+    expect(verify([eth, usdc, btc])).toBeOk(
+      Cl.list([
+        Cl.uint(converted_price("mock-eth")),
+        Cl.uint(converted_price("mock-usdc")),
+        Cl.uint(converted_price("mock-btc")),
+      ])
     );
   });
 
-  it("zero price rejected (H-1, M-15)", async () => {
-    await set_raw_price("mock-btc", 0n);
-    const result = simnet.callReadOnlyFn(
-      "pyth-adapter-v1",
-      "read-price",
-      [Cl.contractPrincipal(deployer, "mock-btc")],
-      address1
-    );
-    expect(result.result).toBeErr(Cl.uint(80005)); // ERR-INVALID-PRICE
+  it("negative price rejected", () => {
+    set_raw_feed("mock-btc", -100n, -8);
+    expect(verify([btc])).toBeErr(Cl.uint(80005)); // ERR-INVALID-PRICE
   });
 
-  it("negative price rejected (H-9)", async () => {
-    await set_raw_price("mock-btc", -100n);
-    const result = simnet.callReadOnlyFn(
-      "pyth-adapter-v1",
-      "read-price",
-      [Cl.contractPrincipal(deployer, "mock-btc")],
-      address1
-    );
-    expect(result.result).toBeErr(Cl.uint(80005)); // ERR-INVALID-PRICE
+  it("zero price is dropped by the decoder, surfaces as a missing feed", () => {
+    set_raw_feed("mock-btc", 0n, -8);
+    expect(verify([btc])).toBeErr(Cl.uint(80008)); // ERR-MISSING-FEED
   });
 
-  it("extreme positive exponent rejected (M-3)", async () => {
-    await set_raw_price("mock-btc", 100n, 30);
-    const result = simnet.callReadOnlyFn(
-      "pyth-adapter-v1",
-      "read-price",
-      [Cl.contractPrincipal(deployer, "mock-btc")],
-      address1
-    );
-    expect(result.result).toBeErr(Cl.uint(80006)); // ERR-INVALID-EXPONENT
+  it("extreme positive exponent rejected", () => {
+    set_raw_feed("mock-btc", 100n, 30);
+    expect(verify([btc])).toBeErr(Cl.uint(80006)); // ERR-INVALID-EXPONENT
   });
 
-  it("extreme negative exponent rejected (M-3)", async () => {
-    await set_raw_price("mock-btc", 100n, -30);
-    const result = simnet.callReadOnlyFn(
-      "pyth-adapter-v1",
-      "read-price",
-      [Cl.contractPrincipal(deployer, "mock-btc")],
-      address1
-    );
-    expect(result.result).toBeErr(Cl.uint(80006)); // ERR-INVALID-EXPONENT
+  it("extreme negative exponent rejected", () => {
+    set_raw_feed("mock-btc", 100n, -30);
+    expect(verify([btc])).toBeErr(Cl.uint(80006)); // ERR-INVALID-EXPONENT
   });
 
-  it("future timestamp rejected (M-2)", async () => {
-    // Set a publish time far in the future (1 hour ahead of simnet block time)
-    const blockTime = getSimnetBlockTime();
-    const farFuture = blockTime + 3600n;
-    await set_price_with_time("mock-btc", 100n, farFuture);
-    const result = simnet.callReadOnlyFn(
-      "pyth-adapter-v1",
-      "read-price",
-      [Cl.contractPrincipal(deployer, "mock-btc")],
-      address1
-    );
-    expect(result.result).toBeErr(Cl.uint(80002)); // ERR-PYTH-PRICE-STALE
+  it("confidence within bound accepted", () => {
+    set_raw_feed("mock-btc", 10000000000n, -8, 100000000n); // 1e8 <= 1e10 * 500 / 10000 = 5e8
+    expect(verify([btc])).toBeOk(Cl.list([Cl.uint(converted_price("mock-btc"))]));
   });
 
-  it("valid price and exponent accepted", async () => {
-    await set_raw_price("mock-btc", 10000000000n, -8);
-    const result = simnet.callReadOnlyFn(
-      "pyth-adapter-v1",
-      "read-price",
-      [Cl.contractPrincipal(deployer, "mock-btc")],
-      address1
-    );
-    expect(result.result).toHaveClarityType(ClarityType.ResponseOk);
+  it("confidence above bound rejected", () => {
+    set_raw_feed("mock-btc", 10000000000n, -8, 600000000n); // 6e8 > 5e8
+    expect(verify([btc])).toBeErr(Cl.uint(80004)); // ERR-PRICE-CONFIDENCE-LOW
+  });
+
+  it("unsupported asset rejected", () => {
+    set_raw_feed("mock-btc", 10000000000n, -8);
+    expect(verify([eth])).toBeErr(Cl.uint(80001)); // ERR-UNSUPPORTED-ASSET (mock-eth not in map)
+  });
+
+  it("feed absent from the update rejected", () => {
+    register("mock-eth"); // in the map, but the blob only carries btc
+    set_raw_feed("mock-btc", 10000000000n, -8);
+    expect(verify([eth])).toBeErr(Cl.uint(80008)); // ERR-MISSING-FEED
+  });
+
+  it("future timestamp rejected", () => {
+    const future = (getSimnetBlockTime() + 3600n) * 1_000_000n;
+    expect(verify([btc], build_at(get_token_feed_id("mock-btc"), 10000000000n, -8, future))).toBeErr(Cl.uint(80002)); // ERR-PYTH-PRICE-STALE
+  });
+
+  it("stale timestamp rejected", () => {
+    set_pyth_time_delta(15, deployer);
+    const stale = (getSimnetBlockTime() - 100n) * 1_000_000n;
+    expect(verify([btc], build_at(get_token_feed_id("mock-btc"), 10000000000n, -8, stale))).toBeErr(Cl.uint(80002)); // ERR-PYTH-PRICE-STALE
+  });
+
+  it("untrusted signer rejected", () => {
+    const now = getSimnetBlockTime() * 1_000_000n;
+    const blob = build_at(get_token_feed_id("mock-btc"), 10000000000n, -8, now, OTHER_PRIVKEY);
+    expect(verify([btc], blob)).toBeErr(Cl.uint(2105)); // decoder ERR_UNTRUSTED_SIGNER
   });
 });
 
-describe("pyth-adapter-v1 time-delta bounds (M-1)", () => {
+describe("pyth-adapter-v1 time-delta bounds", () => {
   beforeEach(() => {
     init_pyth(deployer);
   });
 
   it("time-delta below minimum rejected", () => {
-    const result = simnet.callPublicFn(
-      "pyth-adapter-v1",
-      "update-time-delta",
-      [Cl.uint(0)],
-      deployer
-    );
-    expect(result.result).toBeErr(Cl.uint(80007)); // ERR-INVALID-TIME-DELTA
+    expect(simnet.callPublicFn("pyth-adapter-v1", "update-time-delta", [Cl.uint(0)], deployer).result).toBeErr(Cl.uint(80007));
   });
 
   it("time-delta one below minimum rejected", () => {
-    const result = simnet.callPublicFn(
-      "pyth-adapter-v1",
-      "update-time-delta",
-      [Cl.uint(14)],
-      deployer
-    );
-    expect(result.result).toBeErr(Cl.uint(80007)); // ERR-INVALID-TIME-DELTA
+    expect(simnet.callPublicFn("pyth-adapter-v1", "update-time-delta", [Cl.uint(14)], deployer).result).toBeErr(Cl.uint(80007));
   });
 
   it("time-delta above maximum rejected", () => {
-    const result = simnet.callPublicFn(
-      "pyth-adapter-v1",
-      "update-time-delta",
-      [Cl.uint(10000)],
-      deployer
-    );
-    expect(result.result).toBeErr(Cl.uint(80007)); // ERR-INVALID-TIME-DELTA
+    expect(simnet.callPublicFn("pyth-adapter-v1", "update-time-delta", [Cl.uint(10000)], deployer).result).toBeErr(Cl.uint(80007));
   });
 
   it("time-delta at minimum accepted", () => {
-    const result = simnet.callPublicFn(
-      "pyth-adapter-v1",
-      "update-time-delta",
-      [Cl.uint(15)],
-      deployer
-    );
-    expect(result.result).toBeOk(Cl.bool(true));
+    expect(simnet.callPublicFn("pyth-adapter-v1", "update-time-delta", [Cl.uint(15)], deployer).result).toBeOk(Cl.bool(true));
   });
 
   it("time-delta at maximum accepted", () => {
-    const result = simnet.callPublicFn(
-      "pyth-adapter-v1",
-      "update-time-delta",
-      [Cl.uint(7200)],
-      deployer
-    );
-    expect(result.result).toBeOk(Cl.bool(true));
+    expect(simnet.callPublicFn("pyth-adapter-v1", "update-time-delta", [Cl.uint(7200)], deployer).result).toBeOk(Cl.bool(true));
   });
 });

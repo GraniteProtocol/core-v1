@@ -30,39 +30,42 @@
 (define-constant ERR-LIQUIDATION-NOT-ALLOWED (err u30011))
 
 ;; PUBLIC FUNCTIONS
-(define-public (batch-liquidate (pyth-price-feed-data (optional (buff 8192))) (collateral <token-trait>) (batch (list 20 (optional {
+(define-public (batch-liquidate (update (buff 8192)) (collateral <token-trait>) (batch (list 20 (optional {
   user: principal,
   liquidator-repay-amount: uint,
   min-collateral-expected: uint
 }))))
   (begin
-  (try! (contract-call? .pyth-adapter-v1 update-pyth pyth-price-feed-data))
   (try! (accrue-interest))
-  (try! (get res (fold fold-execute-liquidation batch {collateral: collateral, res: (ok true)})))
-  SUCCESS
+  ;; Verify the signed update once for the whole batch, then price each liquidation from it.
+  (let ((verified (try! (contract-call? .pyth-adapter-v1 verify-update update))))
+    (try! (get res (fold fold-execute-liquidation batch {verified: verified, collateral: collateral, res: (ok true)})))
+    SUCCESS
+  )
 ))
 
-(define-public (liquidate-collateral (pyth-price-feed-data (optional (buff 8192))) (collateral <token-trait>) (user principal) (liquidator-repay-amount uint) (min-collateral-expected uint))
+(define-public (liquidate-collateral (update (buff 8192)) (collateral <token-trait>) (user principal) (liquidator-repay-amount uint) (min-collateral-expected uint))
   (begin
-    (try! (contract-call? .pyth-adapter-v1 update-pyth pyth-price-feed-data))
     (try! (accrue-interest))
-    (execute-liquidation user collateral liquidator-repay-amount min-collateral-expected)
+    (let ((verified (try! (contract-call? .pyth-adapter-v1 verify-update update))))
+      (execute-liquidation verified user collateral liquidator-repay-amount min-collateral-expected)
+    )
 ))
 
 ;; READ-ONLY FUNCTIONS
-(define-read-only (user-collateral-repayment-info 
-    (collateral <token-trait>) 
+(define-read-only (user-collateral-repayment-info
+    (collateral <token-trait>)
     (user principal)
     (user-debt uint)
-    (maybe-market-asset-price (optional uint))
-    (maybe-total-liquid-ltv (optional uint))
-    (maybe-collateral-value (optional uint))
+    (market-asset-price uint)
+    (collateral-prices (list 10 uint))
   )
   (let (
-      (position-data (unwrap! (try! (check-account-unhealthy user maybe-market-asset-price maybe-total-liquid-ltv)) ERR-USER-POSITION-HEALTHY))
+      (position-data (unwrap! (try! (check-account-unhealthy user market-asset-price collateral-prices)) ERR-USER-POSITION-HEALTHY))
       (total-liquid-ltv (get total-liquid-ltv position-data))
       (collateral-token (contract-of collateral))
-      (collateral-value (match maybe-collateral-value value value (get-collateral-value collateral-token user (try! (contract-call? .pyth-adapter-v1 read-price collateral-token)))))
+      (collateral-price (unwrap! (collateral-price-for collateral-token (get collaterals position-data) collateral-prices) ERR-INVALID-ORACLE-PRICE))
+      (collateral-value (get-collateral-value collateral-token user collateral-price))
       (collateral-info (unwrap! (contract-call? .state-v1 get-collateral collateral-token) ERR-COLLATERAL-NOT-SUPPORTED))
       (liquidation-premium (get liquidation-premium collateral-info))
       (collateral-liquidation-ltv (get liquidation-ltv collateral-info))
@@ -72,28 +75,20 @@
   )
 )
 
-(define-read-only (account-health (user principal) (maybe-market-asset-price (optional uint)) (maybe-total-liquid-ltv (optional uint)))
+(define-read-only (account-health (user principal) (market-asset-price uint) (collateral-prices (list 10 uint)))
   (let (
       (borrow-params (contract-call? .state-v1 get-borrow-repay-params user))
       (position (unwrap! (get user-position borrow-params) ERR-NO-POSITION))
       ;; get user current debt
       (debt-params (contract-call? .state-v1 get-debt-params))
       (current-debt (contract-call? .math-v1 convert-to-debt-assets debt-params (get debt-shares position) true))
-      (market-asset-price (match maybe-market-asset-price price price (unwrap! (contract-call? .pyth-adapter-v1 read-price .mock-usdc) ERR-MISSING-MARKET-PRICE)))
       (current-debt-adjusted (contract-call? .math-v1 get-market-asset-value market-asset-price current-debt))
       (position-collaterals (get collaterals position))
-      (total-liquid-ltv (match maybe-total-liquid-ltv ltv 
-        ltv
-        (let (
-          (collateral-prices (try! (contract-call? .pyth-adapter-v1 bulk-read-collateral-prices position-collaterals)))
-        )
-          (if (is-eq (len position-collaterals) u0) 
-            u0
-            (fold + (map iterate-collateral-value-ltv position-collaterals (
-            list user user user user user user user user user user
-            ) collateral-prices) u0)
-          )  
-      )))
+      (total-liquid-ltv (if (is-eq (len position-collaterals) u0)
+        u0
+        (fold + (map iterate-collateral-value-ltv position-collaterals (
+          list user user user user user user user user user user
+        ) collateral-prices) u0)))
       (position-health (if (> current-debt-adjusted u0) (/ (* total-liquid-ltv SCALING-FACTOR) current-debt-adjusted) MINIMUM_HEALTH_RATIO))
     )
     (ok {
@@ -107,24 +102,20 @@
     })
 ))
 
-(define-read-only (get-liquidation-data 
+(define-read-only (get-liquidation-data
   (user principal)
   (collateral <token-trait>)
   (liquidator-repay-amount uint)
-  (maybe-market-asset-price (optional uint))
-  (maybe-total-liquid-ltv (optional uint))
-  (maybe-collateral-value (optional uint))
-  (maybe-collateral-price (optional uint)))
+  (market-asset-price uint)
+  (collateral-prices (list 10 uint)))
 
   (let (
-    (liquidation-info (try! (get-liquidation-info 
+    (liquidation-info (try! (get-liquidation-info
       user
       collateral
       liquidator-repay-amount
-      maybe-market-asset-price
-      maybe-total-liquid-ltv
-      maybe-collateral-value
-      maybe-collateral-price
+      market-asset-price
+      collateral-prices
     ))))
     (try! (ensure-non-zero-repay-amount liquidator-repay-amount))
     (ok (get liquidation-info liquidation-info))))
@@ -163,19 +154,17 @@
 
 
 ;; PRIVATE FUNCTIONS
-(define-private (get-liquidate-params 
+(define-private (get-liquidate-params
   (user principal)
   (collateral <token-trait>)
-  (maybe-market-asset-price (optional uint))
-  (maybe-total-liquid-ltv (optional uint))
-  (maybe-collateral-value (optional uint))
-  (maybe-collateral-price (optional uint))
+  (market-asset-price uint)
+  (collateral-prices (list 10 uint))
 )
   (let (
-    (position-data (unwrap! (try! (check-account-unhealthy user maybe-market-asset-price maybe-total-liquid-ltv)) ERR-USER-POSITION-HEALTHY))
+    (position-data (unwrap! (try! (check-account-unhealthy user market-asset-price collateral-prices)) ERR-USER-POSITION-HEALTHY))
     (collateral-token (contract-of collateral))
-    (collateral-price (match maybe-collateral-price price price (unwrap! (contract-call? .pyth-adapter-v1 read-price collateral-token) ERR-INVALID-ORACLE-PRICE)))
-    (collateral-value (match maybe-collateral-value value value (get-collateral-value collateral-token user collateral-price)))
+    (collateral-price (unwrap! (collateral-price-for collateral-token (get collaterals position-data) collateral-prices) ERR-INVALID-ORACLE-PRICE))
+    (collateral-value (get-collateral-value collateral-token user collateral-price))
     (collateral-info (unwrap! (contract-call? .state-v1 get-collateral collateral-token) ERR-COLLATERAL-NOT-SUPPORTED))
     (user-balance (unwrap! (get amount (contract-call? .state-v1 get-user-collateral user collateral-token))  ERR-INSUFFICIENT-BALANCE))
   )
@@ -189,17 +178,15 @@
   )
 )
 
-(define-private (get-liquidation-info 
+(define-private (get-liquidation-info
   (user principal)
   (collateral <token-trait>)
   (liquidator-repay-amount uint)
-  (maybe-market-asset-price (optional uint))
-  (maybe-total-liquid-ltv (optional uint))
-  (maybe-collateral-value (optional uint))
-  (maybe-collateral-price (optional uint))
-) 
+  (market-asset-price uint)
+  (collateral-prices (list 10 uint))
+)
   (let (
-    (liquidation-params (try! (get-liquidate-params user collateral maybe-market-asset-price maybe-total-liquid-ltv maybe-collateral-value maybe-collateral-price)))
+    (liquidation-params (try! (get-liquidate-params user collateral market-asset-price collateral-prices)))
     ;; check position is unhealthy
     (position-data (get position-data liquidation-params))
     (user-borrowed-amount (get borrowed-amount position-data))
@@ -207,26 +194,15 @@
     (current-debt (get current-debt position-data))
     (current-debt-adjusted (get current-debt-adjusted position-data))
     (user-collaterals (get collaterals position-data))
-    (bad-debt (match maybe-collateral-price price 
-      false
-      (let ((total-collateral-value-and-reward (get-user-total-collateral-value-and-reward user user-collaterals (try! (contract-call? .pyth-adapter-v1 bulk-read-collateral-prices user-collaterals)))))
-        (is-bad-debt current-debt-adjusted total-collateral-value-and-reward))))
-    ;; total collaterals value * collateral liquid ltv
+    (bad-debt (is-bad-debt current-debt-adjusted (get-user-total-collateral-value-and-reward user user-collaterals collateral-prices)))
     (total-liquid-ltv (get total-liquid-ltv position-data))
-    ;; user collateral value and amount
     (collateral-value (get collateral-value liquidation-params))
-    ;; revert if the collateral isn't supported
     (collateral-info (get collateral-info liquidation-params))
-    ;; collateral decimals
     (collateral-decimals (get decimals collateral-info))
-    ;; collateral liquidation premium
     (liquidation-premium (get liquidation-premium collateral-info))
-    ;; collateral liquidation ltv
     (liquidation-ltv (get liquidation-ltv collateral-info))
-    ;; user collateral amount
     (user-balance (get user-balance liquidation-params))
     (collateral-price (get collateral-price liquidation-params))
-    ;; get liquidation info for the user
     (liquidation-info (try! (liquidate
         current-debt-adjusted
         total-liquid-ltv
@@ -250,15 +226,16 @@
   )
 )
 
-(define-private (execute-liquidation (user principal) (collateral <token-trait>) (liquidator-repay-amount uint) (min-collateral-expected uint))
+(define-private (execute-liquidation (verified { timestamp: uint, feeds: (list 16 { feed-id: uint, price: int, exponent: int, confidence: (optional uint) }) }) (user principal) (collateral <token-trait>) (liquidator-repay-amount uint) (min-collateral-expected uint))
   (let
       (
         (collateral-token (contract-of collateral))
         (user-position-data (contract-call? .state-v1 get-borrow-repay-params user))
         (position-for-block-check (unwrap! (get user-position user-position-data) ERR-NO-POSITION))
-        ;; get liquidation info for the user
-        (market-asset-price (unwrap! (contract-call? .pyth-adapter-v1 read-price .mock-usdc) ERR-MISSING-MARKET-PRICE))
-        (liquidation-res (try! (get-liquidation-info user collateral liquidator-repay-amount (some market-asset-price) none none none)))
+        ;; Price the market asset and this position's collaterals from the verified update.
+        (market-asset-price (unwrap! (element-at? (try! (contract-call? .pyth-adapter-v1 prices-for verified (list .mock-usdc))) u0) ERR-MISSING-MARKET-PRICE))
+        (collateral-prices (try! (contract-call? .pyth-adapter-v1 prices-for verified (get collaterals position-for-block-check))))
+        (liquidation-res (try! (get-liquidation-info user collateral liquidator-repay-amount market-asset-price collateral-prices)))
         (liquidation-info (get liquidation-info liquidation-res))
         (current-debt (get current-debt liquidation-res))
         (user-borrowed-amount (get user-borrowed-amount liquidation-res))
@@ -326,14 +303,18 @@
       ;; slippage check
       (asserts! (>= collateral-to-give min-collateral-expected) ERR-SLIPPAGE)
       (let (
-          (account-health-data (try! (account-health user none none)))
+          ;; Re-price against a fresh read of the post-liquidation collateral set, so the prices
+          ;; line up one-to-one with what account-health and socialize-bad-debt read back.
+          (post-liq-collaterals (get collaterals (unwrap! (get user-position (contract-call? .state-v1 get-borrow-repay-params user)) ERR-NO-POSITION)))
+          (post-liq-collateral-prices (try! (contract-call? .pyth-adapter-v1 prices-for verified post-liq-collaterals)))
+          (account-health-data (try! (account-health user market-asset-price post-liq-collateral-prices)))
           (position-health (get position-health account-health-data))
         )
 
         ;; check account health post liquidation
         (asserts! (<= position-health (+ LIQUIDATION-BUFFER MINIMUM_HEALTH_RATIO)) (err position-health))
         ;; socialize debt if bad debt
-        (try! (socialize-bad-debt bad-debt user))
+        (try! (socialize-bad-debt bad-debt user post-liq-collateral-prices))
         (print {
             action: "liquidate-collateral",
             collateral: collateral-token,
@@ -353,7 +334,7 @@
   user: principal,
   liquidator-repay-amount: uint,
   min-collateral-expected: uint
-})) (result {collateral: <token-trait>, res: (response bool uint)}))
+})) (result {verified: { timestamp: uint, feeds: (list 16 { feed-id: uint, price: int, exponent: int, confidence: (optional uint) }) }, collateral: <token-trait>, res: (response bool uint)}))
   (let (
       (prev-result (get res result))
     )
@@ -361,7 +342,7 @@
     (if (is-err prev-result)
       result
       (match maybe-liquidation-data liquidation-data
-        {collateral: (get collateral result), res: (execute-liquidation (get user liquidation-data) (get collateral result) (get liquidator-repay-amount liquidation-data) (get min-collateral-expected liquidation-data))}
+        (merge result {res: (execute-liquidation (get verified result) (get user liquidation-data) (get collateral result) (get liquidator-repay-amount liquidation-data) (get min-collateral-expected liquidation-data))})
         result
       )
     )
@@ -429,8 +410,8 @@
   (contract-call? .state-v1 set-accrued-interest accrued-interest)
 ))
 
-(define-private (check-account-unhealthy (user principal) (maybe-market-asset-price (optional uint)) (maybe-total-liquid-ltv (optional uint)))
-  (let ((health-data (try! (account-health user maybe-market-asset-price maybe-total-liquid-ltv))))
+(define-private (check-account-unhealthy (user principal) (market-asset-price uint) (collateral-prices (list 10 uint)))
+  (let ((health-data (try! (account-health user market-asset-price collateral-prices))))
     (if (< (get position-health health-data) MINIMUM_HEALTH_RATIO)
       (ok (some health-data))
       (ok none)
@@ -508,15 +489,14 @@
   )
 )
 
-(define-private (socialize-bad-debt (bad-debt bool) (user principal))
-  (if (not bad-debt) 
+(define-private (socialize-bad-debt (bad-debt bool) (user principal) (collateral-prices (list 10 uint)))
+  (if (not bad-debt)
     SUCCESS
     (let (
         (repay-params (contract-call? .state-v1 get-borrow-repay-params user))
         (position (unwrap! (get user-position repay-params) ERR-NO-POSITION))
         (total-borrowed-amount (get total-borrowed-amount repay-params))
         (user-collaterals (get collaterals position))
-        (collateral-prices (try! (contract-call? .pyth-adapter-v1 bulk-read-collateral-prices user-collaterals)))
         (total-collateral-value (get-user-total-collateral-value user user-collaterals collateral-prices))
         (debt-params (contract-call? .state-v1 get-debt-params))
         (remaining-debt (contract-call? .math-v1 convert-to-debt-assets debt-params (get debt-shares position) true))
@@ -564,3 +544,12 @@
       ))
     )
 ))
+
+;; The verified price for a specific collateral, taken from an injected list aligned to `collaterals`.
+(define-private (collateral-price-for (token principal) (collaterals (list 10 principal)) (collateral-prices (list 10 uint)))
+  (match (index-of? collaterals token)
+    idx (element-at? collateral-prices idx)
+    none
+  )
+)
+
