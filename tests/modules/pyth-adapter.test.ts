@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from "vitest";
-import { Cl } from "@stacks/transactions";
+import { Cl, ClarityType } from "@stacks/transactions";
 import {
   init_pyth,
   set_pyth_time_delta,
@@ -26,13 +26,22 @@ const register = (token: string) =>
     deployer
   );
 
-const verify = (tokens: any[], update?: Uint8Array) =>
-  simnet.callPublicFn(
+// Verify the update once, then extract prices for the requested tokens from the verified set.
+const verify = (tokens: any[], update?: Uint8Array) => {
+  const verified = simnet.callPublicFn(
     "pyth-adapter-v1",
-    "verify-and-get-prices",
-    [Cl.buffer(update ?? build_price_update()), Cl.list(tokens)],
+    "verify-update",
+    [Cl.buffer(update ?? build_price_update())],
     deployer
   ).result;
+  if (verified.type === ClarityType.ResponseErr) return verified;
+  return simnet.callPublicFn(
+    "pyth-adapter-v1",
+    "prices-for",
+    [(verified as any).value, Cl.list(tokens)],
+    deployer
+  ).result;
+};
 
 // Build a single-feed blob with an explicit timestamp / signer for the timing + signature tests.
 const build_at = (feedId: number, price: bigint, expo: number, tsMicros: bigint, privKey?: Uint8Array) =>
@@ -45,7 +54,7 @@ const build_at = (feedId: number, price: bigint, expo: number, tsMicros: bigint,
     privKey
   );
 
-describe("pyth-adapter-v1 verify-and-get-prices", () => {
+describe("pyth-adapter-v1 verify-update / prices-for", () => {
   beforeEach(() => {
     init_pyth(deployer);
     set_pyth_time_delta(7200, deployer);

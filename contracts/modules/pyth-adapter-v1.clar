@@ -77,82 +77,34 @@
 
 (define-read-only (get-pyth-minimum-time-delta) MINIMUM_TIME_DELTA)
 
-;; Verify a signed Lazer update once and return the fixed-point price for each
-;; requested token, in order. Reverts if any token is unsupported, its feed is
-;; absent from the update, stale, low-confidence, or otherwise invalid.
-(define-public (verify-and-get-prices (update (buff 8192)) (tokens (list 11 principal)))
-  (let (
-      (decoded (try! (contract-call? .pyth-lazer-oracle verify-price-feeds update .pyth-lazer-decoder-v1 none)))
-      (timestamp (/ (get timestamp decoded) MICROS_PER_SECOND))
-      (feeds (get price-feeds decoded))
-      (result (try! (fold accumulate-token-price tokens (ok {
-        timestamp: timestamp,
-        feeds: feeds,
-        prices: (list),
-      }))))
-    )
-    (ok (get prices result))
+;; Verify a signed Lazer update once (signature, trusted signer, decode) and return the decoded
+;; feed set plus the publish timestamp in seconds. A batch verifies once and prices many tokens
+;; from the result without repeating the signature check.
+(define-public (verify-update (update (buff 8192)))
+  (let ((decoded (try! (contract-call? .pyth-lazer-oracle verify-price-feeds update .pyth-lazer-decoder-v1 none))))
+    (ok {
+      timestamp: (/ (get timestamp decoded) MICROS_PER_SECOND),
+      feeds: (map slim-feed (get price-feeds decoded)),
+    })
   )
 )
 
-(define-private (accumulate-token-price
-    (token principal)
-    (acc (response {
+;; Fixed-point prices for the requested tokens, in order, looked up from an already-verified feed
+;; set. Reverts if any token is unsupported, its feed is absent, stale, low-confidence, or invalid.
+(define-public (prices-for
+    (verified {
       timestamp: uint,
-      feeds: (list 16 {
-        feed-id: uint,
-        price: int,
-        exponent: int,
-        publisher-count: uint,
-        confidence: (optional uint),
-        best-bid: (optional int),
-        best-ask: (optional int),
-        funding-rate: (optional int),
-        funding-timestamp: (optional uint),
-        funding-rate-interval: (optional uint),
-        market-session: (optional uint),
-        ema-price: (optional int),
-        ema-confidence: (optional uint),
-        feed-update-timestamp: (optional uint),
-      }),
-      prices: (list 11 uint),
-    } uint))
+      feeds: (list 16 { feed-id: uint, price: int, exponent: int, confidence: (optional uint) }),
+    })
+    (tokens (list 10 principal))
   )
-  (let (
-      (state (try! acc))
-      (feed-data (unwrap! (map-get? price-feeds token) ERR-UNSUPPORTED-ASSET))
-      (feed (unwrap! (find-feed (get feed-id feed-data) (get feeds state)) ERR-MISSING-FEED))
-      (price (try! (validate-and-convert feed (get timestamp state) (get max-confidence-ratio feed-data))))
-    )
-    (ok (merge state {
-      prices: (unwrap! (as-max-len? (append (get prices state) price) u11) ERR-PRICE-LIST-OVERFLOW),
-    }))
-  )
+  (ok (get prices (try! (fold accumulate-token-price tokens (ok {
+    verified: verified,
+    prices: (list),
+  })))))
 )
 
-(define-private (find-feed
-    (feed-id uint)
-    (feeds (list 16 {
-      feed-id: uint,
-      price: int,
-      exponent: int,
-      publisher-count: uint,
-      confidence: (optional uint),
-      best-bid: (optional int),
-      best-ask: (optional int),
-      funding-rate: (optional int),
-      funding-timestamp: (optional uint),
-      funding-rate-interval: (optional uint),
-      market-session: (optional uint),
-      ema-price: (optional int),
-      ema-confidence: (optional uint),
-      feed-update-timestamp: (optional uint),
-    }))
-  )
-  (get found (fold match-feed-id feeds { target: feed-id, found: none }))
-)
-
-(define-private (match-feed-id
+(define-private (slim-feed
     (feed {
       feed-id: uint,
       price: int,
@@ -169,24 +121,50 @@
       ema-confidence: (optional uint),
       feed-update-timestamp: (optional uint),
     })
+  )
+  {
+    feed-id: (get feed-id feed),
+    price: (get price feed),
+    exponent: (get exponent feed),
+    confidence: (get confidence feed),
+  }
+)
+
+(define-private (accumulate-token-price
+    (token principal)
+    (acc (response {
+      verified: {
+        timestamp: uint,
+        feeds: (list 16 { feed-id: uint, price: int, exponent: int, confidence: (optional uint) }),
+      },
+      prices: (list 10 uint),
+    } uint))
+  )
+  (let (
+      (state (try! acc))
+      (verified (get verified state))
+      (feed-data (unwrap! (map-get? price-feeds token) ERR-UNSUPPORTED-ASSET))
+      (feed (unwrap! (find-feed (get feed-id feed-data) (get feeds verified)) ERR-MISSING-FEED))
+      (price (try! (validate-and-convert feed (get timestamp verified) (get max-confidence-ratio feed-data))))
+    )
+    (ok (merge state {
+      prices: (unwrap! (as-max-len? (append (get prices state) price) u10) ERR-PRICE-LIST-OVERFLOW),
+    }))
+  )
+)
+
+(define-private (find-feed
+    (feed-id uint)
+    (feeds (list 16 { feed-id: uint, price: int, exponent: int, confidence: (optional uint) }))
+  )
+  (get found (fold match-feed-id feeds { target: feed-id, found: none }))
+)
+
+(define-private (match-feed-id
+    (feed { feed-id: uint, price: int, exponent: int, confidence: (optional uint) })
     (acc {
       target: uint,
-      found: (optional {
-        feed-id: uint,
-        price: int,
-        exponent: int,
-        publisher-count: uint,
-        confidence: (optional uint),
-        best-bid: (optional int),
-        best-ask: (optional int),
-        funding-rate: (optional int),
-        funding-timestamp: (optional uint),
-        funding-rate-interval: (optional uint),
-        market-session: (optional uint),
-        ema-price: (optional int),
-        ema-confidence: (optional uint),
-        feed-update-timestamp: (optional uint),
-      }),
+      found: (optional { feed-id: uint, price: int, exponent: int, confidence: (optional uint) }),
     })
   )
   (if (and (is-none (get found acc)) (is-eq (get feed-id feed) (get target acc)))
@@ -196,22 +174,7 @@
 )
 
 (define-private (validate-and-convert
-    (feed {
-      feed-id: uint,
-      price: int,
-      exponent: int,
-      publisher-count: uint,
-      confidence: (optional uint),
-      best-bid: (optional int),
-      best-ask: (optional int),
-      funding-rate: (optional int),
-      funding-timestamp: (optional uint),
-      funding-rate-interval: (optional uint),
-      market-session: (optional uint),
-      ema-price: (optional int),
-      ema-confidence: (optional uint),
-      feed-update-timestamp: (optional uint),
-    })
+    (feed { feed-id: uint, price: int, exponent: int, confidence: (optional uint) })
     (timestamp uint)
     (max-confidence-ratio uint)
   )

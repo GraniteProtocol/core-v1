@@ -37,14 +37,19 @@
 }))))
   (begin
   (try! (accrue-interest))
-  (try! (get res (fold fold-execute-liquidation batch {update: update, collateral: collateral, res: (ok true)})))
-  SUCCESS
+  ;; Verify the signed update once for the whole batch, then price each liquidation from it.
+  (let ((verified (try! (contract-call? .pyth-adapter-v1 verify-update update))))
+    (try! (get res (fold fold-execute-liquidation batch {verified: verified, collateral: collateral, res: (ok true)})))
+    SUCCESS
+  )
 ))
 
 (define-public (liquidate-collateral (update (buff 8192)) (collateral <token-trait>) (user principal) (liquidator-repay-amount uint) (min-collateral-expected uint))
   (begin
     (try! (accrue-interest))
-    (execute-liquidation update user collateral liquidator-repay-amount min-collateral-expected)
+    (let ((verified (try! (contract-call? .pyth-adapter-v1 verify-update update))))
+      (execute-liquidation verified user collateral liquidator-repay-amount min-collateral-expected)
+    )
 ))
 
 ;; READ-ONLY FUNCTIONS
@@ -221,17 +226,15 @@
   )
 )
 
-(define-private (execute-liquidation (update (buff 8192)) (user principal) (collateral <token-trait>) (liquidator-repay-amount uint) (min-collateral-expected uint))
+(define-private (execute-liquidation (verified { timestamp: uint, feeds: (list 16 { feed-id: uint, price: int, exponent: int, confidence: (optional uint) }) }) (user principal) (collateral <token-trait>) (liquidator-repay-amount uint) (min-collateral-expected uint))
   (let
       (
         (collateral-token (contract-of collateral))
         (user-position-data (contract-call? .state-v1 get-borrow-repay-params user))
         (position-for-block-check (unwrap! (get user-position user-position-data) ERR-NO-POSITION))
-        ;; Verify the Lazer update once for the market asset + this position's collaterals.
-        (tokens (market-and-collaterals (get collaterals position-for-block-check)))
-        (verified-prices (try! (contract-call? .pyth-adapter-v1 verify-and-get-prices update tokens)))
-        (market-asset-price (unwrap! (element-at? verified-prices u0) ERR-MISSING-MARKET-PRICE))
-        (collateral-prices (try! (align-prices (get collaterals position-for-block-check) tokens verified-prices)))
+        ;; Price the market asset and this position's collaterals from the verified update.
+        (market-asset-price (unwrap! (element-at? (try! (contract-call? .pyth-adapter-v1 prices-for verified (list .mock-usdc))) u0) ERR-MISSING-MARKET-PRICE))
+        (collateral-prices (try! (contract-call? .pyth-adapter-v1 prices-for verified (get collaterals position-for-block-check))))
         (liquidation-res (try! (get-liquidation-info user collateral liquidator-repay-amount market-asset-price collateral-prices)))
         (liquidation-info (get liquidation-info liquidation-res))
         (current-debt (get current-debt liquidation-res))
@@ -300,10 +303,10 @@
       ;; slippage check
       (asserts! (>= collateral-to-give min-collateral-expected) ERR-SLIPPAGE)
       (let (
-          ;; Re-price against a fresh read of the post-liquidation collateral set, so the injected
-          ;; prices line up one-to-one with what account-health and socialize-bad-debt read back.
+          ;; Re-price against a fresh read of the post-liquidation collateral set, so the prices
+          ;; line up one-to-one with what account-health and socialize-bad-debt read back.
           (post-liq-collaterals (get collaterals (unwrap! (get user-position (contract-call? .state-v1 get-borrow-repay-params user)) ERR-NO-POSITION)))
-          (post-liq-collateral-prices (try! (align-prices post-liq-collaterals tokens verified-prices)))
+          (post-liq-collateral-prices (try! (contract-call? .pyth-adapter-v1 prices-for verified post-liq-collaterals)))
           (account-health-data (try! (account-health user market-asset-price post-liq-collateral-prices)))
           (position-health (get position-health account-health-data))
         )
@@ -331,7 +334,7 @@
   user: principal,
   liquidator-repay-amount: uint,
   min-collateral-expected: uint
-})) (result {update: (buff 8192), collateral: <token-trait>, res: (response bool uint)}))
+})) (result {verified: { timestamp: uint, feeds: (list 16 { feed-id: uint, price: int, exponent: int, confidence: (optional uint) }) }, collateral: <token-trait>, res: (response bool uint)}))
   (let (
       (prev-result (get res result))
     )
@@ -339,7 +342,7 @@
     (if (is-err prev-result)
       result
       (match maybe-liquidation-data liquidation-data
-        (merge result {res: (execute-liquidation (get update result) (get user liquidation-data) (get collateral result) (get liquidator-repay-amount liquidation-data) (get min-collateral-expected liquidation-data))})
+        (merge result {res: (execute-liquidation (get verified result) (get user liquidation-data) (get collateral result) (get liquidator-repay-amount liquidation-data) (get min-collateral-expected liquidation-data))})
         result
       )
     )
@@ -542,11 +545,6 @@
     )
 ))
 
-;; Token list for a verify-and-get-prices call: market asset first, then the collaterals.
-(define-private (market-and-collaterals (collaterals (list 10 principal)))
-  (concat (list .mock-usdc) collaterals)
-)
-
 ;; The verified price for a specific collateral, taken from an injected list aligned to `collaterals`.
 (define-private (collateral-price-for (token principal) (collaterals (list 10 principal)) (collateral-prices (list 10 uint)))
   (match (index-of? collaterals token)
@@ -555,33 +553,3 @@
   )
 )
 
-;; Prices for `collaterals`, in order, looked up from a verified (tokens, prices) pair.
-;; Used to re-align verified prices to a collateral set that may differ from what was verified
-;; (e.g. after a collateral is fully seized during liquidation).
-(define-private (align-prices (collaterals (list 10 principal)) (tokens (list 11 principal)) (prices (list 11 uint)))
-  (let ((result (fold accumulate-aligned-price collaterals {
-      tokens: tokens,
-      prices: prices,
-      out: (list),
-      ok: true,
-    })))
-    (if (get ok result) (ok (get out result)) ERR-INVALID-ORACLE-PRICE)
-  )
-)
-
-(define-private (accumulate-aligned-price
-    (collateral principal)
-    (acc {
-      tokens: (list 11 principal),
-      prices: (list 11 uint),
-      out: (list 10 uint),
-      ok: bool,
-    })
-  )
-  (match (index-of? (get tokens acc) collateral)
-    idx (match (element-at? (get prices acc) idx)
-          price (merge acc { out: (unwrap-panic (as-max-len? (append (get out acc) price) u10)) })
-          (merge acc { ok: false }))
-    (merge acc { ok: false })
-  )
-)

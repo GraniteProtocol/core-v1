@@ -34,16 +34,16 @@
         ;; can't borrow if no collaterals were posted
         (borrow-params (contract-call? .state-v1 get-borrow-repay-params user))
         (position (unwrap! (get user-position borrow-params) ERR-NO-POSITION))
+        (position-collaterals (get collaterals position))
+        ;; Verify the untrusted update up front, then price the market asset and collaterals from it.
+        (verified (try! (contract-call? .pyth-adapter-v1 verify-update update)))
+        (market-asset-price (unwrap! (element-at? (try! (contract-call? .pyth-adapter-v1 prices-for verified (list .mock-usdc))) u0) ERR-MISSING-MARKET-PRICE))
+        (collateral-prices (try! (contract-call? .pyth-adapter-v1 prices-for verified position-collaterals)))
         (current-debt-shares (get debt-shares position))
         (debt-params (contract-call? .state-v1 get-debt-params))
         (current-debt (contract-call? .math-v1 convert-to-debt-assets debt-params current-debt-shares true))
         (new-debt-shares (contract-call? .math-v1 convert-to-debt-shares debt-params amount true))
         (total-user-debt-shares (+ new-debt-shares (get debt-shares position)))
-        (position-collaterals (get collaterals position))
-        ;; Verify the Lazer update once: prices[0] is the market asset, prices[1..] align to collaterals.
-        (prices (try! (contract-call? .pyth-adapter-v1 verify-and-get-prices update (market-and-collaterals position-collaterals))))
-        (market-asset-price (unwrap! (element-at? prices u0) ERR-MISSING-MARKET-PRICE))
-        (collateral-prices (collateral-prices-from prices))
         (user-list (unwrap-panic (slice? (list user user user user user user user user user user) u0 (len collateral-prices))))
         (total-max-ltv (fold + (map iterate-collateral-value position-collaterals collateral-prices user-list) u0))
         (new-current-debt (+ amount current-debt))
@@ -181,6 +181,8 @@
     (let
       (
         (user (match maybe-user user (begin (asserts! (is-eq user tx-sender) ERR-NOT-TX-SENDER) user) contract-caller))
+        ;; Verify the untrusted update up front, before mutating any collateral state.
+        (verified (try! (contract-call? .pyth-adapter-v1 verify-update update)))
         (collateral-token (contract-of collateral))
         (remove-collateral-params (try! (contract-call? .state-v1 get-collateral-params collateral-token user)))
         (collateral-info (get collateral-info remove-collateral-params))
@@ -189,10 +191,9 @@
         (position (get user-position remove-collateral-params))
         (remove-user-collateral-info (try! (remove-user-collateral user prev-amount amount collateral-token (get debt-shares position) (get collaterals position) (get borrowed-amount position) (get borrowed-block position))))
         (position-collaterals (get position-collaterals remove-user-collateral-info))
-        ;; Verify against the post-removal collateral set: prices[0] market asset, prices[1..] collaterals.
-        (prices (try! (contract-call? .pyth-adapter-v1 verify-and-get-prices update (market-and-collaterals position-collaterals))))
-        (market-asset-price (unwrap! (element-at? prices u0) ERR-MISSING-MARKET-PRICE))
-        (collateral-prices (collateral-prices-from prices))
+        ;; Price the market asset and the post-removal collaterals from the verified update.
+        (market-asset-price (unwrap! (element-at? (try! (contract-call? .pyth-adapter-v1 prices-for verified (list .mock-usdc))) u0) ERR-MISSING-MARKET-PRICE))
+        (collateral-prices (try! (contract-call? .pyth-adapter-v1 prices-for verified position-collaterals)))
         (user-list (unwrap-panic (slice? (list user user user user user user user user user user) u0 (len collateral-prices))))
         (total-max-ltv (fold + (map iterate-collateral-value position-collaterals collateral-prices user-list) u0))
         (debt-params (contract-call? .state-v1 get-debt-params))
@@ -225,20 +226,6 @@
 ))
 
 ;; PRIVATE FUNCTIONS
-
-;; Token list for a verify-and-get-prices call: market asset first, then the collaterals.
-(define-private (market-and-collaterals (collaterals (list 10 principal)))
-  (concat (list .mock-usdc) collaterals)
-)
-
-;; The collateral slice of a verified price list (drops the leading market-asset price);
-;; empty when the position has no collateral, since `slice?` has no valid range on one element.
-(define-private (collateral-prices-from (prices (list 11 uint)))
-  (if (<= (len prices) u1)
-    (list)
-    (unwrap-panic (as-max-len? (unwrap-panic (slice? prices u1 (len prices))) u10))
-  )
-)
 
 (define-private (accrue-interest)
   (let (
