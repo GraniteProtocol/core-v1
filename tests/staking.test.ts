@@ -219,8 +219,8 @@ describe("staking tests", () => {
 
     // withdrawal should exist
     const withdrawal = getUserWithdrawal(depositor1, 0);
-    expect(withdrawal.data["withdrawal-shares"]).toEqual(Cl.uint(1000));
-    expect(withdrawal.data["finalization-at"]).toEqual(
+    expect(withdrawal.value["withdrawal-shares"]).toEqual(Cl.uint(1000));
+    expect(withdrawal.value["finalization-at"]).toEqual(
       Cl.uint(finalizationPeriod)
     );
 
@@ -293,8 +293,8 @@ describe("staking tests", () => {
 
     // withdrawal should exist
     const withdrawal = getUserWithdrawal(depositor1, 0);
-    expect(withdrawal.data["withdrawal-shares"]).toEqual(Cl.uint(1000));
-    expect(withdrawal.data["finalization-at"]).toEqual(
+    expect(withdrawal.value["withdrawal-shares"]).toEqual(Cl.uint(1000));
+    expect(withdrawal.value["finalization-at"]).toEqual(
       Cl.uint(finalizationPeriod)
     );
 
@@ -343,8 +343,8 @@ describe("staking tests", () => {
 
     // withdrawal should exist
     let withdrawal = getUserWithdrawal(depositor1, 0);
-    expect(withdrawal.data["withdrawal-shares"]).toEqual(Cl.uint(500));
-    expect(withdrawal.data["finalization-at"]).toEqual(
+    expect(withdrawal.value["withdrawal-shares"]).toEqual(Cl.uint(500));
+    expect(withdrawal.value["finalization-at"]).toEqual(
       Cl.uint(finalizationPeriod)
     );
 
@@ -369,8 +369,8 @@ describe("staking tests", () => {
 
     // withdrawal should exist
     withdrawal = getUserWithdrawal(depositor1, 1);
-    expect(withdrawal.data["withdrawal-shares"]).toEqual(Cl.uint(500));
-    expect(withdrawal.data["finalization-at"]).toEqual(
+    expect(withdrawal.value["withdrawal-shares"]).toEqual(Cl.uint(500));
+    expect(withdrawal.value["finalization-at"]).toEqual(
       Cl.uint(finalizationPeriod)
     );
 
@@ -447,8 +447,8 @@ describe("staking tests", () => {
 
     // withdrawal should exist
     let withdrawal = getUserWithdrawal(depositor2, 0);
-    expect(withdrawal.data["withdrawal-shares"]).toEqual(Cl.uint(1000));
-    expect(withdrawal.data["finalization-at"]).toEqual(
+    expect(withdrawal.value["withdrawal-shares"]).toEqual(Cl.uint(1000));
+    expect(withdrawal.value["finalization-at"]).toEqual(
       Cl.uint(finalizationPeriod)
     );
 
@@ -468,8 +468,8 @@ describe("staking tests", () => {
 
     // withdrawal should exist
     withdrawal = getUserWithdrawal(depositor1, 0);
-    expect(withdrawal.data["withdrawal-shares"]).toEqual(Cl.uint(2000));
-    expect(withdrawal.data["finalization-at"]).toEqual(
+    expect(withdrawal.value["withdrawal-shares"]).toEqual(Cl.uint(2000));
+    expect(withdrawal.value["finalization-at"]).toEqual(
       Cl.uint(finalizationPeriod)
     );
 
@@ -531,7 +531,7 @@ describe("staking tests", () => {
       [Cl.principal(borrower1)],
       borrower1
     );
-    expect(userDebtShares.result.value.data["debt-shares"].value).toEqual(0n);
+    expect(userDebtShares.result.value.value["debt-shares"].value).toEqual(0n);
 
     // stake contracts lp balance should have increased.
     // Post H-01: dust + 2-block init shift in mint/initialize call cause the
@@ -548,8 +548,8 @@ describe("staking tests", () => {
 
     // withdrawal should exist
     const withdrawal = getUserWithdrawal(depositor1, 0);
-    expect(withdrawal.data["withdrawal-shares"]).toEqual(Cl.uint(500054682070));
-    expect(withdrawal.data["finalization-at"]).toEqual(
+    expect(withdrawal.value["withdrawal-shares"]).toEqual(Cl.uint(500054682070));
+    expect(withdrawal.value["finalization-at"]).toEqual(
       Cl.uint(finalizationPeriod)
     );
 
@@ -593,7 +593,7 @@ describe("staking tests", () => {
       [],
       deployer
     );
-    let totalAssets = totalAssetsRes.result.data["total-assets"].value;
+    let totalAssets = totalAssetsRes.result.value["total-assets"].value;
     // H-01 burn dust adds 1000 to every pool's total-assets baseline.
     expect(totalAssets).toEqual(3001n);
 
@@ -603,7 +603,7 @@ describe("staking tests", () => {
       [Cl.principal(borrower1), Cl.none(), Cl.none()],
       deployer
     );
-    expect(accounthealthRes.result.value.data["position-health"]).toEqual(
+    expect(accounthealthRes.result.value.value["position-health"]).toEqual(
       Cl.uint(115356885n)
     );
 
@@ -613,7 +613,7 @@ describe("staking tests", () => {
       [Cl.principal(borrower1)],
       borrower1
     );
-    expect(userDebtShares.result.value.data["debt-shares"].value).toEqual(
+    expect(userDebtShares.result.value.value["debt-shares"].value).toEqual(
       1386n
     );
 
@@ -627,7 +627,7 @@ describe("staking tests", () => {
       [],
       deployer
     );
-    totalAssets = totalAssetsRes.result.data["total-assets"].value;
+    totalAssets = totalAssetsRes.result.value["total-assets"].value;
     // H-01 burn dust adds 1000 to every pool's total-assets baseline.
     expect(totalAssets).toEqual(3001n);
 
@@ -646,7 +646,7 @@ describe("staking tests", () => {
       [Cl.principal(borrower1), Cl.none(), Cl.none()],
       deployer
     );
-    expect(accounthealthRes.result.value.data["position-health"]).toEqual(
+    expect(accounthealthRes.result.value.value["position-health"]).toEqual(
       Cl.uint(43258832n)
     );
 
@@ -684,7 +684,7 @@ describe("staking tests", () => {
       [],
       deployer
     );
-    totalAssets = totalAssetsRes.result.data["total-assets"].value;
+    totalAssets = totalAssetsRes.result.value["total-assets"].value;
     // H-01 burn dust adds 1000 to every pool's total-assets baseline.
     expect(totalAssets).toEqual(3002n);
 
@@ -710,7 +710,7 @@ describe("staking tests", () => {
       [Cl.principal(borrower1)],
       borrower1
     );
-    expect(userDebtShares.result.value.data["debt-shares"].value).toEqual(796n);
+    expect(userDebtShares.result.value.value["debt-shares"].value).toEqual(796n);
 
     mint_token("mock-usdc", 10000, deployer);
     const depositToReserve = simnet.callPublicFn(
@@ -739,7 +739,7 @@ describe("staking tests", () => {
       depositor1
     );
     expect(liquidate.result).toBeOk(Cl.bool(true));
-    let socializedDebt = liquidate.events[5].data.value.data["amount"].value;
+    let socializedDebt = liquidate.events[5].data.value.value["amount"].value;
 
     depositorBalance = simnet.callReadOnlyFn(
       "mock-usdc",
@@ -763,7 +763,7 @@ describe("staking tests", () => {
       [Cl.principal(borrower1), Cl.none(), Cl.none()],
       deployer
     );
-    expect(accounthealthRes.result.value.data["position-health"]).toEqual(
+    expect(accounthealthRes.result.value.value["position-health"]).toEqual(
       Cl.uint(100000000n)
     );
 
@@ -805,7 +805,7 @@ describe("staking tests", () => {
       [Cl.principal(borrower1)],
       borrower1
     );
-    expect(userDebtShares.result.value.data["debt-shares"].value).toEqual(0n);
+    expect(userDebtShares.result.value.value["debt-shares"].value).toEqual(0n);
 
     const reseverBalance = simnet.callReadOnlyFn(
       "state-v1",
@@ -824,7 +824,7 @@ describe("staking tests", () => {
       [],
       deployer
     );
-    totalAssets = totalAssetsRes.result.data["total-assets"].value;
+    totalAssets = totalAssetsRes.result.value["total-assets"].value;
     // this is after socializing the remaining debt from the user
     // total assets with interest is 2003 + 1000 H-01 burn dust = 3003
     expect(totalAssets).toEqual(3003n);
@@ -860,7 +860,7 @@ describe("staking tests", () => {
       [],
       deployer
     );
-    let totalAssets = totalAssetsRes.result.data["total-assets"].value;
+    let totalAssets = totalAssetsRes.result.value["total-assets"].value;
     // H-01 burn dust adds 1000 to every pool's total-assets baseline.
     expect(totalAssets).toEqual(3002n);
 
@@ -870,7 +870,7 @@ describe("staking tests", () => {
       [Cl.principal(borrower1), Cl.none(), Cl.none()],
       deployer
     );
-    expect(accounthealthRes.result.value.data["position-health"]).toEqual(
+    expect(accounthealthRes.result.value.value["position-health"]).toEqual(
       Cl.uint(115273775n)
     );
 
@@ -880,7 +880,7 @@ describe("staking tests", () => {
       [Cl.principal(borrower1)],
       borrower1
     );
-    expect(userDebtShares.result.value.data["debt-shares"].value).toEqual(
+    expect(userDebtShares.result.value.value["debt-shares"].value).toEqual(
       1385n
     );
 
@@ -894,7 +894,7 @@ describe("staking tests", () => {
       [],
       deployer
     );
-    totalAssets = totalAssetsRes.result.data["total-assets"].value;
+    totalAssets = totalAssetsRes.result.value["total-assets"].value;
     // H-01 burn dust adds 1000 to every pool's total-assets baseline.
     expect(totalAssets).toEqual(3002n);
 
@@ -913,7 +913,7 @@ describe("staking tests", () => {
       [Cl.principal(borrower1), Cl.none(), Cl.none()],
       deployer
     );
-    expect(accounthealthRes.result.value.data["position-health"]).toEqual(
+    expect(accounthealthRes.result.value.value["position-health"]).toEqual(
       Cl.uint(43227665n)
     );
 
@@ -951,7 +951,7 @@ describe("staking tests", () => {
       [],
       deployer
     );
-    totalAssets = totalAssetsRes.result.data["total-assets"].value;
+    totalAssets = totalAssetsRes.result.value["total-assets"].value;
     // H-01 burn dust adds 1000 to every pool's total-assets baseline.
     expect(totalAssets).toEqual(3003n);
 
@@ -977,7 +977,7 @@ describe("staking tests", () => {
       [Cl.principal(borrower1)],
       borrower1
     );
-    expect(userDebtShares.result.value.data["debt-shares"].value).toEqual(796n);
+    expect(userDebtShares.result.value.value["debt-shares"].value).toEqual(796n);
 
     mint_token("mock-usdc", 100, deployer);
     const depositToReserve = simnet.callPublicFn(
@@ -1020,7 +1020,7 @@ describe("staking tests", () => {
       depositor1
     );
     expect(liquidate.result).toBeOk(Cl.bool(true));
-    let socializedDebt = liquidate.events[6].data.value.data["amount"].value;
+    let socializedDebt = liquidate.events[6].data.value.value["amount"].value;
 
     depositorBalance = simnet.callReadOnlyFn(
       "mock-usdc",
@@ -1044,7 +1044,7 @@ describe("staking tests", () => {
       [Cl.principal(borrower1), Cl.none(), Cl.none()],
       deployer
     );
-    expect(accounthealthRes.result.value.data["position-health"]).toEqual(
+    expect(accounthealthRes.result.value.value["position-health"]).toEqual(
       Cl.uint(100000000n)
     );
 
@@ -1086,7 +1086,7 @@ describe("staking tests", () => {
       [Cl.principal(borrower1)],
       borrower1
     );
-    expect(userDebtShares.result.value.data["debt-shares"].value).toEqual(0n);
+    expect(userDebtShares.result.value.value["debt-shares"].value).toEqual(0n);
 
     const reseverBalance = simnet.callReadOnlyFn(
       "state-v1",
@@ -1111,7 +1111,7 @@ describe("staking tests", () => {
       [],
       deployer
     );
-    totalAssets = totalAssetsRes.result.data["total-assets"].value;
+    totalAssets = totalAssetsRes.result.value["total-assets"].value;
     // this is after socializing the remaining debt from the user.
     // total assets with interest is 2003 + 1000 H-01 burn dust = 3003 baseline.
     expect(totalAssets).toEqual(3004n - socializedDebt - 1n);
@@ -1157,7 +1157,7 @@ describe("staking tests", () => {
       [],
       deployer
     );
-    let totalAssets = totalAssetsRes.result.data["total-assets"].value;
+    let totalAssets = totalAssetsRes.result.value["total-assets"].value;
     // H-01 burn dust adds 1000 to every pool's total-assets baseline.
     expect(totalAssets).toEqual(3002n);
 
@@ -1167,7 +1167,7 @@ describe("staking tests", () => {
       [Cl.principal(borrower1), Cl.none(), Cl.none()],
       deployer
     );
-    expect(accounthealthRes.result.value.data["position-health"]).toEqual(
+    expect(accounthealthRes.result.value.value["position-health"]).toEqual(
       Cl.uint(115273775n)
     );
 
@@ -1177,7 +1177,7 @@ describe("staking tests", () => {
       [Cl.principal(borrower1)],
       borrower1
     );
-    expect(userDebtShares.result.value.data["debt-shares"].value).toEqual(
+    expect(userDebtShares.result.value.value["debt-shares"].value).toEqual(
       1385n
     );
 
@@ -1188,8 +1188,8 @@ describe("staking tests", () => {
 
     // withdrawal should exist
     const withdrawal = getUserWithdrawal(depositor1, 0);
-    expect(withdrawal.data["withdrawal-shares"]).toEqual(Cl.uint(500));
-    expect(withdrawal.data["finalization-at"]).toEqual(
+    expect(withdrawal.value["withdrawal-shares"]).toEqual(Cl.uint(500));
+    expect(withdrawal.value["finalization-at"]).toEqual(
       Cl.uint(finalizationPeriod)
     );
 
@@ -1203,7 +1203,7 @@ describe("staking tests", () => {
       [],
       deployer
     );
-    totalAssets = totalAssetsRes.result.data["total-assets"].value;
+    totalAssets = totalAssetsRes.result.value["total-assets"].value;
     // H-01 burn dust adds 1000 to every pool's total-assets baseline.
     expect(totalAssets).toEqual(3003n);
 
@@ -1222,7 +1222,7 @@ describe("staking tests", () => {
       [Cl.principal(borrower1), Cl.none(), Cl.none()],
       deployer
     );
-    expect(accounthealthRes.result.value.data["position-health"]).toEqual(
+    expect(accounthealthRes.result.value.value["position-health"]).toEqual(
       Cl.uint(43196544n)
     );
 
@@ -1260,7 +1260,7 @@ describe("staking tests", () => {
       [],
       deployer
     );
-    totalAssets = totalAssetsRes.result.data["total-assets"].value;
+    totalAssets = totalAssetsRes.result.value["total-assets"].value;
     // H-01 burn dust adds 1000 to every pool's total-assets baseline.
     expect(totalAssets).toEqual(3004n);
 
@@ -1286,7 +1286,7 @@ describe("staking tests", () => {
       [Cl.principal(borrower1)],
       borrower1
     );
-    expect(userDebtShares.result.value.data["debt-shares"].value).toEqual(797n);
+    expect(userDebtShares.result.value.value["debt-shares"].value).toEqual(797n);
 
     mint_token("mock-usdc", 100, deployer);
     const depositToReserve = simnet.callPublicFn(
@@ -1329,9 +1329,9 @@ describe("staking tests", () => {
       depositor1
     );
     expect(liquidate.result).toBeOk(Cl.bool(true));
-    let socializedDebt = liquidate.events[6].data.value.data["amount"].value;
+    let socializedDebt = liquidate.events[6].data.value.value["amount"].value;
     let burnedStakedLPTokens =
-      liquidate.events[6].data.value.data["burned-staking-lp-tokens"].value;
+      liquidate.events[6].data.value.value["burned-staking-lp-tokens"].value;
     // since staked lp are equally divided between active and withdrawal
     // Withdrawal should yield half of the remaining
     let expectedWithdrawalTokens = (1000n - burnedStakedLPTokens) / 2n;
@@ -1358,7 +1358,7 @@ describe("staking tests", () => {
       [Cl.principal(borrower1), Cl.none(), Cl.none()],
       deployer
     );
-    expect(accounthealthRes.result.value.data["position-health"]).toEqual(
+    expect(accounthealthRes.result.value.value["position-health"]).toEqual(
       Cl.uint(100000000n)
     );
 
@@ -1400,7 +1400,7 @@ describe("staking tests", () => {
       [Cl.principal(borrower1)],
       borrower1
     );
-    expect(userDebtShares.result.value.data["debt-shares"].value).toEqual(0n);
+    expect(userDebtShares.result.value.value["debt-shares"].value).toEqual(0n);
 
     const reseverBalance = simnet.callReadOnlyFn(
       "state-v1",
@@ -1418,7 +1418,7 @@ describe("staking tests", () => {
       [],
       deployer
     );
-    totalAssets = totalAssetsRes.result.data["total-assets"].value;
+    totalAssets = totalAssetsRes.result.value["total-assets"].value;
     // this is after socializing the remaining debt from the user
     // total assets with interest is 2003 and reserve is completely wiped out
     // staked lp tokens are slashed
@@ -1476,8 +1476,8 @@ describe("staking tests", () => {
     initiateUnstake(depositor1, 500n, 0);
 
     const withdrawal = getUserWithdrawal(depositor1, 0);
-    expect(withdrawal.data["withdrawal-shares"]).toEqual(Cl.uint(500));
-    expect(withdrawal.data["finalization-at"]).toEqual(
+    expect(withdrawal.value["withdrawal-shares"]).toEqual(Cl.uint(500));
+    expect(withdrawal.value["finalization-at"]).toEqual(
       Cl.uint(finalizationPeriod)
     );
 
@@ -1780,7 +1780,7 @@ describe("staking tests", () => {
       [],
       deployer
     );
-    let totalAssets = totalAssetsRes.result.data["total-assets"].value;
+    let totalAssets = totalAssetsRes.result.value["total-assets"].value;
     // H-01 burn dust adds 1000 to every pool's total-assets baseline.
     expect(totalAssets).toEqual(3002n);
 
@@ -1790,7 +1790,7 @@ describe("staking tests", () => {
       [Cl.principal(borrower1), Cl.none(), Cl.none()],
       deployer
     );
-    expect(accounthealthRes.result.value.data["position-health"]).toEqual(
+    expect(accounthealthRes.result.value.value["position-health"]).toEqual(
       Cl.uint(115273775n)
     );
 
@@ -1800,7 +1800,7 @@ describe("staking tests", () => {
       [Cl.principal(borrower1)],
       borrower1
     );
-    expect(userDebtShares.result.value.data["debt-shares"].value).toEqual(
+    expect(userDebtShares.result.value.value["debt-shares"].value).toEqual(
       1385n
     );
 
@@ -1814,7 +1814,7 @@ describe("staking tests", () => {
       [],
       deployer
     );
-    totalAssets = totalAssetsRes.result.data["total-assets"].value;
+    totalAssets = totalAssetsRes.result.value["total-assets"].value;
     // H-01 burn dust adds 1000 to every pool's total-assets baseline.
     expect(totalAssets).toEqual(3002n);
 
@@ -1833,7 +1833,7 @@ describe("staking tests", () => {
       [Cl.principal(borrower1), Cl.none(), Cl.none()],
       deployer
     );
-    expect(accounthealthRes.result.value.data["position-health"]).toEqual(
+    expect(accounthealthRes.result.value.value["position-health"]).toEqual(
       Cl.uint(43227665n)
     );
 
@@ -1871,7 +1871,7 @@ describe("staking tests", () => {
       [],
       deployer
     );
-    totalAssets = totalAssetsRes.result.data["total-assets"].value;
+    totalAssets = totalAssetsRes.result.value["total-assets"].value;
     // H-01 burn dust adds 1000 to every pool's total-assets baseline.
     expect(totalAssets).toEqual(3003n);
 
@@ -1897,7 +1897,7 @@ describe("staking tests", () => {
       [Cl.principal(borrower1)],
       borrower1
     );
-    expect(userDebtShares.result.value.data["debt-shares"].value).toEqual(796n);
+    expect(userDebtShares.result.value.value["debt-shares"].value).toEqual(796n);
 
     mint_token("mock-usdc", 100, deployer);
     const depositToReserve = simnet.callPublicFn(
@@ -1948,7 +1948,7 @@ describe("staking tests", () => {
       depositor1
     );
     expect(liquidate.result).toBeOk(Cl.bool(true));
-    let socializedDebt = liquidate.events[7].data.value.data["amount"].value;
+    let socializedDebt = liquidate.events[7].data.value.value["amount"].value;
 
     depositorBalance = simnet.callReadOnlyFn(
       "mock-usdc",
@@ -1972,7 +1972,7 @@ describe("staking tests", () => {
       [Cl.principal(borrower1), Cl.none(), Cl.none()],
       deployer
     );
-    expect(accounthealthRes.result.value.data["position-health"]).toEqual(
+    expect(accounthealthRes.result.value.value["position-health"]).toEqual(
       Cl.uint(100000000n)
     );
 
@@ -2014,7 +2014,7 @@ describe("staking tests", () => {
       [Cl.principal(borrower1)],
       borrower1
     );
-    expect(userDebtShares.result.value.data["debt-shares"].value).toEqual(0n);
+    expect(userDebtShares.result.value.value["debt-shares"].value).toEqual(0n);
 
     const reseverBalance = simnet.callReadOnlyFn(
       "state-v1",
@@ -2033,7 +2033,7 @@ describe("staking tests", () => {
       [],
       deployer
     );
-    totalAssets = totalAssetsRes.result.data["total-assets"].value;
+    totalAssets = totalAssetsRes.result.value["total-assets"].value;
     // this is after socializing the remaining debt from the user
     // total assets with interest is 2003 and reserve is completely wiped out
     // staked lp tokens are slashed

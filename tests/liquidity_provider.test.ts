@@ -474,7 +474,7 @@ describe("H-01 initialize burn-floor", () => {
         deployer
       );
       expect(
-        lpParams.result.data["total-assets"].value as bigint
+        lpParams.result.value["total-assets"].value as bigint
       ).toBeGreaterThanOrEqual(1000n);
 
       // Burn principal still owns the floor shares.

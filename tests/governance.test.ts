@@ -30,24 +30,24 @@ const guardian_account = accounts.get("wallet_2")!;
 const deployer = accounts.get("deployer")!;
 
 function execute_proposal(response: any) {
-  const proposal_id = response.result.value.buffer;
+  const proposal_id = response.result.value.value;
   simnet.mineEmptyBlocks(21600);
   const res = simnet.callPublicFn(
     "governance-v1",
     "execute",
-    [Cl.buffer(proposal_id)],
+    [Cl.bufferFromHex(proposal_id)],
     governance_account
   );
   expect(res.result).toBeOk(Cl.bool(true));
 }
 
 function execute_proposal_failed(response: any, error: any) {
-  const proposal_id = response.result.value.buffer;
+  const proposal_id = response.result.value.value;
   simnet.mineEmptyBlocks(21600);
   const res = simnet.callPublicFn(
     "governance-v1",
     "execute",
-    [Cl.buffer(proposal_id)],
+    [Cl.bufferFromHex(proposal_id)],
     governance_account
   );
   expect(res.result).toBeErr(Cl.uint(error));
@@ -418,7 +418,7 @@ describe("governance tests", () => {
       [Cl.contractPrincipal(deployer, "mock-btc")],
       governance_account
     );
-    expect(response.result.value.data["max-ltv"]).toEqual(Cl.uint(90000000));
+    expect(response.result.value.value["max-ltv"]).toEqual(Cl.uint(90000000));
   });
 
   it("update collateral settings should fail with incorrect values", async () => {
@@ -787,7 +787,7 @@ describe("governance tests", () => {
       [],
       deployer
     );
-    expect(response.result.data["base-ir"]).toEqual(Cl.uint(300000000000));
+    expect(response.result.value["base-ir"]).toEqual(Cl.uint(300000000000));
 
     response = simnet.callPublicFn(
       "governance-v1",
@@ -810,7 +810,7 @@ describe("governance tests", () => {
       [],
       deployer
     );
-    expect(response.result.data["base-ir"]).toEqual(Cl.uint(500000000000));
+    expect(response.result.value["base-ir"]).toEqual(Cl.uint(500000000000));
   });
 
   it("staking reward rate params can be upgraded", async () => {
@@ -822,7 +822,7 @@ describe("governance tests", () => {
       [],
       deployer
     );
-    expect(response.result.data["base-reward"]).toEqual(Cl.uint(30000000n));
+    expect(response.result.value["base-reward"]).toEqual(Cl.uint(30000000n));
 
     response = simnet.callPublicFn(
       "governance-v1",
@@ -845,7 +845,7 @@ describe("governance tests", () => {
       [],
       deployer
     );
-    expect(response.result.data["base-reward"]).toEqual(Cl.uint(15000000));
+    expect(response.result.value["base-reward"]).toEqual(Cl.uint(15000000));
   });
 
   it("staking reward window can be upgraded", async () => {
@@ -932,13 +932,13 @@ describe("governance tests", () => {
       governance_account
     );
     expect(response.result.type).toBe(ClarityType.ResponseOk);
-    const proposal_id = response.result.value.buffer;
+    const proposal_id = response.result.value.value;
 
     // Immediate execute attempt must fail with ERR-PROPOSAL-TIME-LOCKED.
     let exec = simnet.callPublicFn(
       "governance-v1",
       "execute",
-      [Cl.buffer(proposal_id)],
+      [Cl.bufferFromHex(proposal_id)],
       governance_account
     );
     expect(exec.result).toBeErr(Cl.uint(40017)); // ERR-PROPOSAL-TIME-LOCKED
@@ -951,7 +951,7 @@ describe("governance tests", () => {
     exec = simnet.callPublicFn(
       "governance-v1",
       "execute",
-      [Cl.buffer(proposal_id)],
+      [Cl.bufferFromHex(proposal_id)],
       governance_account
     );
     expect(exec.result).toBeOk(Cl.bool(true));
@@ -988,12 +988,12 @@ describe("governance tests", () => {
       governance_account
     );
     expect(response.result.type).toBe(ClarityType.ResponseOk);
-    const proposal_id = response.result.value.buffer;
+    const proposal_id = response.result.value.value;
 
     let exec = simnet.callPublicFn(
       "governance-v1",
       "execute",
-      [Cl.buffer(proposal_id)],
+      [Cl.bufferFromHex(proposal_id)],
       governance_account
     );
     expect(exec.result).toBeErr(Cl.uint(40017)); // ERR-PROPOSAL-TIME-LOCKED
@@ -1002,7 +1002,7 @@ describe("governance tests", () => {
     exec = simnet.callPublicFn(
       "governance-v1",
       "execute",
-      [Cl.buffer(proposal_id)],
+      [Cl.bufferFromHex(proposal_id)],
       governance_account
     );
     expect(exec.result).toBeOk(Cl.bool(true));
@@ -1038,7 +1038,7 @@ describe("governance tests", () => {
       governance_account
     );
     expect(respA.result.type).toBe(ClarityType.ResponseOk);
-    const idA = respA.result.value.buffer;
+    const idA = respA.result.value.value;
 
     // Proposal B: same feed + max-confidence-ratio + expires-in, but a
     // different token. Pre-fix this collided on the same proposal-id and
@@ -1056,11 +1056,9 @@ describe("governance tests", () => {
       governance_account
     );
     expect(respB.result.type).toBe(ClarityType.ResponseOk);
-    const idB = respB.result.value.buffer;
+    const idB = respB.result.value.value;
 
-    expect(Buffer.from(idA).toString("hex")).not.toEqual(
-      Buffer.from(idB).toString("hex")
-    );
+    expect(idA).not.toEqual(idB);
   });
 
   it("governance multisigs can be upgraded", async () => {
@@ -1113,12 +1111,12 @@ describe("governance tests", () => {
       governance_account
     );
     expect(response.result.type).toBe(ClarityType.ResponseOk);
-    let proposal_id = response.result.value.buffer;
+    let proposal_id = response.result.value.value;
 
     response = simnet.callPublicFn(
       "meta-governance-v1",
       "approve",
-      [Cl.buffer(proposal_id)],
+      [Cl.bufferFromHex(proposal_id)],
       new_governance_account
     );
     expect(response.result).toBeOk(Cl.bool(true));
@@ -1214,7 +1212,7 @@ describe("governance tests", () => {
       governance_account
     );
     expect(response.result.type).toBe(ClarityType.ResponseOk);
-    let proposal_id_1 = response.result.value.buffer;
+    let proposal_id_1 = response.result.value.value;
 
     // create proposal 2
     response = simnet.callPublicFn(
@@ -1224,13 +1222,13 @@ describe("governance tests", () => {
       governance_account
     );
     expect(response.result.type).toBe(ClarityType.ResponseOk);
-    let proposal_id_2 = response.result.value.buffer;
+    let proposal_id_2 = response.result.value.value;
 
     // approve and execute proposal 2
     response = simnet.callPublicFn(
       "meta-governance-v1",
       "approve",
-      [Cl.buffer(proposal_id_2)],
+      [Cl.bufferFromHex(proposal_id_2)],
       new_governance_account
     );
     expect(response.result).toBeOk(Cl.bool(true));
@@ -1239,7 +1237,7 @@ describe("governance tests", () => {
     response = simnet.callPublicFn(
       "meta-governance-v1",
       "approve",
-      [Cl.buffer(proposal_id_1)],
+      [Cl.bufferFromHex(proposal_id_1)],
       new_governance_account
     );
     expect(response.result).toBeErr(Cl.uint(50008));
@@ -1288,7 +1286,7 @@ describe("governance tests", () => {
       new_governance_account
     );
     expect(response.result.type).toBe(ClarityType.ResponseOk);
-    let proposal_id_1 = response.result.value.buffer;
+    let proposal_id_1 = response.result.value.value;
 
     // create proposal 2
     response = simnet.callPublicFn(
@@ -1298,13 +1296,13 @@ describe("governance tests", () => {
       new_governance_account
     );
     expect(response.result.type).toBe(ClarityType.ResponseOk);
-    let proposal_id_2 = response.result.value.buffer;
+    let proposal_id_2 = response.result.value.value;
 
     // approve and execute proposal 2
     response = simnet.callPublicFn(
       "meta-governance-v1",
       "approve",
-      [Cl.buffer(proposal_id_2)],
+      [Cl.bufferFromHex(proposal_id_2)],
       governance_account
     );
     expect(response.result).toBeOk(Cl.bool(true));
@@ -1313,7 +1311,7 @@ describe("governance tests", () => {
     response = simnet.callPublicFn(
       "meta-governance-v1",
       "approve",
-      [Cl.buffer(proposal_id_1)],
+      [Cl.bufferFromHex(proposal_id_1)],
       governance_account
     );
     expect(response.result).toBeErr(Cl.uint(50009));
@@ -1363,12 +1361,12 @@ describe("governance tests", () => {
       governance_account
     );
     expect(response.result.type).toBe(ClarityType.ResponseOk);
-    let proposal_id = response.result.value.buffer;
+    let proposal_id = response.result.value.value;
 
     response = simnet.callPublicFn(
       "meta-governance-v1",
       "approve",
-      [Cl.buffer(proposal_id)],
+      [Cl.bufferFromHex(proposal_id)],
       new_governance_account
     );
     expect(response.result).toBeOk(Cl.bool(true));
@@ -1389,13 +1387,13 @@ describe("governance tests", () => {
       new_governance_account_1
     );
     expect(response.result.type).toBe(ClarityType.ResponseOk);
-    proposal_id = response.result.value.buffer;
+    proposal_id = response.result.value.value;
 
     // rest of multisigs denies and closes the proposal
     response = simnet.callPublicFn(
       "meta-governance-v1",
       "deny",
-      [Cl.buffer(proposal_id)],
+      [Cl.bufferFromHex(proposal_id)],
       new_governance_account
     );
     expect(response.result).toBeOk(Cl.bool(true));
@@ -1403,7 +1401,7 @@ describe("governance tests", () => {
     response = simnet.callPublicFn(
       "meta-governance-v1",
       "deny",
-      [Cl.buffer(proposal_id)],
+      [Cl.bufferFromHex(proposal_id)],
       governance_account
     );
     expect(response.result).toBeOk(Cl.bool(true));
@@ -1420,10 +1418,10 @@ describe("governance tests", () => {
     response = simnet.callReadOnlyFn(
       "meta-governance-v1",
       "get-proposal",
-      [Cl.buffer(proposal_id)],
+      [Cl.bufferFromHex(proposal_id)],
       deployer
     );
-    expect(response.result.value.data["completed"]).toEqual(Cl.bool(true));
+    expect(response.result.value.value["completed"]).toEqual(Cl.bool(true));
   });
 
   it("protocol reserve percentage can be upgraded", async () => {
@@ -1597,12 +1595,12 @@ describe("governance tests", () => {
       governance_account
     );
     expect(response.result.type).toBe(ClarityType.ResponseOk);
-    let proposal_id = response.result.value.buffer;
+    let proposal_id = response.result.value.value;
 
     response = simnet.callPublicFn(
       "meta-governance-v1",
       "approve",
-      [Cl.buffer(proposal_id)],
+      [Cl.bufferFromHex(proposal_id)],
       new_governance_account
     );
     expect(response.result).toBeOk(Cl.bool(true));
@@ -1625,12 +1623,12 @@ describe("governance tests", () => {
       new_governance_account_1
     );
     expect(response.result.type).toBe(ClarityType.ResponseOk);
-    proposal_id = response.result.value.buffer;
+    proposal_id = response.result.value.value;
 
     response = simnet.callPublicFn(
       "governance-v1",
       "deny",
-      [Cl.buffer(proposal_id)],
+      [Cl.bufferFromHex(proposal_id)],
       new_governance_account
     );
     expect(response.result).toBeOk(Cl.bool(true));
@@ -1638,7 +1636,7 @@ describe("governance tests", () => {
     response = simnet.callPublicFn(
       "governance-v1",
       "deny",
-      [Cl.buffer(proposal_id)],
+      [Cl.bufferFromHex(proposal_id)],
       governance_account
     );
     expect(response.result).toBeOk(Cl.bool(true));
@@ -1647,10 +1645,10 @@ describe("governance tests", () => {
     response = simnet.callReadOnlyFn(
       "governance-v1",
       "get-proposal",
-      [Cl.buffer(proposal_id)],
+      [Cl.bufferFromHex(proposal_id)],
       deployer
     );
-    expect(response.result.value.data["closed"]).toEqual(Cl.bool(true));
+    expect(response.result.value.value["closed"]).toEqual(Cl.bool(true));
 
     response = simnet.callReadOnlyFn("state-v1", "get-asset-cap", [], deployer);
     expect(response.result).toEqual(Cl.uint(10000000000000n));
@@ -1695,12 +1693,12 @@ describe("governance tests", () => {
       new_governance_account
     );
     expect(response.result.type).toBe(ClarityType.ResponseOk);
-    let proposal_id = response.result.value.buffer;
+    let proposal_id = response.result.value.value;
 
     response = simnet.callPublicFn(
       "governance-v1",
       "deny",
-      [Cl.buffer(proposal_id)],
+      [Cl.bufferFromHex(proposal_id)],
       governance_account
     );
     expect(response.result).toBeOk(Cl.bool(true));
@@ -1709,16 +1707,16 @@ describe("governance tests", () => {
     response = simnet.callReadOnlyFn(
       "governance-v1",
       "get-proposal",
-      [Cl.buffer(proposal_id)],
+      [Cl.bufferFromHex(proposal_id)],
       deployer
     );
-    expect(response.result.value.data["closed"]).toEqual(Cl.bool(false));
+    expect(response.result.value.value["closed"]).toEqual(Cl.bool(false));
 
     // close the proposal since of there 50% threshold met for both approval and denial and everyone voted
     response = simnet.callPublicFn(
       "governance-v1",
       "close",
-      [Cl.buffer(proposal_id)],
+      [Cl.bufferFromHex(proposal_id)],
       governance_account
     );
     expect(response.result).toBeOk(Cl.bool(true));
@@ -1727,10 +1725,10 @@ describe("governance tests", () => {
     response = simnet.callReadOnlyFn(
       "governance-v1",
       "get-proposal",
-      [Cl.buffer(proposal_id)],
+      [Cl.bufferFromHex(proposal_id)],
       deployer
     );
-    expect(response.result.value.data["closed"]).toEqual(Cl.bool(true));
+    expect(response.result.value.value["closed"]).toEqual(Cl.bool(true));
 
     response = simnet.callReadOnlyFn("state-v1", "get-asset-cap", [], deployer);
     expect(response.result).toEqual(Cl.uint(10000000000000n));
@@ -1775,14 +1773,14 @@ describe("governance tests", () => {
       new_governance_account
     );
     expect(response.result.type).toBe(ClarityType.ResponseOk);
-    let proposal_id = response.result.value.buffer;
+    let proposal_id = response.result.value.value;
 
     simnet.mineEmptyBlocks(15);
 
     response = simnet.callPublicFn(
       "governance-v1",
       "deny",
-      [Cl.buffer(proposal_id)],
+      [Cl.bufferFromHex(proposal_id)],
       governance_account
     );
     expect(response.result).toBeErr(Cl.uint(40013)); // proposal expired
@@ -1791,16 +1789,16 @@ describe("governance tests", () => {
     response = simnet.callReadOnlyFn(
       "governance-v1",
       "get-proposal",
-      [Cl.buffer(proposal_id)],
+      [Cl.bufferFromHex(proposal_id)],
       deployer
     );
-    expect(response.result.value.data["closed"]).toEqual(Cl.bool(false));
+    expect(response.result.value.value["closed"]).toEqual(Cl.bool(false));
 
     // close the proposal since its expired even if voting is incomplete
     response = simnet.callPublicFn(
       "governance-v1",
       "close",
-      [Cl.buffer(proposal_id)],
+      [Cl.bufferFromHex(proposal_id)],
       governance_account
     );
     expect(response.result).toBeOk(Cl.bool(true));
@@ -1809,10 +1807,10 @@ describe("governance tests", () => {
     response = simnet.callReadOnlyFn(
       "governance-v1",
       "get-proposal",
-      [Cl.buffer(proposal_id)],
+      [Cl.bufferFromHex(proposal_id)],
       deployer
     );
-    expect(response.result.value.data["closed"]).toEqual(Cl.bool(true));
+    expect(response.result.value.value["closed"]).toEqual(Cl.bool(true));
 
     response = simnet.callReadOnlyFn("state-v1", "get-asset-cap", [], deployer);
     expect(response.result).toEqual(Cl.uint(10000000000000n));
@@ -1854,12 +1852,12 @@ describe("governance tests", () => {
       governance_account
     );
     expect(response.result.type).toBe(ClarityType.ResponseOk);
-    let proposal_id = response.result.value.buffer;
+    let proposal_id = response.result.value.value;
 
     response = simnet.callPublicFn(
       "meta-governance-v1",
       "deny",
-      [Cl.buffer(proposal_id)],
+      [Cl.bufferFromHex(proposal_id)],
       new_governance_account
     );
     expect(response.result).toBeOk(Cl.bool(true));
@@ -1868,16 +1866,16 @@ describe("governance tests", () => {
     response = simnet.callReadOnlyFn(
       "meta-governance-v1",
       "get-proposal",
-      [Cl.buffer(proposal_id)],
+      [Cl.bufferFromHex(proposal_id)],
       deployer
     );
-    expect(response.result.value.data["completed"]).toEqual(Cl.bool(false));
+    expect(response.result.value.value["completed"]).toEqual(Cl.bool(false));
 
     // close the proposal since of there 50% threshold met for both approval and denial and everyone voted
     response = simnet.callPublicFn(
       "meta-governance-v1",
       "close",
-      [Cl.buffer(proposal_id)],
+      [Cl.bufferFromHex(proposal_id)],
       governance_account
     );
     expect(response.result).toBeOk(Cl.bool(true));
@@ -1894,10 +1892,10 @@ describe("governance tests", () => {
     response = simnet.callReadOnlyFn(
       "meta-governance-v1",
       "get-proposal",
-      [Cl.buffer(proposal_id)],
+      [Cl.bufferFromHex(proposal_id)],
       deployer
     );
-    expect(response.result.value.data["completed"]).toEqual(Cl.bool(true));
+    expect(response.result.value.value["completed"]).toEqual(Cl.bool(true));
   });
 
   it("multisig proposal can be expired and closed", async () => {
@@ -1936,7 +1934,7 @@ describe("governance tests", () => {
       governance_account
     );
     expect(response.result.type).toBe(ClarityType.ResponseOk);
-    let proposal_id = response.result.value.buffer;
+    let proposal_id = response.result.value.value;
 
     // mine blocks so that proposal is expired
     simnet.mineEmptyBlocks(15);
@@ -1944,7 +1942,7 @@ describe("governance tests", () => {
     response = simnet.callPublicFn(
       "meta-governance-v1",
       "deny",
-      [Cl.buffer(proposal_id)],
+      [Cl.bufferFromHex(proposal_id)],
       new_governance_account
     );
     expect(response.result).toBeErr(Cl.uint(50015)); // proposal expired
@@ -1953,16 +1951,16 @@ describe("governance tests", () => {
     response = simnet.callReadOnlyFn(
       "meta-governance-v1",
       "get-proposal",
-      [Cl.buffer(proposal_id)],
+      [Cl.bufferFromHex(proposal_id)],
       deployer
     );
-    expect(response.result.value.data["completed"]).toEqual(Cl.bool(false));
+    expect(response.result.value.value["completed"]).toEqual(Cl.bool(false));
 
     // close proposal since its expired even if the voting is incomplete
     response = simnet.callPublicFn(
       "meta-governance-v1",
       "close",
-      [Cl.buffer(proposal_id)],
+      [Cl.bufferFromHex(proposal_id)],
       governance_account
     );
     expect(response.result).toBeOk(Cl.bool(true));
@@ -1979,10 +1977,10 @@ describe("governance tests", () => {
     response = simnet.callReadOnlyFn(
       "meta-governance-v1",
       "get-proposal",
-      [Cl.buffer(proposal_id)],
+      [Cl.bufferFromHex(proposal_id)],
       deployer
     );
-    expect(response.result.value.data["completed"]).toEqual(Cl.bool(true));
+    expect(response.result.value.value["completed"]).toEqual(Cl.bool(true));
   });
 
   it("market timelocked proposal can be expired and closed", async () => {
@@ -2003,25 +2001,25 @@ describe("governance tests", () => {
       governance_account
     );
     expect(response.result.type).toBe(ClarityType.ResponseOk);
-    let proposal_id = response.result.value.buffer;
+    let proposal_id = response.result.value.value;
 
     // proposal should be not closed
     response = simnet.callReadOnlyFn(
       "governance-v1",
       "get-proposal",
-      [Cl.buffer(proposal_id)],
+      [Cl.bufferFromHex(proposal_id)],
       deployer
     );
-    expect(response.result.value.data["closed"]).toEqual(Cl.bool(false));
-    expect(response.result.value.data["executed"]).toEqual(Cl.bool(false));
+    expect(response.result.value.value["closed"]).toEqual(Cl.bool(false));
+    expect(response.result.value.value["executed"]).toEqual(Cl.bool(false));
 
     let block_number = simnet.blockHeight;
     let execute_at = block_number + 21600;
     let expires_at = execute_at + 151200;
-    expect(response.result.value.data["execute-at"]).toEqual(
+    expect(response.result.value.value["execute-at"]).toEqual(
       Cl.some(Cl.uint(execute_at))
     );
-    expect(response.result.value.data["expires-at"]).toEqual(
+    expect(response.result.value.value["expires-at"]).toEqual(
       Cl.uint(expires_at)
     );
 
@@ -2031,7 +2029,7 @@ describe("governance tests", () => {
     const res = simnet.callPublicFn(
       "governance-v1",
       "execute",
-      [Cl.buffer(proposal_id)],
+      [Cl.bufferFromHex(proposal_id)],
       governance_account
     );
     expect(res.result).toBeErr(Cl.uint(40013)); // ERR-PROPOSAL-EXPIRED
@@ -2040,7 +2038,7 @@ describe("governance tests", () => {
     response = simnet.callPublicFn(
       "governance-v1",
       "close",
-      [Cl.buffer(proposal_id)],
+      [Cl.bufferFromHex(proposal_id)],
       governance_account
     );
     expect(response.result).toBeOk(Cl.bool(true));
@@ -2049,11 +2047,11 @@ describe("governance tests", () => {
     response = simnet.callReadOnlyFn(
       "governance-v1",
       "get-proposal",
-      [Cl.buffer(proposal_id)],
+      [Cl.bufferFromHex(proposal_id)],
       deployer
     );
-    expect(response.result.value.data["closed"]).toEqual(Cl.bool(true));
-    expect(response.result.value.data["executed"]).toEqual(Cl.bool(false));
+    expect(response.result.value.value["closed"]).toEqual(Cl.bool(true));
+    expect(response.result.value.value["executed"]).toEqual(Cl.bool(false));
 
     response = simnet.callReadOnlyFn(
       "state-v1",
@@ -2127,7 +2125,7 @@ describe("governance tests", () => {
       [Cl.principal(borrower1)],
       borrower1
     );
-    expect(userDebtShares.result.value.data["debt-shares"].value).toEqual(0n);
+    expect(userDebtShares.result.value.value["debt-shares"].value).toEqual(0n);
 
     // remove collateral should fail
     response = simnet.callPublicFn(
@@ -2322,12 +2320,12 @@ describe("LEV-L-01: governance proposal snapshots member-count at creation", () 
       governance_account
     );
     expect(res.result.type).toBe(ClarityType.ResponseOk);
-    const pid = (res.result as any).value.buffer;
+    const pid = (res.result as any).value.value;
     for (const v of voters) {
       const r = simnet.callPublicFn(
         "meta-governance-v1",
         "approve",
-        [Cl.buffer(pid)],
+        [Cl.bufferFromHex(pid)],
         v
       );
       expect(r.result).toBeOk(Cl.bool(true));
@@ -2348,10 +2346,10 @@ describe("LEV-L-01: governance proposal snapshots member-count at creation", () 
     const r = simnet.callReadOnlyFn(
       "governance-v1",
       "get-proposal",
-      [Cl.buffer(pid)],
+      [Cl.bufferFromHex(pid)],
       deployer
     );
-    return ((r.result as any).value as any).data;
+    return ((r.result as any).value as any).value;
   };
 
   it("multisig growth during timelock cannot strand an approved proposal at execute-time", async () => {
@@ -2376,7 +2374,7 @@ describe("LEV-L-01: governance proposal snapshots member-count at creation", () 
       governance_account
     );
     expect(response.result.type).toBe(ClarityType.ResponseOk);
-    const pid = (response.result as any).value.buffer;
+    const pid = (response.result as any).value.value;
 
     // Snapshot captured at creation must equal current multisig count.
     expect(getProposal(pid)["member-count"]).toEqual(Cl.uint(3));
@@ -2386,7 +2384,7 @@ describe("LEV-L-01: governance proposal snapshots member-count at creation", () 
     response = simnet.callPublicFn(
       "governance-v1",
       "approve",
-      [Cl.buffer(pid)],
+      [Cl.bufferFromHex(pid)],
       wallet_3
     );
     expect(response.result).toBeOk(Cl.bool(true));
@@ -2405,7 +2403,7 @@ describe("LEV-L-01: governance proposal snapshots member-count at creation", () 
     response = simnet.callPublicFn(
       "governance-v1",
       "execute",
-      [Cl.buffer(pid)],
+      [Cl.bufferFromHex(pid)],
       governance_account
     );
     expect(response.result).toBeOk(Cl.bool(true));
@@ -2422,7 +2420,7 @@ describe("LEV-L-01: governance proposal snapshots member-count at creation", () 
       [],
       deployer
     );
-    expect((irParams.result as any).data["base-ir"]).toEqual(
+    expect((irParams.result as any).value["base-ir"]).toEqual(
       Cl.uint(500000000000)
     );
   });
@@ -2448,7 +2446,7 @@ describe("LEV-L-01: governance proposal snapshots member-count at creation", () 
       governance_account
     );
     expect(response.result.type).toBe(ClarityType.ResponseOk);
-    const pid = (response.result as any).value.buffer;
+    const pid = (response.result as any).value.value;
     expect(getProposal(pid)["member-count"]).toEqual(Cl.uint(4));
     expect(getProposal(pid)["execute-at"]).toEqual(Cl.none());
 
@@ -2462,12 +2460,12 @@ describe("LEV-L-01: governance proposal snapshots member-count at creation", () 
         governance_account
       );
       expect(r.result.type).toBe(ClarityType.ResponseOk);
-      const rpid = (r.result as any).value.buffer;
+      const rpid = (r.result as any).value.value;
       for (const v of voters) {
         const rr = simnet.callPublicFn(
           "meta-governance-v1",
           "approve",
-          [Cl.buffer(rpid)],
+          [Cl.bufferFromHex(rpid)],
           v
         );
         expect(rr.result).toBeOk(Cl.bool(true));
@@ -2487,7 +2485,7 @@ describe("LEV-L-01: governance proposal snapshots member-count at creation", () 
     response = simnet.callPublicFn(
       "governance-v1",
       "approve",
-      [Cl.buffer(pid)],
+      [Cl.bufferFromHex(pid)],
       wallet_3
     );
     expect(response.result).toBeOk(Cl.bool(true));

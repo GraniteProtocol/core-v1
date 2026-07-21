@@ -94,9 +94,9 @@ describe("PoC E-M-01: integer-floor repay-allowed > debt underflow", () => {
     );
 
     expect(res.result.type).toBe(ClarityType.ResponseOk);
-    const info = res.result.value.data["repayment-info"];
-    const repayAllowed = info.data["repay-allowed"].value;
-    const debt = info.data["debt"].value;
+    const info = res.result.value.value["repayment-info"];
+    const repayAllowed = info.value["repay-allowed"].value;
+    const debt = info.value["debt"].value;
     console.log(`[A] repay-allowed=${repayAllowed} debt=${debt}`);
 
     // Pre-fix: repay-allowed = 10 > debt = 9.
@@ -150,6 +150,6 @@ describe("PoC E-M-01: integer-floor repay-allowed > debt underflow", () => {
       [Cl.principal(borrower)],
       deployer,
     );
-    expect(post.result.data["user-position"].value.data["debt-shares"].value).toBe(0n);
+    expect(post.result.value["user-position"].value.value["debt-shares"].value).toBe(0n);
   });
 });

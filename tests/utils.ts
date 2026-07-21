@@ -47,12 +47,12 @@ export const update_supported_collateral_governance = (
     governance_account
   );
   expect(response.result.type).toBe(ClarityType.ResponseOk);
-  const proposal_id = response.result.value.buffer;
+  const proposal_id = response.result.value.value;
   simnet.mineEmptyBlocks(21600);
   const res = simnet.callPublicFn(
     "governance-v1",
     "execute",
-    [Cl.buffer(proposal_id)],
+    [Cl.bufferFromHex(proposal_id)],
     governance_account
   );
   expect(res.result).toBeOk(Cl.bool(true));

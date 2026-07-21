@@ -34,12 +34,12 @@ const ACTION_SET_DECAY_TIME_WINDOW = 34;
 const SCALING_FACTOR = 100000000;
 
 function execute_proposal(response: any) {
-  const proposal_id = response.result.value.buffer;
+  const proposal_id = response.result.value.value;
   simnet.mineEmptyBlocks(21600);
   const res = simnet.callPublicFn(
     "governance-v1",
     "execute",
-    [Cl.buffer(proposal_id)],
+    [Cl.bufferFromHex(proposal_id)],
     deployer
   );
   expect(res.result).toBeOk(Cl.bool(true));

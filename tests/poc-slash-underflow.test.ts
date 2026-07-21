@@ -19,7 +19,7 @@
  */
 
 import { beforeEach, describe, expect, it } from "vitest";
-import { Cl, ClarityValue } from "@stacks/transactions";
+import { Cl, ClarityType, ClarityValue } from "@stacks/transactions";
 import {
   initialize_ir,
   set_allowed_contracts,
@@ -64,7 +64,7 @@ const initiateUnstake = (user: string, amount: bigint) => {
     user
   );
   // returns (ok withdrawal-index)
-  expect(r.result.type).toBe(7); // ResponseOk
+  expect(r.result.type).toBe(ClarityType.ResponseOk);
 };
 
 const getStakingState = () => {
@@ -152,7 +152,7 @@ describe("PoC: slash-total-staked-lp-tokens underflow", () => {
       [Cl.principal(borrower1), Cl.none(), Cl.none()],
       deployer
     );
-    const healthBefore = healthRes.result.value.data["position-health"].value;
+    const healthBefore = healthRes.result.value.value["position-health"].value;
     expect(healthBefore).toBeGreaterThanOrEqual(100_000_000n); // ≥ 1.0
 
     // ────────────────────────────────────────────────────────────
@@ -171,7 +171,7 @@ describe("PoC: slash-total-staked-lp-tokens underflow", () => {
       [Cl.principal(borrower1), Cl.none(), Cl.none()],
       deployer
     );
-    const healthAfter = healthRes.result.value.data["position-health"].value;
+    const healthAfter = healthRes.result.value.value["position-health"].value;
     expect(healthAfter).toBeLessThan(100_000_000n); // < 1.0
 
     // ────────────────────────────────────────────────────────────

@@ -160,7 +160,7 @@ describe("Borrower User flow tests", () => {
       [Cl.principal(borrower1)],
       borrower1
     );
-    expect(position.result.value.data["debt-shares"].value).toBe(0n);
+    expect(position.result.value.value["debt-shares"].value).toBe(0n);
   });
 
   it("Borrower borrows and partial liquidation", async () => {
@@ -191,7 +191,7 @@ describe("Borrower User flow tests", () => {
       [Cl.principal(borrower1), Cl.none(), Cl.none()],
       deployer
     );
-    expect(accounthealthRes.result.value.data["position-health"]).toEqual(
+    expect(accounthealthRes.result.value.value["position-health"]).toEqual(
       Cl.uint(115356885n)
     );
 
@@ -207,7 +207,7 @@ describe("Borrower User flow tests", () => {
       [Cl.principal(borrower1), Cl.none(), Cl.none()],
       deployer
     );
-    expect(accounthealthRes.result.value.data["position-health"]).toEqual(
+    expect(accounthealthRes.result.value.value["position-health"]).toEqual(
       Cl.uint(98053352n)
     );
 
@@ -233,7 +233,7 @@ describe("Borrower User flow tests", () => {
       [Cl.principal(borrower1), Cl.none(), Cl.none()],
       deployer
     );
-    expect(accounthealthRes.result.value.data["position-health"]).toEqual(
+    expect(accounthealthRes.result.value.value["position-health"]).toEqual(
       Cl.uint(100000000n)
     );
 
@@ -286,8 +286,8 @@ describe("Borrower User flow tests", () => {
       [Cl.principal(borrower1)],
       borrower1
     );
-    expect(position.result.value.data["debt-shares"].value).toBe(0n);
-    expect(position.result.value.data["collaterals"].list.length).toBe(0);
+    expect(position.result.value.value["debt-shares"].value).toBe(0n);
+    expect(position.result.value.value["collaterals"].value.length).toBe(0);
   });
 
   it("Borrower borrows and full liquidation", async () => {
@@ -317,7 +317,7 @@ describe("Borrower User flow tests", () => {
       [],
       deployer
     );
-    let totalAssets = totalAssetsRes.result.data["total-assets"].value;
+    let totalAssets = totalAssetsRes.result.value["total-assets"].value;
     // H-01 burn dust adds 1000 to every pool's total-assets baseline.
     expect(totalAssets).toEqual(3001n);
 
@@ -327,7 +327,7 @@ describe("Borrower User flow tests", () => {
       [Cl.principal(borrower1), Cl.none(), Cl.none()],
       deployer
     );
-    expect(accounthealthRes.result.value.data["position-health"]).toEqual(
+    expect(accounthealthRes.result.value.value["position-health"]).toEqual(
       Cl.uint(115356885n)
     );
 
@@ -361,7 +361,7 @@ describe("Borrower User flow tests", () => {
       [Cl.principal(borrower1)],
       borrower1
     );
-    expect(userDebtShares.result.value.data["debt-shares"].value).toEqual(
+    expect(userDebtShares.result.value.value["debt-shares"].value).toEqual(
       1386n
     );
 
@@ -375,7 +375,7 @@ describe("Borrower User flow tests", () => {
       [],
       deployer
     );
-    totalAssets = totalAssetsRes.result.data["total-assets"].value;
+    totalAssets = totalAssetsRes.result.value["total-assets"].value;
     // H-01 burn dust adds 1000 to every pool's total-assets baseline.
     expect(totalAssets).toEqual(3001n);
 
@@ -394,7 +394,7 @@ describe("Borrower User flow tests", () => {
       [Cl.principal(borrower1), Cl.none(), Cl.none()],
       deployer
     );
-    expect(accounthealthRes.result.value.data["position-health"]).toEqual(
+    expect(accounthealthRes.result.value.value["position-health"]).toEqual(
       Cl.uint(43258832n)
     );
 
@@ -431,7 +431,7 @@ describe("Borrower User flow tests", () => {
       [],
       deployer
     );
-    totalAssets = totalAssetsRes.result.data["total-assets"].value;
+    totalAssets = totalAssetsRes.result.value["total-assets"].value;
     // H-01 burn dust adds 1000 to every pool's total-assets baseline.
     expect(totalAssets).toEqual(3002n);
 
@@ -457,7 +457,7 @@ describe("Borrower User flow tests", () => {
       [Cl.principal(borrower1)],
       borrower1
     );
-    expect(userDebtShares.result.value.data["debt-shares"].value).toEqual(796n);
+    expect(userDebtShares.result.value.value["debt-shares"].value).toEqual(796n);
 
     simnet.mineEmptyBlocks(6);
     // refresh prices after mining blocks
@@ -478,7 +478,7 @@ describe("Borrower User flow tests", () => {
     );
     expect(liquidate.result).toBeOk(Cl.bool(true));
     let socializedDebt =
-      liquidate.events[liquidate.events.length - 2].data.value.data["amount"]
+      liquidate.events[liquidate.events.length - 2].data.value.value["amount"]
         .value;
 
     depositorBalance = simnet.callReadOnlyFn(
@@ -503,7 +503,7 @@ describe("Borrower User flow tests", () => {
       [Cl.principal(borrower1), Cl.none(), Cl.none()],
       deployer
     );
-    expect(accounthealthRes.result.value.data["position-health"]).toEqual(
+    expect(accounthealthRes.result.value.value["position-health"]).toEqual(
       Cl.uint(100000000n)
     );
 
@@ -545,7 +545,7 @@ describe("Borrower User flow tests", () => {
       [Cl.principal(borrower1)],
       borrower1
     );
-    expect(userDebtShares.result.value.data["debt-shares"].value).toEqual(0n);
+    expect(userDebtShares.result.value.value["debt-shares"].value).toEqual(0n);
 
     totalAssetsRes = simnet.callReadOnlyFn(
       "state-v1",
@@ -553,7 +553,7 @@ describe("Borrower User flow tests", () => {
       [],
       deployer
     );
-    totalAssets = totalAssetsRes.result.data["total-assets"].value;
+    totalAssets = totalAssetsRes.result.value["total-assets"].value;
     // this is after socializing the remaining debt from the user.
     // total assets with interest is 2002 + 1000 H-01 burn dust = 3002.
     expect(totalAssets).toEqual(3002n - socializedDebt);

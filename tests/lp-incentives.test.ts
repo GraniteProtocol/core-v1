@@ -41,7 +41,7 @@ function check_closed_epoch() {
     deployer
   );
 
-  expect(res.result.value.data["epoch-completed"]).toStrictEqual(Cl.bool(true));
+  expect(res.result.value.value["epoch-completed"]).toStrictEqual(Cl.bool(true));
 }
 
 const getUserStxBalance = (user: string) => {
@@ -130,7 +130,7 @@ function expectUserRewards(user: string, rewards: number) {
     [Cl.principal(user)],
     deployer
   );
-  expect(user1Rewards.result.value.value.data["earned-rewards"]).toStrictEqual(
+  expect(user1Rewards.result.value.value.value["earned-rewards"]).toStrictEqual(
     Cl.uint(rewards)
   );
 }

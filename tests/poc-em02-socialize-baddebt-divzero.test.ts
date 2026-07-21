@@ -104,6 +104,6 @@ describe("PoC E-M-02: socialize-bad-debt DivisionByZero on full-payoff bad-debt 
       [Cl.principal(borrower)],
       deployer,
     );
-    expect(post.result.data["user-position"].value.data["debt-shares"].value).toBe(0n);
+    expect(post.result.value["user-position"].value.value["debt-shares"].value).toBe(0n);
   });
 });
