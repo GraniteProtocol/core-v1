@@ -1,13 +1,13 @@
 ;; SPDX-License-Identifier: BUSL-1.1
 
 ;; TRAITS
-(use-trait token-trait .trait-sip-010.sip-010-trait)
+(use-trait token-trait 'SP3FBR2AGK5H9QBDH3EEN6DF8EK8JY7RX8QJ5SVTE.sip-010-trait-ft-standard.sip-010-trait)
 
 ;; CONSTANTS
 (define-constant SUCCESS (ok true))
-(define-constant MARKET-TOKEN-DECIMALS (contract-call? .constants-v2 get-market-token-decimals))
-(define-constant SCALING-FACTOR (contract-call? .constants-v2 get-scaling-factor))
-(define-constant PRICE-SCALING-FACTOR (contract-call? .constants-v2 get-price-scaling-factor))
+(define-constant MARKET-TOKEN-DECIMALS (contract-call? 'SP3Y6GFKWN50HPA8RKRXMY0EXAJR9VXPY899P88JN.constants-v2 get-market-token-decimals))
+(define-constant SCALING-FACTOR (contract-call? 'SP3Y6GFKWN50HPA8RKRXMY0EXAJR9VXPY899P88JN.constants-v2 get-scaling-factor))
+(define-constant PRICE-SCALING-FACTOR (contract-call? 'SP3Y6GFKWN50HPA8RKRXMY0EXAJR9VXPY899P88JN.constants-v2 get-price-scaling-factor))
 ;; Must have the same precision as SCALING-FACTOR
 (define-constant MINIMUM_HEALTH_RATIO u100000000)
 ;; Liquidation buffer of 2.00%
@@ -66,7 +66,7 @@
       (collateral-token (contract-of collateral))
       (collateral-price (unwrap! (collateral-price-for collateral-token (get collaterals position-data) collateral-prices) ERR-INVALID-ORACLE-PRICE))
       (collateral-value (get-collateral-value collateral-token user collateral-price))
-      (collateral-info (unwrap! (contract-call? .state-v1 get-collateral collateral-token) ERR-COLLATERAL-NOT-SUPPORTED))
+      (collateral-info (unwrap! (contract-call? 'SP3Y6GFKWN50HPA8RKRXMY0EXAJR9VXPY899P88JN.state-v1 get-collateral collateral-token) ERR-COLLATERAL-NOT-SUPPORTED))
       (liquidation-premium (get liquidation-premium collateral-info))
       (collateral-liquidation-ltv (get liquidation-ltv collateral-info))
       (repayment-info (try! (calculate-repayment-info user-debt total-liquid-ltv collateral-value liquidation-premium collateral-liquidation-ltv)))
@@ -77,12 +77,12 @@
 
 (define-read-only (account-health (user principal) (market-asset-price uint) (collateral-prices (list 10 uint)))
   (let (
-      (borrow-params (contract-call? .state-v1 get-borrow-repay-params user))
+      (borrow-params (contract-call? 'SP3Y6GFKWN50HPA8RKRXMY0EXAJR9VXPY899P88JN.state-v1 get-borrow-repay-params user))
       (position (unwrap! (get user-position borrow-params) ERR-NO-POSITION))
       ;; get user current debt
-      (debt-params (contract-call? .state-v1 get-debt-params))
-      (current-debt (contract-call? .math-v1 convert-to-debt-assets debt-params (get debt-shares position) true))
-      (current-debt-adjusted (contract-call? .math-v1 get-market-asset-value market-asset-price current-debt))
+      (debt-params (contract-call? 'SP3Y6GFKWN50HPA8RKRXMY0EXAJR9VXPY899P88JN.state-v1 get-debt-params))
+      (current-debt (contract-call? 'SP3Y6GFKWN50HPA8RKRXMY0EXAJR9VXPY899P88JN.math-v1 convert-to-debt-assets debt-params (get debt-shares position) true))
+      (current-debt-adjusted (contract-call? 'SP3Y6GFKWN50HPA8RKRXMY0EXAJR9VXPY899P88JN.math-v1 get-market-asset-value market-asset-price current-debt))
       (position-collaterals (get collaterals position))
       (total-liquid-ltv (if (is-eq (len position-collaterals) u0)
         u0
@@ -165,8 +165,8 @@
     (collateral-token (contract-of collateral))
     (collateral-price (unwrap! (collateral-price-for collateral-token (get collaterals position-data) collateral-prices) ERR-INVALID-ORACLE-PRICE))
     (collateral-value (get-collateral-value collateral-token user collateral-price))
-    (collateral-info (unwrap! (contract-call? .state-v1 get-collateral collateral-token) ERR-COLLATERAL-NOT-SUPPORTED))
-    (user-balance (unwrap! (get amount (contract-call? .state-v1 get-user-collateral user collateral-token))  ERR-INSUFFICIENT-BALANCE))
+    (collateral-info (unwrap! (contract-call? 'SP3Y6GFKWN50HPA8RKRXMY0EXAJR9VXPY899P88JN.state-v1 get-collateral collateral-token) ERR-COLLATERAL-NOT-SUPPORTED))
+    (user-balance (unwrap! (get amount (contract-call? 'SP3Y6GFKWN50HPA8RKRXMY0EXAJR9VXPY899P88JN.state-v1 get-user-collateral user collateral-token))  ERR-INSUFFICIENT-BALANCE))
   )
     (ok {
       position-data: position-data,
@@ -230,10 +230,10 @@
   (let
       (
         (collateral-token (contract-of collateral))
-        (user-position-data (contract-call? .state-v1 get-borrow-repay-params user))
+        (user-position-data (contract-call? 'SP3Y6GFKWN50HPA8RKRXMY0EXAJR9VXPY899P88JN.state-v1 get-borrow-repay-params user))
         (position-for-block-check (unwrap! (get user-position user-position-data) ERR-NO-POSITION))
         ;; Price the market asset and this position's collaterals from the verified update.
-        (market-asset-price (unwrap! (element-at? (try! (contract-call? .pyth-adapter-v1 prices-for verified (list .mock-usdc))) u0) ERR-MISSING-MARKET-PRICE))
+        (market-asset-price (unwrap! (element-at? (try! (contract-call? .pyth-adapter-v1 prices-for verified (list 'SP3Y2ZSH8P7D50B0VBTSX11S7XSG24M1VB9YFQA4K.token-aeusdc))) u0) ERR-MISSING-MARKET-PRICE))
         (collateral-prices (try! (contract-call? .pyth-adapter-v1 prices-for verified (get collaterals position-for-block-check))))
         (liquidation-res (try! (get-liquidation-info user collateral liquidator-repay-amount market-asset-price collateral-prices)))
         (liquidation-info (get liquidation-info liquidation-res))
@@ -243,38 +243,38 @@
         (user-balance (get user-balance liquidation-res))
         (bad-debt (get bad-debt liquidation-res))
         ;; get open interest
-        (open-interest-info (contract-call? .state-v1 get-open-interest))
+        (open-interest-info (contract-call? 'SP3Y6GFKWN50HPA8RKRXMY0EXAJR9VXPY899P88JN.state-v1 get-open-interest))
         (open-interest (+ (get lp-open-interest open-interest-info) (get staked-open-interest open-interest-info) (get protocol-open-interest open-interest-info)))
         ;; get collateral to give to liquidator
         (collateral-to-give (get collateral-to-give liquidation-info))
         (repay-amount-value (get repay-amount liquidation-info))
-        (repay-amount-raw (contract-call? .math-v1 divide-round-up (* repay-amount-value PRICE-SCALING-FACTOR) market-asset-price))
+        (repay-amount-raw (contract-call? 'SP3Y6GFKWN50HPA8RKRXMY0EXAJR9VXPY899P88JN.math-v1 divide-round-up (* repay-amount-value PRICE-SCALING-FACTOR) market-asset-price))
         (repay-amount (if (< repay-amount-raw current-debt) repay-amount-raw current-debt))
         ;; convert repay amount to debt shares
-        (debt-params (contract-call? .state-v1 get-debt-params))
-        (paid-shares (contract-call? .math-v1 convert-to-debt-shares debt-params repay-amount false))
+        (debt-params (contract-call? 'SP3Y6GFKWN50HPA8RKRXMY0EXAJR9VXPY899P88JN.state-v1 get-debt-params))
+        (paid-shares (contract-call? 'SP3Y6GFKWN50HPA8RKRXMY0EXAJR9VXPY899P88JN.math-v1 convert-to-debt-shares debt-params repay-amount false))
         (effective-borrowed-amount (if (< current-debt user-borrowed-amount) current-debt user-borrowed-amount))
-        (interest-portion (contract-call? .math-v1 calculate-interest-portions current-debt effective-borrowed-amount repay-amount))
+        (interest-portion (contract-call? 'SP3Y6GFKWN50HPA8RKRXMY0EXAJR9VXPY899P88JN.math-v1 calculate-interest-portions current-debt effective-borrowed-amount repay-amount))
         (principal-part (get principal-part interest-portion))
         (interest-part (get interest-part interest-portion))
         (total-borrowed-amount (get total-borrowed-amount position-data))
-        (open-interest-without-principal (contract-call? .math-v1 safe-sub open-interest total-borrowed-amount))
-        (lp-open-interest-without-principal (contract-call? .math-v1 safe-sub (get lp-open-interest open-interest-info) total-borrowed-amount))
+        (open-interest-without-principal (contract-call? 'SP3Y6GFKWN50HPA8RKRXMY0EXAJR9VXPY899P88JN.math-v1 safe-sub open-interest total-borrowed-amount))
+        (lp-open-interest-without-principal (contract-call? 'SP3Y6GFKWN50HPA8RKRXMY0EXAJR9VXPY899P88JN.math-v1 safe-sub (get lp-open-interest open-interest-info) total-borrowed-amount))
         ;; calculate liquidity provider and protocol debt repaid
-        (lp-part (contract-call? .math-v1 safe-div (* interest-part lp-open-interest-without-principal) open-interest-without-principal))
-        (protocol-part (contract-call? .math-v1 safe-div (* interest-part (get protocol-open-interest open-interest-info)) open-interest-without-principal))
-        (staked-part (contract-call? .math-v1 safe-div (* interest-part (get staked-open-interest open-interest-info)) open-interest-without-principal))
-        (asset-params (contract-call? .state-v1 get-lp-params))
-        (staked-lp-tokens (contract-call? .math-v1 convert-to-shares asset-params staked-part false))
-        (is-wiped (contract-call? .staking-v1 is-staking-wiped-out))
+        (lp-part (contract-call? 'SP3Y6GFKWN50HPA8RKRXMY0EXAJR9VXPY899P88JN.math-v1 safe-div (* interest-part lp-open-interest-without-principal) open-interest-without-principal))
+        (protocol-part (contract-call? 'SP3Y6GFKWN50HPA8RKRXMY0EXAJR9VXPY899P88JN.math-v1 safe-div (* interest-part (get protocol-open-interest open-interest-info)) open-interest-without-principal))
+        (staked-part (contract-call? 'SP3Y6GFKWN50HPA8RKRXMY0EXAJR9VXPY899P88JN.math-v1 safe-div (* interest-part (get staked-open-interest open-interest-info)) open-interest-without-principal))
+        (asset-params (contract-call? 'SP3Y6GFKWN50HPA8RKRXMY0EXAJR9VXPY899P88JN.state-v1 get-lp-params))
+        (staked-lp-tokens (contract-call? 'SP3Y6GFKWN50HPA8RKRXMY0EXAJR9VXPY899P88JN.math-v1 convert-to-shares asset-params staked-part false))
+        (is-wiped (contract-call? 'SP3G0BKE829S65ZN2DMED2KZ032V7Y30S01AD7CAD.staking-v1 is-staking-wiped-out))
         (effective-staked-lp-tokens (if is-wiped u0 staked-lp-tokens))
-        (remaining-user-debt-shares (contract-call? .math-v1 safe-sub (get debt-shares position-for-block-check) paid-shares))
-        (updated-borrowed-amount (contract-call? .math-v1 safe-sub effective-borrowed-amount principal-part))
-        (updated-total-borrowed-amount (contract-call? .math-v1 safe-sub total-borrowed-amount
+        (remaining-user-debt-shares (contract-call? 'SP3Y6GFKWN50HPA8RKRXMY0EXAJR9VXPY899P88JN.math-v1 safe-sub (get debt-shares position-for-block-check) paid-shares))
+        (updated-borrowed-amount (contract-call? 'SP3Y6GFKWN50HPA8RKRXMY0EXAJR9VXPY899P88JN.math-v1 safe-sub effective-borrowed-amount principal-part))
+        (updated-total-borrowed-amount (contract-call? 'SP3Y6GFKWN50HPA8RKRXMY0EXAJR9VXPY899P88JN.math-v1 safe-sub total-borrowed-amount
           (if (is-eq remaining-user-debt-shares u0) user-borrowed-amount principal-part)))
         (remaining-collateral-balance (- user-balance collateral-to-give))
         (updated-collaterals-list (if (is-eq remaining-collateral-balance u0)
-          (get new-list (contract-call? .state-v1 remove-item (get collaterals position-data) collateral-token))
+          (get new-list (contract-call? 'SP3Y6GFKWN50HPA8RKRXMY0EXAJR9VXPY899P88JN.state-v1 remove-item (get collaterals position-data) collateral-token))
           (get collaterals position-data)
         ))
       )
@@ -282,7 +282,7 @@
       (asserts! (>= stacks-block-height (+ (get borrowed-block position-for-block-check) MINIMUM-LIQUIDATION-BLOCK-GAP)) ERR-LIQUIDATION-NOT-ALLOWED)
       (try! (ensure-non-zero-repay-amount liquidator-repay-amount))
       ;; update state
-      (try! (contract-call? .state-v1 update-liquidate-collateral-state collateral {
+      (try! (contract-call? 'SP3Y6GFKWN50HPA8RKRXMY0EXAJR9VXPY899P88JN.state-v1 update-liquidate-collateral-state collateral {
         liquidator: contract-caller,
         user: user,
         collateral-to-give: collateral-to-give,
@@ -294,18 +294,18 @@
         staked-lp-tokens: effective-staked-lp-tokens,
         borrowed-amount: updated-borrowed-amount,
         total-borrowed-amount: updated-total-borrowed-amount,
-        staking-contract: .staking-v1,
+        staking-contract: 'SP3G0BKE829S65ZN2DMED2KZ032V7Y30S01AD7CAD.staking-v1,
         remaining-balance: remaining-collateral-balance,
         updated-collaterals: updated-collaterals-list
       }))
-      (try! (contract-call? .staking-v1 increase-lp-staked-balance effective-staked-lp-tokens))
+      (try! (contract-call? 'SP3G0BKE829S65ZN2DMED2KZ032V7Y30S01AD7CAD.staking-v1 increase-lp-staked-balance effective-staked-lp-tokens))
       (try! (contract-call? .withdrawal-caps-v1 repay repay-amount))
       ;; slippage check
       (asserts! (>= collateral-to-give min-collateral-expected) ERR-SLIPPAGE)
       (let (
           ;; Re-price against a fresh read of the post-liquidation collateral set, so the prices
           ;; line up one-to-one with what account-health and socialize-bad-debt read back.
-          (post-liq-collaterals (get collaterals (unwrap! (get user-position (contract-call? .state-v1 get-borrow-repay-params user)) ERR-NO-POSITION)))
+          (post-liq-collaterals (get collaterals (unwrap! (get user-position (contract-call? 'SP3Y6GFKWN50HPA8RKRXMY0EXAJR9VXPY899P88JN.state-v1 get-borrow-repay-params user)) ERR-NO-POSITION)))
           (post-liq-collateral-prices (try! (contract-call? .pyth-adapter-v1 prices-for verified post-liq-collaterals)))
           (account-health-data (try! (account-health user market-asset-price post-liq-collateral-prices)))
           (position-health (get position-health account-health-data))
@@ -361,7 +361,7 @@
       (denominator (- SCALING-FACTOR
         (try! (safe-div (* (+ SCALING-FACTOR liquidation-discount) collateral-liquid-ltv) SCALING-FACTOR))))
       (total-repay-amount (try! (safe-div (* (- debt total-collaterals-liquid-value) SCALING-FACTOR) denominator)))
-      (repay-amount-without-discount (contract-call? .math-v1 divide-round-up (* collateral-value SCALING-FACTOR) (+ liquidation-discount SCALING-FACTOR)))
+      (repay-amount-without-discount (contract-call? 'SP3Y6GFKWN50HPA8RKRXMY0EXAJR9VXPY899P88JN.math-v1 divide-round-up (* collateral-value SCALING-FACTOR) (+ liquidation-discount SCALING-FACTOR)))
       (repay-allowed-raw (if (< total-repay-amount repay-amount-without-discount) total-repay-amount repay-amount-without-discount))
       (repay-allowed (if (< repay-allowed-raw debt) repay-allowed-raw debt))
     )
@@ -383,7 +383,7 @@
     (
       (repay-amount-with-discount (/ (* repay-amount (+ SCALING-FACTOR liquidation-discount)) SCALING-FACTOR))
       (collateral-amount (try! (safe-div (* repay-amount-with-discount SCALING-FACTOR) collateral-price)))
-      (decimal-corrected-collateral (contract-call? .math-v1 to-fixed collateral-amount MARKET-TOKEN-DECIMALS collateral-decimals))
+      (decimal-corrected-collateral (contract-call? 'SP3Y6GFKWN50HPA8RKRXMY0EXAJR9VXPY899P88JN.math-v1 to-fixed collateral-amount MARKET-TOKEN-DECIMALS collateral-decimals))
     )
     (ok (if (> decimal-corrected-collateral deposited-collateral) deposited-collateral decimal-corrected-collateral))
 ))
@@ -396,18 +396,18 @@
 
 (define-private (accrue-interest)
   (let (
-    (accrue-interest-params (unwrap! (contract-call? .state-v1 get-accrue-interest-params) ERR-INTEREST-PARAMS))
-    (accrued-interest (try! (contract-call? .linear-kinked-ir-v1 accrue-interest
+    (accrue-interest-params (unwrap! (contract-call? 'SP3Y6GFKWN50HPA8RKRXMY0EXAJR9VXPY899P88JN.state-v1 get-accrue-interest-params) ERR-INTEREST-PARAMS))
+    (accrued-interest (try! (contract-call? 'SP3G0BKE829S65ZN2DMED2KZ032V7Y30S01AD7CAD.linear-kinked-ir-v1 accrue-interest
       (get last-accrued-block-time accrue-interest-params)
       (get lp-interest accrue-interest-params)
       (get staked-interest accrue-interest-params)
-      (try! (contract-call? .staking-reward-v1 calculate-staking-reward-percentage (contract-call? .staking-v1 get-active-staked-lp-tokens)))
+      (try! (contract-call? 'SP3Y6GFKWN50HPA8RKRXMY0EXAJR9VXPY899P88JN.staking-reward-v1 calculate-staking-reward-percentage (contract-call? 'SP3G0BKE829S65ZN2DMED2KZ032V7Y30S01AD7CAD.staking-v1 get-active-staked-lp-tokens)))
       (get protocol-interest accrue-interest-params)
       (get protocol-reserve-percentage accrue-interest-params)
       (get total-assets accrue-interest-params)))
     )
   )
-  (contract-call? .state-v1 set-accrued-interest accrued-interest)
+  (contract-call? 'SP3Y6GFKWN50HPA8RKRXMY0EXAJR9VXPY899P88JN.state-v1 set-accrued-interest accrued-interest)
 ))
 
 (define-private (check-account-unhealthy (user principal) (market-asset-price uint) (collateral-prices (list 10 uint)))
@@ -419,15 +419,15 @@
 ))
 
 (define-private (get-collateral-value (collateral principal) (user principal) (collateral-price uint))
-  (contract-call? .math-v1 to-fixed
+  (contract-call? 'SP3Y6GFKWN50HPA8RKRXMY0EXAJR9VXPY899P88JN.math-v1 to-fixed
     (/
       (* 
-        (default-to u0 (get amount (contract-call? .state-v1 get-user-collateral user collateral)))
+        (default-to u0 (get amount (contract-call? 'SP3Y6GFKWN50HPA8RKRXMY0EXAJR9VXPY899P88JN.state-v1 get-user-collateral user collateral)))
         collateral-price
       )
       PRICE-SCALING-FACTOR
     ) 
-    (default-to u8 (get decimals (contract-call? .state-v1 get-collateral collateral)))
+    (default-to u8 (get decimals (contract-call? 'SP3Y6GFKWN50HPA8RKRXMY0EXAJR9VXPY899P88JN.state-v1 get-collateral collateral)))
     MARKET-TOKEN-DECIMALS
   )
 )
@@ -435,7 +435,7 @@
 (define-private (iterate-collateral-value-ltv (collateral principal) (user principal) (collateral-price uint))
   (let
     (
-      (collateral-info (contract-call? .state-v1 get-collateral collateral))
+      (collateral-info (contract-call? 'SP3Y6GFKWN50HPA8RKRXMY0EXAJR9VXPY899P88JN.state-v1 get-collateral collateral))
       (user-collateral-value (get-collateral-value collateral user collateral-price))
       (liquidation-ltv (default-to u0 (get liquidation-ltv collateral-info)))
     )
@@ -445,7 +445,7 @@
 (define-private (iterate-collateral-value-and-reward (collateral principal) (user principal) (collateral-price uint))
   (let
     (
-      (collateral-info (contract-call? .state-v1 get-collateral collateral))
+      (collateral-info (contract-call? 'SP3Y6GFKWN50HPA8RKRXMY0EXAJR9VXPY899P88JN.state-v1 get-collateral collateral))
       (user-collateral-value (get-collateral-value collateral user collateral-price))
       (liquidation-premium (default-to u0 (get liquidation-premium collateral-info)))
     )
@@ -493,41 +493,41 @@
   (if (not bad-debt)
     SUCCESS
     (let (
-        (repay-params (contract-call? .state-v1 get-borrow-repay-params user))
+        (repay-params (contract-call? 'SP3Y6GFKWN50HPA8RKRXMY0EXAJR9VXPY899P88JN.state-v1 get-borrow-repay-params user))
         (position (unwrap! (get user-position repay-params) ERR-NO-POSITION))
         (total-borrowed-amount (get total-borrowed-amount repay-params))
         (user-collaterals (get collaterals position))
         (total-collateral-value (get-user-total-collateral-value user user-collaterals collateral-prices))
-        (debt-params (contract-call? .state-v1 get-debt-params))
-        (remaining-debt (contract-call? .math-v1 convert-to-debt-assets debt-params (get debt-shares position) true))
+        (debt-params (contract-call? 'SP3Y6GFKWN50HPA8RKRXMY0EXAJR9VXPY899P88JN.state-v1 get-debt-params))
+        (remaining-debt (contract-call? 'SP3Y6GFKWN50HPA8RKRXMY0EXAJR9VXPY899P88JN.math-v1 convert-to-debt-assets debt-params (get debt-shares position) true))
       )
       
       (if (or (> total-collateral-value u0) (is-eq remaining-debt u0))
         SUCCESS
         (let (
             (user-borrowed-amount (get borrowed-amount position))
-            (open-interest-data (contract-call? .state-v1 get-open-interest))
+            (open-interest-data (contract-call? 'SP3Y6GFKWN50HPA8RKRXMY0EXAJR9VXPY899P88JN.state-v1 get-open-interest))
             (lp-open-interest-val (get lp-open-interest open-interest-data))
             (protocol-open-interest-val (get protocol-open-interest open-interest-data))
             (staked-open-interest-val (get staked-open-interest open-interest-data))
             (total-open-interest (+ lp-open-interest-val protocol-open-interest-val staked-open-interest-val))
             (interest-portion (if (>= remaining-debt user-borrowed-amount)
-              (contract-call? .math-v1 calculate-interest-portions remaining-debt user-borrowed-amount remaining-debt)
+              (contract-call? 'SP3Y6GFKWN50HPA8RKRXMY0EXAJR9VXPY899P88JN.math-v1 calculate-interest-portions remaining-debt user-borrowed-amount remaining-debt)
               {principal-part: remaining-debt, interest-part: u0}
             ))
             (principal-part (get principal-part interest-portion))
             (interest-part (get interest-part interest-portion))
-            (open-interest-without-principal (contract-call? .math-v1 safe-sub total-open-interest total-borrowed-amount))
-            (lp-open-interest-without-principal (contract-call? .math-v1 safe-sub lp-open-interest-val total-borrowed-amount))
-            (lp-interest-part (contract-call? .math-v1 safe-div (* interest-part lp-open-interest-without-principal) open-interest-without-principal))
-            (protocol-part (contract-call? .math-v1 safe-div (* interest-part protocol-open-interest-val) open-interest-without-principal))
-            (staked-part (contract-call? .math-v1 safe-div (* interest-part staked-open-interest-val) open-interest-without-principal))
+            (open-interest-without-principal (contract-call? 'SP3Y6GFKWN50HPA8RKRXMY0EXAJR9VXPY899P88JN.math-v1 safe-sub total-open-interest total-borrowed-amount))
+            (lp-open-interest-without-principal (contract-call? 'SP3Y6GFKWN50HPA8RKRXMY0EXAJR9VXPY899P88JN.math-v1 safe-sub lp-open-interest-val total-borrowed-amount))
+            (lp-interest-part (contract-call? 'SP3Y6GFKWN50HPA8RKRXMY0EXAJR9VXPY899P88JN.math-v1 safe-div (* interest-part lp-open-interest-without-principal) open-interest-without-principal))
+            (protocol-part (contract-call? 'SP3Y6GFKWN50HPA8RKRXMY0EXAJR9VXPY899P88JN.math-v1 safe-div (* interest-part protocol-open-interest-val) open-interest-without-principal))
+            (staked-part (contract-call? 'SP3Y6GFKWN50HPA8RKRXMY0EXAJR9VXPY899P88JN.math-v1 safe-div (* interest-part staked-open-interest-val) open-interest-without-principal))
             (lp-part (+ principal-part lp-interest-part))
-            (updated-total-borrowed-amount (contract-call? .math-v1 safe-sub total-borrowed-amount user-borrowed-amount))
-            (staked-lp-tokens (contract-call? .staking-v1 get-total-staked-lp-tokens))
-            (is-wiped (contract-call? .staking-v1 is-staking-wiped-out))
+            (updated-total-borrowed-amount (contract-call? 'SP3Y6GFKWN50HPA8RKRXMY0EXAJR9VXPY899P88JN.math-v1 safe-sub total-borrowed-amount user-borrowed-amount))
+            (staked-lp-tokens (contract-call? 'SP3G0BKE829S65ZN2DMED2KZ032V7Y30S01AD7CAD.staking-v1 get-total-staked-lp-tokens))
+            (is-wiped (contract-call? 'SP3G0BKE829S65ZN2DMED2KZ032V7Y30S01AD7CAD.staking-v1 is-staking-wiped-out))
             (effective-staked-lp-tokens (if is-wiped u0 staked-lp-tokens))
-            (burned-staking-lp-tokens (try! (contract-call? .state-v1 socialize-user-bad-debt user remaining-debt lp-part staked-part protocol-part updated-total-borrowed-amount .staking-v1 effective-staked-lp-tokens)))
+            (burned-staking-lp-tokens (try! (contract-call? 'SP3Y6GFKWN50HPA8RKRXMY0EXAJR9VXPY899P88JN.state-v1 socialize-user-bad-debt user remaining-debt lp-part staked-part protocol-part updated-total-borrowed-amount 'SP3G0BKE829S65ZN2DMED2KZ032V7Y30S01AD7CAD.staking-v1 effective-staked-lp-tokens)))
           )
           (print {
             user: user,
@@ -539,7 +539,7 @@
             updated-total-borrowed-amount: updated-total-borrowed-amount,
             burned-staking-lp-tokens: burned-staking-lp-tokens
           })
-          (if (> burned-staking-lp-tokens u0) (try! (contract-call? .staking-v1 slash-total-staked-lp-tokens burned-staking-lp-tokens)) true)
+          (if (> burned-staking-lp-tokens u0) (try! (contract-call? 'SP3G0BKE829S65ZN2DMED2KZ032V7Y30S01AD7CAD.staking-v1 slash-total-staked-lp-tokens burned-staking-lp-tokens)) true)
           SUCCESS
       ))
     )

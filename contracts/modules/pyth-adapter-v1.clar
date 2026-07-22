@@ -12,7 +12,7 @@
 (define-constant ERR-MISSING-FEED (err u80008))
 (define-constant ERR-PRICE-LIST-OVERFLOW (err u80009))
 
-(define-constant STACKS_BLOCK_TIME (contract-call? .constants-v1 get-stacks-block-time ))
+(define-constant STACKS_BLOCK_TIME (contract-call? 'SP3Y6GFKWN50HPA8RKRXMY0EXAJR9VXPY899P88JN.constants-v1 get-stacks-block-time ))
 ;; Minimum time delta of 15 seconds (~2 Stacks blocks). Prevents
 ;; governance from setting time-delta to 0 (which would freeze
 ;; price-dependent operations) while still allowing tight freshness
@@ -25,7 +25,7 @@
 ;; Confidence ratio scaling factor  = 100% confidence
 (define-constant CONFIDENCE_SCALING_FACTOR u10000)
 ;; Price scaling factor decimals
-(define-constant PRICE_DECIMALS (to-int (contract-call? .constants-v2 get-price-decimals)))
+(define-constant PRICE_DECIMALS (to-int (contract-call? 'SP3Y6GFKWN50HPA8RKRXMY0EXAJR9VXPY899P88JN.constants-v2 get-price-decimals)))
 ;; Lazer publish-time is microseconds; freshness is checked in seconds.
 (define-constant MICROS_PER_SECOND u1000000)
 
@@ -39,7 +39,7 @@
 ;; admin-level maintenance functions
 (define-public (update-price-feed-id (token principal) (new-feed-id uint) (max-confidence-ratio uint))
   (begin
-    (asserts! (is-eq (contract-call? .state-v1 get-governance) contract-caller) ERR-NOT-AUTHORIZED)
+    (asserts! (is-eq (contract-call? 'SP3Y6GFKWN50HPA8RKRXMY0EXAJR9VXPY899P88JN.state-v1 get-governance) contract-caller) ERR-NOT-AUTHORIZED)
     (asserts! (<= max-confidence-ratio CONFIDENCE_SCALING_FACTOR) ERR-INVALID-MAX-CONFIDENCE-RATIO)
     (map-set price-feeds token {
       feed-id: new-feed-id,
@@ -57,7 +57,7 @@
 
 (define-public (update-time-delta (delta uint))
   (begin
-    (asserts! (is-eq (contract-call? .state-v1 get-governance) contract-caller) ERR-NOT-AUTHORIZED)
+    (asserts! (is-eq (contract-call? 'SP3Y6GFKWN50HPA8RKRXMY0EXAJR9VXPY899P88JN.state-v1 get-governance) contract-caller) ERR-NOT-AUTHORIZED)
     (asserts! (>= delta MINIMUM_TIME_DELTA) ERR-INVALID-TIME-DELTA)
     (asserts! (<= delta MAXIMUM_TIME_DELTA) ERR-INVALID-TIME-DELTA)
     (print  {
@@ -81,7 +81,7 @@
 ;; feed set plus the publish timestamp in seconds. A batch verifies once and prices many tokens
 ;; from the result without repeating the signature check.
 (define-public (verify-update (update (buff 8192)))
-  (let ((decoded (try! (contract-call? .pyth-lazer-oracle verify-price-feeds update .pyth-lazer-decoder-v1 none))))
+  (let ((decoded (try! (contract-call? 'SPMV5HDZ4EMB8XY7HAYT3XW0DF7DZ4E8XEG2J1T8.pyth-lazer-oracle verify-price-feeds update 'SPMV5HDZ4EMB8XY7HAYT3XW0DF7DZ4E8XEG2J1T8.pyth-lazer-decoder-v1 none))))
     (ok {
       timestamp: (/ (get timestamp decoded) MICROS_PER_SECOND),
       feeds: (map slim-feed (get price-feeds decoded)),
