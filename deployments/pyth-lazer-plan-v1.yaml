@@ -1,0 +1,50 @@
+---
+id: 0
+name: Pyth Lazer oracle deploy v1 - self-owned verify-only stack (dedicated deployer)
+network: mainnet
+stacks-node: "https://api.hiro.so"
+bitcoin-node: "http://blockstack:blockstacksystem@bitcoin.blockstack.com:8332"
+# Canonical mainnet Pyth Lazer oracle, shared by staging + USDCx + aeUSDC.
+# Deployer: SPMV5HDZ4EMB8XY7HAYT3XW0DF7DZ4E8XEG2J1T8 (settings/Mainnet.toml -> accounts.pyth-lazer-deployer).
+# `cost` = fixed fee in µSTX, matching the proven 100000 (0.1 STX)/publish the USDCx deploy paid and
+# confirmed on mainnet; decoder bumped to 200000 for its size (~20 KB). Ignore clarinet's
+# --medium/--low-cost estimator here (it wildly overestimates: 2.5 / 0.7 STX/publish).
+plan:
+  batches:
+    - id: 0
+      transactions:
+        - contract-publish:
+            contract-name: pyth-lazer-traits
+            expected-sender: SPMV5HDZ4EMB8XY7HAYT3XW0DF7DZ4E8XEG2J1T8
+            cost: 100000
+            path: contracts/pyth-lazer/contracts/pyth-lazer-traits.clar
+            anchor-block-only: true
+            clarity-version: 5
+        - contract-publish:
+            contract-name: pyth-lazer-oracle
+            expected-sender: SPMV5HDZ4EMB8XY7HAYT3XW0DF7DZ4E8XEG2J1T8
+            cost: 100000
+            path: contracts/pyth-lazer/contracts/pyth-lazer-oracle.clar
+            anchor-block-only: true
+            clarity-version: 5
+        - contract-publish:
+            contract-name: pyth-lazer-decoder-v1
+            expected-sender: SPMV5HDZ4EMB8XY7HAYT3XW0DF7DZ4E8XEG2J1T8
+            cost: 200000
+            path: contracts/pyth-lazer/contracts/pyth-lazer-decoder-v1.clar
+            anchor-block-only: true
+            clarity-version: 5
+      epoch: "3.4"
+    - id: 1
+      transactions:
+        # Seed Pyth's production Lazer signer (confirmed live 2026-07-22). Deployer holds
+        # ROLE_GOVERNANCE at publish and set-trusted-signers is exempt from the pause gate, so this
+        # passes directly. expires-at u1924992000 = 2031-01-01 UTC (backstop; rotate via governance).
+        - contract-call:
+            contract-id: SPMV5HDZ4EMB8XY7HAYT3XW0DF7DZ4E8XEG2J1T8.pyth-lazer-oracle
+            expected-sender: SPMV5HDZ4EMB8XY7HAYT3XW0DF7DZ4E8XEG2J1T8
+            method: set-trusted-signers
+            parameters:
+              - "(list { pubkey: 0x03a4380f01136eb2640f90c17e1e319e02bbafbeef2e6e67dc48af53f9827e155b, expires-at: u1924992000 })"
+            cost: 100000
+      epoch: "3.4"
