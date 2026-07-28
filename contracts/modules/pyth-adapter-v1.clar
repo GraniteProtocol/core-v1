@@ -11,6 +11,9 @@
 (define-constant ERR-INVALID-TIME-DELTA (err u80007))
 (define-constant ERR-MISSING-FEED (err u80008))
 (define-constant ERR-PRICE-LIST-OVERFLOW (err u80009))
+(define-constant ERR-CONTRACT-ALREADY-INITIALIZED (err u80010))
+(define-constant ERR-NOT-CONTRACT-DEPLOYER (err u80011))
+(define-constant ERR-EMPTY-FEED-LIST (err u80012))
 
 (define-constant STACKS_BLOCK_TIME (contract-call? .constants-v1 get-stacks-block-time ))
 ;; Minimum time delta of 15 seconds (~2 Stacks blocks). Prevents
@@ -35,6 +38,47 @@
   max-confidence-ratio: uint
 })
 (define-data-var time-delta uint u1800)
+
+;; contract deployer. No permissions except to initialize the contract
+(define-constant contract-deployer contract-caller)
+
+(define-data-var initialized bool false)
+
+;; A token repeated in `feeds` resolves last-one-wins.
+(define-public (initialize
+    (feeds (list 10 { token: principal, feed-id: uint, max-confidence-ratio: uint }))
+    (delta uint)
+  )
+  (begin
+    (asserts! (is-eq contract-caller contract-deployer) ERR-NOT-CONTRACT-DEPLOYER)
+    (asserts! (not (var-get initialized)) ERR-CONTRACT-ALREADY-INITIALIZED)
+    (asserts! (> (len feeds) u0) ERR-EMPTY-FEED-LIST)
+    (asserts! (is-eq (len (filter has-valid-confidence-ratio feeds)) (len feeds)) ERR-INVALID-MAX-CONFIDENCE-RATIO)
+    (asserts! (>= delta MINIMUM_TIME_DELTA) ERR-INVALID-TIME-DELTA)
+    (asserts! (<= delta MAXIMUM_TIME_DELTA) ERR-INVALID-TIME-DELTA)
+    (var-set initialized true)
+    (var-set time-delta delta)
+    (map seed-price-feed feeds)
+    (print {
+      event-type: "initialize",
+      user: contract-caller,
+      feeds: feeds,
+      time-delta: delta,
+    })
+    SUCCESS
+  )
+)
+
+(define-private (has-valid-confidence-ratio (entry { token: principal, feed-id: uint, max-confidence-ratio: uint }))
+  (<= (get max-confidence-ratio entry) CONFIDENCE_SCALING_FACTOR)
+)
+
+(define-private (seed-price-feed (entry { token: principal, feed-id: uint, max-confidence-ratio: uint }))
+  (map-set price-feeds (get token entry) {
+    feed-id: (get feed-id entry),
+    max-confidence-ratio: (get max-confidence-ratio entry),
+  })
+)
 
 ;; admin-level maintenance functions
 (define-public (update-price-feed-id (token principal) (new-feed-id uint) (max-confidence-ratio uint))

@@ -13,10 +13,15 @@ import { buildEvmUpdate, buildLazerPayload, PROP, OTHER_PRIVKEY } from "../lazer
 
 const accounts = simnet.getAccounts();
 const deployer = accounts.get("deployer")!;
+const outsider = accounts.get("wallet_1")!;
 
 const btc = Cl.contractPrincipal(deployer, "mock-btc");
 const eth = Cl.contractPrincipal(deployer, "mock-eth");
 const usdc = Cl.contractPrincipal(deployer, "mock-usdc");
+
+const CONFIDENCE_SCALING_FACTOR = 10000;
+const MINIMUM_TIME_DELTA = 15;
+const MAXIMUM_TIME_DELTA = 7200;
 
 const register = (token: string) =>
   simnet.callPublicFn(
@@ -42,6 +47,18 @@ const verify = (tokens: any[], update?: Uint8Array) => {
     deployer
   ).result;
 };
+
+const feed = (token: string, ratio: number) =>
+  Cl.tuple({
+    token: Cl.contractPrincipal(deployer, token),
+    "feed-id": Cl.uint(get_token_feed_id(token)),
+    "max-confidence-ratio": Cl.uint(ratio),
+  });
+
+const initialize = (feeds: any[], delta: number, caller = deployer) =>
+  simnet.callPublicFn("pyth-adapter-v1", "initialize", [Cl.list(feeds), Cl.uint(delta)], caller).result;
+
+const time_delta = () => simnet.callReadOnlyFn("pyth-adapter-v1", "get-pyth-time-delta", [], deployer).result;
 
 // Build a single-feed blob with an explicit timestamp / signer for the timing + signature tests.
 const build_at = (feedId: number, price: bigint, expo: number, tsMicros: bigint, privKey?: Uint8Array) =>
@@ -164,5 +181,88 @@ describe("pyth-adapter-v1 time-delta bounds", () => {
 
   it("time-delta at maximum accepted", () => {
     expect(simnet.callPublicFn("pyth-adapter-v1", "update-time-delta", [Cl.uint(7200)], deployer).result).toBeOk(Cl.bool(true));
+  });
+});
+
+describe("pyth-adapter-v1 initialize", () => {
+  beforeEach(() => {
+    init_pyth(deployer);
+  });
+
+  it("seeds every feed and the time-delta in a single deployer call", () => {
+    expect(initialize([feed("mock-usdc", 100), feed("mock-btc", 500)], 300)).toBeOk(Cl.bool(true));
+    expect(time_delta()).toBeUint(300);
+
+    set_raw_feed("mock-usdc", 100000000n, -8);
+    set_raw_feed("mock-btc", 6000000000000n, -8);
+    expect(verify([usdc, btc])).toBeOk(
+      Cl.list([Cl.uint(converted_price("mock-usdc")), Cl.uint(converted_price("mock-btc"))])
+    );
+  });
+
+  it("cannot be initialized a second time", () => {
+    expect(initialize([feed("mock-usdc", 100)], 300)).toBeOk(Cl.bool(true));
+    expect(initialize([feed("mock-btc", 500)], 300)).toBeErr(Cl.uint(80010)); // ERR-CONTRACT-ALREADY-INITIALIZED
+  });
+
+  it("rejects a caller that is not the contract deployer", () => {
+    expect(initialize([feed("mock-usdc", 100)], 300, outsider)).toBeErr(Cl.uint(80011)); // ERR-NOT-CONTRACT-DEPLOYER
+  });
+
+  it("rejects an empty feed list", () => {
+    expect(initialize([], 300)).toBeErr(Cl.uint(80012)); // ERR-EMPTY-FEED-LIST
+  });
+
+  it("rejects the whole call for one bad max-confidence-ratio, seeding nothing", () => {
+    expect(initialize([feed("mock-usdc", 100), feed("mock-btc", CONFIDENCE_SCALING_FACTOR + 1)], 300)).toBeErr(
+      Cl.uint(80003) // ERR-INVALID-MAX-CONFIDENCE-RATIO
+    );
+
+    set_raw_feed("mock-usdc", 100000000n, -8);
+    expect(verify([usdc])).toBeErr(Cl.uint(80001)); // ERR-UNSUPPORTED-ASSET
+    expect(time_delta()).not.toBeUint(300);
+    // the one-shot was not burned by the rejected call
+    expect(initialize([feed("mock-usdc", 100)], 300)).toBeOk(Cl.bool(true));
+  });
+
+  it("accepts a max-confidence-ratio at the scaling factor", () => {
+    expect(initialize([feed("mock-usdc", CONFIDENCE_SCALING_FACTOR)], 300)).toBeOk(Cl.bool(true));
+  });
+
+  it("rejects a time-delta below the minimum", () => {
+    expect(initialize([feed("mock-usdc", 100)], MINIMUM_TIME_DELTA - 1)).toBeErr(Cl.uint(80007)); // ERR-INVALID-TIME-DELTA
+  });
+
+  it("rejects a time-delta above the maximum", () => {
+    expect(initialize([feed("mock-usdc", 100)], MAXIMUM_TIME_DELTA + 1)).toBeErr(Cl.uint(80007));
+  });
+
+  it("accepts a time-delta at the minimum", () => {
+    expect(initialize([feed("mock-usdc", 100)], MINIMUM_TIME_DELTA)).toBeOk(Cl.bool(true));
+    expect(time_delta()).toBeUint(MINIMUM_TIME_DELTA);
+  });
+
+  it("accepts a time-delta at the maximum", () => {
+    expect(initialize([feed("mock-usdc", 100)], MAXIMUM_TIME_DELTA)).toBeOk(Cl.bool(true));
+    expect(time_delta()).toBeUint(MAXIMUM_TIME_DELTA);
+  });
+
+  it("leaves the governance rotation path working", () => {
+    expect(initialize([feed("mock-usdc", 100), feed("mock-btc", 500)], 300)).toBeOk(Cl.bool(true));
+    expect(register("mock-eth").result).toBeOk(Cl.bool(true));
+
+    set_raw_feed("mock-eth", 300000000000n, -8);
+    expect(verify([eth])).toBeOk(Cl.list([Cl.uint(converted_price("mock-eth"))]));
+  });
+
+  it("still rejects update-price-feed-id from a non-governance principal", () => {
+    expect(initialize([feed("mock-usdc", 100)], 300)).toBeOk(Cl.bool(true));
+    const res = simnet.callPublicFn(
+      "pyth-adapter-v1",
+      "update-price-feed-id",
+      [eth, Cl.uint(get_token_feed_id("mock-eth")), Cl.uint(500)],
+      outsider
+    );
+    expect(res.result).toBeErr(Cl.uint(80000)); // ERR-NOT-AUTHORIZED
   });
 });
