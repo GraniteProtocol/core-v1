@@ -220,7 +220,7 @@ describe("pyth-adapter-v1 initialize", () => {
 
     set_raw_feed("mock-usdc", 100000000n, -8);
     expect(verify([usdc])).toBeErr(Cl.uint(80001)); // ERR-UNSUPPORTED-ASSET
-    expect(time_delta()).not.toBeUint(300);
+    expect(time_delta()).toBeUint(1800); // the contract default, untouched by the rejected call
     // the one-shot was not burned by the rejected call
     expect(initialize([feed("mock-usdc", 100)], 300)).toBeOk(Cl.bool(true));
   });
