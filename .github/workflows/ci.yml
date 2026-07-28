@@ -11,7 +11,7 @@ jobs:
           submodules: true
       - name: "Install Clarinet"
         run: |
-          curl -L https://github.com/hirosystems/clarinet/releases/download/v3.21.1/clarinet-linux-x64-glibc.tar.gz | tar -xz
+          curl -L https://github.com/hirosystems/clarinet/releases/download/v3.22.0/clarinet-linux-x64-glibc.tar.gz | tar -xz
           chmod +x ./clarinet
           echo "$PWD" >> "$GITHUB_PATH"
       - name: "Check contract syntax"
