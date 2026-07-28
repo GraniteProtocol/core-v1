@@ -11,14 +11,12 @@
   },
   "author": "",
   "license": "ISC",
-  "dependencies": {
-    "@noble/hashes": "^1.5.0",
-    "@noble/secp256k1": "^2.1.0",
-    "@stacks/transactions": "7.4.0"
-  },
   "devDependencies": {
     "@fast-check/vitest": "^0.3.0",
+    "@noble/hashes": "^1.5.0",
+    "@noble/secp256k1": "^2.1.0",
     "@stacks/clarinet-sdk": "^3.22.0",
+    "@stacks/transactions": "7.4.0",
     "chokidar-cli": "^3.0.0",
     "fast-check": "^3.22.0",
     "typescript": "^5.6.2",
