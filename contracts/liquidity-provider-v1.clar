@@ -22,7 +22,7 @@
   (begin
     (asserts! (not (var-get initialized)) ERR-ALREADY-INITIALIZED)
     (let (
-        (total-lp-supply (unwrap-panic (contract-call? .state-v1 get-total-supply)))
+        (total-lp-supply (unwrap-panic (contract-call? 'SP3M2BYF7RGF8WKW5FVDNJ6WR8D7AR9BHDXAKPXZE.state-v1 get-total-supply)))
         (dust-burned (is-eq total-lp-supply u0))
       )
       (var-set initialized true)
@@ -45,20 +45,20 @@
     (asserts! (> assets u0) ERR-INPUT-ZERO)
     (try! (accrue-interest))
     (let (
-        (lp-params (contract-call? .state-v1 get-lp-params))
+        (lp-params (contract-call? 'SP3M2BYF7RGF8WKW5FVDNJ6WR8D7AR9BHDXAKPXZE.state-v1 get-lp-params))
         (total-assets (get total-assets lp-params))
         (total-shares (get total-shares lp-params))
-        (shares (contract-call? .math-v1 convert-to-shares lp-params assets false))
+        (shares (contract-call? 'SP3M2BYF7RGF8WKW5FVDNJ6WR8D7AR9BHDXAKPXZE.math-v1 convert-to-shares lp-params assets false))
       )
       (asserts! (or (> total-assets u0) (is-eq total-shares u0)) ERR-POOL-INSOLVENT)
       (try! (contract-call? .withdrawal-caps-v1 lp-deposit assets))
-      (try! (contract-call? .state-v1 add-assets contract-caller recipient assets shares))
+      (try! (contract-call? 'SP3M2BYF7RGF8WKW5FVDNJ6WR8D7AR9BHDXAKPXZE.state-v1 add-assets contract-caller recipient assets shares))
       (print {
         recipient: recipient,
         assets: assets,
         shares: shares,
         user: contract-caller,
-        lp-params: (contract-call? .state-v1 get-lp-params),
+        lp-params: (contract-call? 'SP3M2BYF7RGF8WKW5FVDNJ6WR8D7AR9BHDXAKPXZE.state-v1 get-lp-params),
         action: "deposit",
       }))
     SUCCESS
@@ -70,14 +70,14 @@
     (asserts! (> assets u0) ERR-INPUT-ZERO)
     (try! (contract-call? .withdrawal-caps-v1 check-withdrawal-lp-cap assets))
     (try! (accrue-interest))
-    (let ((shares (contract-call? .math-v1 convert-to-shares (contract-call? .state-v1 get-lp-params) assets true)))
-      (try! (contract-call? .state-v1 remove-assets contract-caller recipient assets shares))
+    (let ((shares (contract-call? 'SP3M2BYF7RGF8WKW5FVDNJ6WR8D7AR9BHDXAKPXZE.math-v1 convert-to-shares (contract-call? 'SP3M2BYF7RGF8WKW5FVDNJ6WR8D7AR9BHDXAKPXZE.state-v1 get-lp-params) assets true)))
+      (try! (contract-call? 'SP3M2BYF7RGF8WKW5FVDNJ6WR8D7AR9BHDXAKPXZE.state-v1 remove-assets contract-caller recipient assets shares))
       (print {
         recipient: recipient,
         assets: assets,
         shares: shares,
         user: contract-caller,
-        lp-params: (contract-call? .state-v1 get-lp-params),
+        lp-params: (contract-call? 'SP3M2BYF7RGF8WKW5FVDNJ6WR8D7AR9BHDXAKPXZE.state-v1 get-lp-params),
         action: "withdraw"
       }))
     SUCCESS
@@ -90,11 +90,11 @@
     (try! (accrue-interest))
     (let
       (
-        (asset-params (contract-call? .state-v1 get-lp-params))
-        (assets (contract-call? .math-v1 convert-to-assets asset-params shares false))
+        (asset-params (contract-call? 'SP3M2BYF7RGF8WKW5FVDNJ6WR8D7AR9BHDXAKPXZE.state-v1 get-lp-params))
+        (assets (contract-call? 'SP3M2BYF7RGF8WKW5FVDNJ6WR8D7AR9BHDXAKPXZE.math-v1 convert-to-assets asset-params shares false))
       )
       (try! (contract-call? .withdrawal-caps-v1 check-withdrawal-lp-cap assets))
-      (try! (contract-call? .state-v1 remove-assets contract-caller recipient assets shares))
+      (try! (contract-call? 'SP3M2BYF7RGF8WKW5FVDNJ6WR8D7AR9BHDXAKPXZE.state-v1 remove-assets contract-caller recipient assets shares))
       SUCCESS
     )
 ))
@@ -102,16 +102,16 @@
 ;; PRIVATE FUNCTIONS
 (define-private (accrue-interest)
   (let (
-      (accrue-interest-params (unwrap! (contract-call? .state-v1 get-accrue-interest-params) ERR-INTEREST-PARAMS))
+      (accrue-interest-params (unwrap! (contract-call? 'SP3M2BYF7RGF8WKW5FVDNJ6WR8D7AR9BHDXAKPXZE.state-v1 get-accrue-interest-params) ERR-INTEREST-PARAMS))
       (accrued-interest (try! (contract-call? .linear-kinked-ir-v1 accrue-interest
         (get last-accrued-block-time accrue-interest-params)
         (get lp-interest accrue-interest-params)
         (get staked-interest accrue-interest-params)
-        (try! (contract-call? .staking-reward-v1 calculate-staking-reward-percentage (contract-call? .staking-v1 get-active-staked-lp-tokens)))
+        (try! (contract-call? 'SP3M2BYF7RGF8WKW5FVDNJ6WR8D7AR9BHDXAKPXZE.staking-reward-v1 calculate-staking-reward-percentage (contract-call? .staking-v1 get-active-staked-lp-tokens)))
         (get protocol-interest accrue-interest-params)
         (get protocol-reserve-percentage accrue-interest-params)
         (get total-assets accrue-interest-params)))
       )
     )
-    (contract-call? .state-v1 set-accrued-interest accrued-interest)
+    (contract-call? 'SP3M2BYF7RGF8WKW5FVDNJ6WR8D7AR9BHDXAKPXZE.state-v1 set-accrued-interest accrued-interest)
 ))

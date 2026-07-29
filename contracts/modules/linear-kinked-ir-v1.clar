@@ -28,15 +28,15 @@
 ;; Taylor input guard at MAX-TAYLOR-INPUT cannot brick accrue-interest
 ;; under stressed (open-interest > total-assets) conditions.
 (define-constant MAX-UTILIZATION u10000000000000)
-(define-constant STACKS_BLOCK_TIME (contract-call? .constants-v1 get-stacks-block-time ))
+(define-constant STACKS_BLOCK_TIME (contract-call? 'SP3M2BYF7RGF8WKW5FVDNJ6WR8D7AR9BHDXAKPXZE.constants-v1 get-stacks-block-time ))
 
 ;; DATA-VARS 
 (define-constant contract-deployer contract-caller)
-(define-data-var is-initialized bool false)
-(define-data-var ir-slope-1 uint u0)
-(define-data-var ir-slope-2 uint u0)
-(define-data-var utilization-kink uint u0)
-(define-data-var base-ir uint u0) ;; interest when utilization is 0
+(define-data-var is-initialized bool true)
+(define-data-var ir-slope-1 uint u40000000000)
+(define-data-var ir-slope-2 uint u3100000000000)
+(define-data-var utilization-kink uint u850000000000)
+(define-data-var base-ir uint u5000000000) ;; interest when utilization is 0
 
 
 ;; PUBLIC FUNCTIONS 
@@ -50,7 +50,7 @@
       )
       (begin
         (asserts! (not (is-eq contract-caller contract-deployer)) ERR-CONTRACT-ALREADY-INITIATED)
-        (asserts! (is-eq contract-caller (contract-call? .state-v1 get-governance)) ERR-NOT-GOVERNANCE)
+        (asserts! (is-eq contract-caller (contract-call? 'SP3M2BYF7RGF8WKW5FVDNJ6WR8D7AR9BHDXAKPXZE.state-v1 get-governance)) ERR-NOT-GOVERNANCE)
       )
     )
 
@@ -90,7 +90,7 @@
     (time-now (+ (unwrap-panic (get-stacks-block-info? time (- stacks-block-height u1))) STACKS_BLOCK_TIME))
     (elapsed-block-time (if (> time-now last-accrued-block-time) (- time-now last-accrued-block-time) u0))
     (premature-return (asserts!
-      (not (or (is-eq u0 elapsed-block-time) (not (contract-call? .state-v1 is-interest-accrual-enabled))))
+      (not (or (is-eq u0 elapsed-block-time) (not (contract-call? 'SP3M2BYF7RGF8WKW5FVDNJ6WR8D7AR9BHDXAKPXZE.state-v1 is-interest-accrual-enabled))))
       (ok {
         last-accrued-block-time: last-accrued-block-time,
         lp-open-interest: lp-open-interest,
@@ -157,7 +157,7 @@
 ;; PRIVATE HELPER FUNCTIONS 
 (define-read-only (calc-total-interest (ir uint) (open-ir uint))
   (let ((interest-factor (- ir one-12))
-    (total-interest (contract-call? .math-v1 divide-round-up (* open-ir interest-factor) one-12)))
+    (total-interest (contract-call? 'SP3M2BYF7RGF8WKW5FVDNJ6WR8D7AR9BHDXAKPXZE.math-v1 divide-round-up (* open-ir interest-factor) one-12)))
     total-interest
 ))
 

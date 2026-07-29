@@ -1,7 +1,7 @@
 ;; SPDX-License-Identifier: BUSL-1.1
 
 ;; TRAITS
-(use-trait callback-trait .trait-flash-loan-v1.flash-loan)
+(use-trait callback-trait 'SP3M2BYF7RGF8WKW5FVDNJ6WR8D7AR9BHDXAKPXZE.trait-flash-loan-v1.flash-loan)
 
 ;; CONSTANTS
 (define-constant SUCCESS (ok true))
@@ -82,17 +82,17 @@
 
 (define-public (flash-loan (amount uint) (callback <callback-trait>) (data (optional (buff 20480))))
   (let (
-      (flash-loan-fee (contract-call? .math-v1 divide-round-up (* amount (var-get fee)) max-fee))
+      (flash-loan-fee (contract-call? 'SP3M2BYF7RGF8WKW5FVDNJ6WR8D7AR9BHDXAKPXZE.math-v1 divide-round-up (* amount (var-get fee)) max-fee))
       (caller contract-caller)
       (callback-contract (contract-of callback))
     )
     (asserts! (is-contract-allowed callback-contract) ERR-CONTRACT-NOT-ALLOWED)
     ;; transfer funds to user
-    (try! (contract-call? .state-v1 transfer-to .mock-usdc caller amount))
+    (try! (contract-call? 'SP3M2BYF7RGF8WKW5FVDNJ6WR8D7AR9BHDXAKPXZE.state-v1 transfer-to 'SP120SBRBQJ00MCWS7TM5R8WJNTTKD5K0HFRC2CNE.usdcx caller amount))
     (try! (contract-call? callback on-granite-flash-loan amount flash-loan-fee data))
-    (try! (contract-call? .state-v1 transfer-from .mock-usdc caller amount))
+    (try! (contract-call? 'SP3M2BYF7RGF8WKW5FVDNJ6WR8D7AR9BHDXAKPXZE.state-v1 transfer-from 'SP120SBRBQJ00MCWS7TM5R8WJNTTKD5K0HFRC2CNE.usdcx caller amount))
     (try! (if (> flash-loan-fee u0)
-      (contract-call? .mock-usdc transfer flash-loan-fee caller (contract-call? .state-v1 get-governance) none)
+      (contract-call? 'SP120SBRBQJ00MCWS7TM5R8WJNTTKD5K0HFRC2CNE.usdcx transfer flash-loan-fee caller (contract-call? 'SP3M2BYF7RGF8WKW5FVDNJ6WR8D7AR9BHDXAKPXZE.state-v1 get-governance) none)
       SUCCESS
     ))
 
@@ -111,5 +111,5 @@
 
 
 (define-private (is-governance)
-  (is-eq (contract-call? .state-v1 get-governance) contract-caller)
+  (is-eq (contract-call? 'SP3M2BYF7RGF8WKW5FVDNJ6WR8D7AR9BHDXAKPXZE.state-v1 get-governance) contract-caller)
 )
