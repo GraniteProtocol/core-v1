@@ -37,7 +37,7 @@
   feed-id: uint,
   max-confidence-ratio: uint
 })
-(define-data-var time-delta uint u1800)
+(define-data-var time-delta uint u300)
 
 ;; contract deployer. No permissions except to initialize the contract
 (define-constant contract-deployer contract-caller)
