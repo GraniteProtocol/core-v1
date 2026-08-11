@@ -1,7 +1,7 @@
 ;; SPDX-License-Identifier: BUSL-1.1
 
 ;; TRAITS
-(use-trait callback-trait <FLASH_LOAN_TRAIT>.trait-flash-loan-v1.flash-loan)
+(use-trait callback-trait 'SP26NGV9AFZBX7XBDBS2C7EC7FCPSAV9PKREQNMVS.trait-flash-loan-v1.flash-loan)
 
 ;; CONSTANTS
 (define-constant SUCCESS (ok true))
