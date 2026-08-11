@@ -1,0 +1,250 @@
+---
+id: 0
+name: aeUSDC Pyth Lazer cutover v1 - Lazer redeploy set (fresh deployer)
+network: mainnet
+stacks-node: "https://api.hiro.so"
+bitcoin-node: "http://blockstack:blockstacksystem@bitcoin.blockstack.com:8332"
+#
+# APPLY-TIME STEP, not a defect: <AEUSDC_DEPLOYER> must be replaced with the real deployer address
+# before applying. There are 16 substitution sites - every expected-sender and contract-id field, so
+# `grep -cE '^\s+(expected-sender|contract-id): <AEUSDC_DEPLOYER>'` is the count to check; a plain
+# grep also matches these comments. `clarinet deployments check` reports this file as
+# "syntax incorrect - unable to parse expected sender '<AEUSDC_DEPLOYER>' as a valid Stacks address"
+# until they are, and passes once a valid address is in place. Note the checker still EXITS 0 while
+# printing that failure, so read its output rather than its status. Keeping the placeholder on the
+# deploy branch is deliberate and matches USDCx: its deploy branch retained all 16, and the real
+# address appears only on the plan-record copy that lands on master.
+#
+# Epoch40 is already active (verified: burn tip 961965, Epoch40 range starts 960230), so unlike the
+# USDCx plan there is no fork to wait for. Re-verify the active epoch by comparing the burn tip
+# against each epoch's [start_height, end_height) range rather than reading .epochs[-1], which is
+# the last DEFINED epoch and is a future one.
+#
+# EXTERNAL CONTRACTS, all referenced fully-qualified. The source references EIGHT deployers in total:
+#   SP35E2BBMDT2Y1HB0NTK139YBGYV3PAPK3WA8BRNA  state-v1, math-v1, constants-v1, staking-reward-v1
+#   SP3BJR4P3W2Y9G22HA595Z59VHBC9EQYRFWSKG743  constants-v2
+#   SP3M2BYF7RGF8WKW5FVDNJ6WR8D7AR9BHDXAKPXZE  meta-governance-v1
+#   SP26NGV9AFZBX7XBDBS2C7EC7FCPSAV9PKREQNMVS  trait-flash-loan-v1
+#   SPMV5HDZ4EMB8XY7HAYT3XW0DF7DZ4E8XEG2J1T8  pyth-lazer-oracle, pyth-lazer-decoder-v1
+#   SP3Y2ZSH8P7D50B0VBTSX11S7XSG24M1VB9YFQA4K  token-aeusdc (market token)
+#   SM3VDXK3WZZSA84XXFKAFAF15NNZX32CTSG82JFQ4  sbtc-token (only registered collateral)
+#   SP3FBR2AGK5H9QBDH3EEN6DF8EK8JY7RX8QJ5SVTE  sip-010-trait-ft-standard
+# So aeUSDC's anchor set spans several deployers, where USDCx's all sat under one.
+#
+# The two SPMV5HDZ Lazer contracts are the POINT of this migration - the whole price path depends on
+# them. Confirm both are live and that pyth-lazer-decoder-v1 still implements the decoder-trait that
+# pyth-lazer-oracle.verify-price-feeds expects, BEFORE applying.
+#
+# meta-governance-v1 is the USDCx anchor's and is deliberately REUSED: aeUSDC's live governance
+# already depends on it, so both markets share one member set. Nothing here touches that member set.
+#
+# trait-flash-loan-v1 is the v3 generation's. That generation is in the retire set, which is safe:
+# retiring removes a principal from state-v1's allow-set only - the contract and the trait it defines
+# stay published and readable forever. Trait conformance here is also STRUCTURAL, not nominal by
+# principal: both live generations published byte-identical trait definitions, and a contract
+# implementing either satisfies a parameter typed against the other (verified in simnet at epoch 4.0
+# and on mainnet). So callbacks built against the OTHER generation's trait do NOT need redeploying.
+#
+# Publish order is derived from the hard-dependency graph of this 10-contract set, not copied. A
+# (contract-call? .peer ...) needs the peer to exist at publish time for analysis to pass; an
+# (as-contract .peer) is only a principal literal and does not. Derived edges:
+#   staking-v1            -> linear-kinked-ir-v1
+#   borrower-v1           -> linear-kinked-ir-v1, pyth-adapter-v1, staking-v1, withdrawal-caps-v1
+#   liquidator-v1         -> linear-kinked-ir-v1, pyth-adapter-v1, staking-v1, withdrawal-caps-v1
+#   liquidity-provider-v1 -> linear-kinked-ir-v1, staking-v1, withdrawal-caps-v1
+#   utility               -> linear-kinked-ir-v1, staking-v1, withdrawal-caps-v1
+#   governance-v1         -> flash-loan-v1, linear-kinked-ir-v1, pyth-adapter-v1, staking-v1,
+#                            withdrawal-caps-v1
+#   flash-loan-v1, linear-kinked-ir-v1, pyth-adapter-v1, withdrawal-caps-v1 -> nothing in the set
+# That yields three layers. withdrawal-caps-v1 names borrower/liquidator/liquidity-provider ONLY via
+# as-contract, so it publishes in batch 0 ahead of all three. staking-v1 is the single same-batch
+# dependency: it follows linear-kinked-ir-v1 inside batch 0, which is safe because Stacks enforces
+# per-account nonce ordering, so the later publish cannot apply before the earlier one even within
+# one block. Every batch-1 contract depends only on batch-0 contracts.
+#
+# `cost` is the tx fee in uSTX and is what `-d` uses, so it is deliberately generous - an underpriced
+# publish stalls the deploy between batches. Figures apply max(100000, ceil(KB/10)*100000) as
+# headroom over the flat 100000 rate. Two reference points: USDCx's mainnet deploy paid 100000 for
+# contracts up to ~16KB and 200000 at ~20KB, and it was STAGING's live-validated cutover that
+# published a 53KB governance-v1 at a flat 100000. Publishes total 2100000 and the batch-2 calls
+# 250000, so 2350000 uSTX (2.35 STX). Fund ~3 STX.
+#
+# No aeUSDC is needed. liquidity-provider-v1.initialize only flips the gate flag: state-v1
+# get-total-supply reads u124233253276, so dust-burned is false and it takes the no-deposit branch.
+#
+# WITHDRAWAL CAPS: an unseeded collateral is silently UNCAPPED, not blocked -
+# check-withdrawal-collateral-cap returns SUCCESS when the collateral-cap-factor map has no entry
+# (a missing entry defaults to u0, and u0 takes the early-return branch). sBTC is currently the only
+# registered collateral, so seeding it alone is correct today; any collateral added later needs its
+# own cap set or it is uncapped from the moment it is registered.
+#
+# FLASH-LOAN ALLOW-LIST STARTS EMPTY BY DECISION - this is not an oversight, do not backfill it.
+# allow-any stays false and allowed-contracts publishes empty, exactly as the unmodified source
+# defaults. The two live generations currently hold five grants between them; those are deliberately
+# NOT migrated. Flash-loan capability is re-established separately after cutover, with new callback
+# contracts deployed and granted as their own piece of work.
+#
+# staking-v1.initialize is deliberately NOT in this plan, and shipping uninitialized has consequences
+# that need to be understood rather than discovered:
+#  - It is DEPLOYER-GATED (asserts contract-caller is contract-deployer, a constant fixed at publish).
+#    Governance cannot ever call it. After the handover the ONLY key that can is the fresh deployer's,
+#    so that key must be RETAINED, not discarded once the market is handed over.
+#  - With is-staking-enabled false, the DEFAULT path cannot succeed at all: initialize stakes the
+#    dead-shares floor via `stake`, and `stake` calls check-staking-enabled, so the whole call reverts.
+#    Only `initialize (some u0)` works while wound down - and that skips the floor, leaving the first
+#    real staker exposed to first-depositor share manipulation.
+#  - governance-v1's unpause branch calls state-v1 set-staking-flag TRUE unconditionally. So a
+#    guardian pause (which sets it false) followed by a governance unpause re-enables staking whether
+#    or not this contract was ever initialized. Uninitialized, `stake` then fails closed on
+#    ERR-NOT-INITIALIZED rather than misbehaving - but the flag no longer reflects a deliberate choice.
+#  - The old staking-v1 keeps its own separate ledger (total-lp-tokens-staked u99564781, an
+#    unfinalized withdrawal of 49). The new contract does NOT inherit those balances.
+plan:
+  batches:
+    - id: 0
+      transactions:
+        # 8.1KB - no intra-set hard dependency. Carries the IR bake.
+        - contract-publish:
+            contract-name: linear-kinked-ir-v1
+            expected-sender: <AEUSDC_DEPLOYER>
+            cost: 100000
+            path: contracts/modules/linear-kinked-ir-v1.clar
+            anchor-block-only: true
+            clarity-version: 3
+        # 15.5KB - hard-needs linear-kinked-ir-v1, so it follows it in this batch
+        - contract-publish:
+            contract-name: staking-v1
+            expected-sender: <AEUSDC_DEPLOYER>
+            cost: 200000
+            path: contracts/staking-v1.clar
+            anchor-block-only: true
+            clarity-version: 3
+        # 3.5KB - allow-list publishes empty by decision, see the note above
+        - contract-publish:
+            contract-name: flash-loan-v1
+            expected-sender: <AEUSDC_DEPLOYER>
+            cost: 100000
+            path: contracts/flash-loan-v1.clar
+            anchor-block-only: true
+            clarity-version: 3
+        # 10.3KB
+        - contract-publish:
+            contract-name: pyth-adapter-v1
+            expected-sender: <AEUSDC_DEPLOYER>
+            cost: 200000
+            path: contracts/modules/pyth-adapter-v1.clar
+            anchor-block-only: true
+            clarity-version: 3
+        # 11.5KB - names borrower/liquidator/liquidity-provider only via as-contract.
+        # Carries the caps bake plus the top-level sBTC collateral-cap-factor map-set.
+        - contract-publish:
+            contract-name: withdrawal-caps-v1
+            expected-sender: <AEUSDC_DEPLOYER>
+            cost: 200000
+            path: contracts/modules/withdrawal-caps-v1.clar
+            anchor-block-only: true
+            clarity-version: 3
+      epoch: "4.0"
+    - id: 1
+      transactions:
+        # 17.8KB
+        - contract-publish:
+            contract-name: borrower-v1
+            expected-sender: <AEUSDC_DEPLOYER>
+            cost: 200000
+            path: contracts/borrower-v1.clar
+            anchor-block-only: true
+            clarity-version: 3
+        # 53.7KB - carries the (list 6) guardian arity bake
+        - contract-publish:
+            contract-name: governance-v1
+            expected-sender: <AEUSDC_DEPLOYER>
+            cost: 600000
+            path: contracts/governance-v1.clar
+            anchor-block-only: true
+            clarity-version: 3
+        # 29.3KB
+        - contract-publish:
+            contract-name: liquidator-v1
+            expected-sender: <AEUSDC_DEPLOYER>
+            cost: 300000
+            path: contracts/liquidator-v1.clar
+            anchor-block-only: true
+            clarity-version: 3
+        # 4.8KB
+        - contract-publish:
+            contract-name: liquidity-provider-v1
+            expected-sender: <AEUSDC_DEPLOYER>
+            cost: 100000
+            path: contracts/liquidity-provider-v1.clar
+            anchor-block-only: true
+            clarity-version: 3
+        # 7.5KB
+        - contract-publish:
+            contract-name: utility
+            expected-sender: <AEUSDC_DEPLOYER>
+            cost: 100000
+            path: contracts/modules/utility.clar
+            anchor-block-only: true
+            clarity-version: 3
+      epoch: "4.0"
+    - id: 2
+      transactions:
+        # Flips the flag gating deposit/withdraw. Takes the no-deposit branch, see the note above.
+        - contract-call:
+            contract-id: <AEUSDC_DEPLOYER>.liquidity-provider-v1
+            expected-sender: <AEUSDC_DEPLOYER>
+            method: initialize
+            parameters: []
+            cost: 50000
+        # Lazer numeric feed ids and confidence ratios. Read off chain rather than carried over:
+        # aeUSDC's live Pyth Core adapter holds max-confidence-ratio u100 for the market token and
+        # u500 for sBTC at time-delta u300, and staging's Lazer adapter - whose market token IS
+        # token-aeusdc - runs feed-id u7 / u1 against those same ratios. Min delta u15, max u7200.
+        # time-delta u300 is ALSO baked into the source, so this call re-asserts the same value
+        # rather than being the only thing that sets it. That matters: a low time-delta is the whole
+        # chosen mitigation for the oracle-replay report, and if this call were the sole source, a
+        # failure here followed by reseeding feeds through governance update-price-feed-id would
+        # leave time-delta at master's u1800 - six times looser, permanently, with nothing logged.
+        - contract-call:
+            contract-id: <AEUSDC_DEPLOYER>.pyth-adapter-v1
+            expected-sender: <AEUSDC_DEPLOYER>
+            method: initialize
+            parameters:
+              - "(list { token: 'SP3Y2ZSH8P7D50B0VBTSX11S7XSG24M1VB9YFQA4K.token-aeusdc, feed-id: u7, max-confidence-ratio: u100 } { token: 'SM3VDXK3WZZSA84XXFKAFAF15NNZX32CTSG82JFQ4.sbtc-token, feed-id: u1, max-confidence-ratio: u500 })"
+              - "u300"
+            cost: 100000
+        # All SIX live guardians, enumerated from is-guardian on the live SP2TRSJ governance rather
+        # than retyped. master's (list 5 ...) would fail here, after every publish above is paid for.
+        - contract-call:
+            contract-id: <AEUSDC_DEPLOYER>.governance-v1
+            expected-sender: <AEUSDC_DEPLOYER>
+            method: initialize-governance
+            parameters:
+              - "(list (some 'SP1ABZHX4VKG0BTQ8NTBJ591W7AK67C33KR76QD27) (some 'SPTXMEW26M54HX1ZXF6VN7QKK4XES1038ERD40T5) (some 'SP2G62YGCCMWS4PAN54ZYT2G9TCJRGBSKQ679M96Q) (some 'SP2EBZVFF99Q97GJXGTRT3Y0M7N6G7XJAKMNVGFK) (some 'SP298TX7MBC848DGTXYP0594AGSHJAKBFZE3VH1E9) (some 'SP2A7DWZMPQAQC0W941VA8RYJNX56A2WJ0GP1RS3E))"
+            cost: 100000
+      epoch: "4.0"
+#
+# POST-APPLY VERIFICATION - run this, do not assume the batch-2 result implies it.
+#
+# (list 6 ...) is a MAXIMUM, not a requirement. A list that arrives truncated seeds only the
+# principals it contains, initialize-governance still returns (ok true), and `initialized` latches so
+# it can never be re-run. The missing guardian would then be discovered during an emergency, by
+# whoever needed to pause the market. So assert all six individually against the NEW governance:
+#
+#   is-guardian SP1ABZHX4VKG0BTQ8NTBJ591W7AK67C33KR76QD27  -> (ok true)
+#   is-guardian SPTXMEW26M54HX1ZXF6VN7QKK4XES1038ERD40T5  -> (ok true)
+#   is-guardian SP2G62YGCCMWS4PAN54ZYT2G9TCJRGBSKQ679M96Q  -> (ok true)
+#   is-guardian SP2EBZVFF99Q97GJXGTRT3Y0M7N6G7XJAKMNVGFK  -> (ok true)
+#   is-guardian SP298TX7MBC848DGTXYP0594AGSHJAKBFZE3VH1E9  -> (ok true)
+#   is-guardian SP2A7DWZMPQAQC0W941VA8RYJNX56A2WJ0GP1RS3E  -> (ok true)
+#
+# Also worth asserting while there, since each is a silent-failure class rather than a loud one:
+#   pyth-adapter-v1  time-delta        -> u300     (baked AND set by initialize)
+#   pyth-adapter-v1  price-feeds       -> feed u7 / conf u100 for token-aeusdc, u1 / u500 for sBTC
+#   linear-kinked-ir-v1 is-initialized -> true, and the four IR params match live
+#   withdrawal-caps-v1 collateral cap  -> u20000000 for sbtc-token (unseeded means UNCAPPED)
+#   flash-loan-v1 allowed-contracts    -> EMPTY, and allow-any false (empty is intended here)
+#   governance-v1 is-governance-member -> (ok true) for the four meta-gov signers, confirming the
+#                                        reused meta-governance at SP3M2BYF resolves through the new
+#                                        contract. A misaddressed one would only surface at handover.
