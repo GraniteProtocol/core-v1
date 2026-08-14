@@ -1,0 +1,109 @@
+---
+id: 0
+name: aeUSDC Pyth Lazer cutover v1 - Lazer redeploy set (fresh deployer)
+network: mainnet
+stacks-node: "https://api.hiro.so"
+bitcoin-node: "http://blockstack:blockstacksystem@bitcoin.blockstack.com:8332"
+# Applied on mainnet 2026-08-13 - all 13 transactions succeeded.
+plan:
+  batches:
+    - id: 0
+      transactions:
+        - contract-publish:
+            contract-name: linear-kinked-ir-v1
+            expected-sender: SP119QJ4NVE3RQP8RXJVW5EXAV3XD4CJZWRCEEAAR
+            cost: 100000
+            path: contracts/modules/linear-kinked-ir-v1.clar
+            anchor-block-only: true
+            clarity-version: 3
+        - contract-publish:
+            contract-name: staking-v1
+            expected-sender: SP119QJ4NVE3RQP8RXJVW5EXAV3XD4CJZWRCEEAAR
+            cost: 200000
+            path: contracts/staking-v1.clar
+            anchor-block-only: true
+            clarity-version: 3
+        - contract-publish:
+            contract-name: flash-loan-v1
+            expected-sender: SP119QJ4NVE3RQP8RXJVW5EXAV3XD4CJZWRCEEAAR
+            cost: 100000
+            path: contracts/flash-loan-v1.clar
+            anchor-block-only: true
+            clarity-version: 3
+        - contract-publish:
+            contract-name: pyth-adapter-v1
+            expected-sender: SP119QJ4NVE3RQP8RXJVW5EXAV3XD4CJZWRCEEAAR
+            cost: 200000
+            path: contracts/modules/pyth-adapter-v1.clar
+            anchor-block-only: true
+            clarity-version: 3
+        - contract-publish:
+            contract-name: withdrawal-caps-v1
+            expected-sender: SP119QJ4NVE3RQP8RXJVW5EXAV3XD4CJZWRCEEAAR
+            cost: 200000
+            path: contracts/modules/withdrawal-caps-v1.clar
+            anchor-block-only: true
+            clarity-version: 3
+      epoch: "4.0"
+    - id: 1
+      transactions:
+        - contract-publish:
+            contract-name: borrower-v1
+            expected-sender: SP119QJ4NVE3RQP8RXJVW5EXAV3XD4CJZWRCEEAAR
+            cost: 200000
+            path: contracts/borrower-v1.clar
+            anchor-block-only: true
+            clarity-version: 3
+        - contract-publish:
+            contract-name: governance-v1
+            expected-sender: SP119QJ4NVE3RQP8RXJVW5EXAV3XD4CJZWRCEEAAR
+            cost: 600000
+            path: contracts/governance-v1.clar
+            anchor-block-only: true
+            clarity-version: 3
+        - contract-publish:
+            contract-name: liquidator-v1
+            expected-sender: SP119QJ4NVE3RQP8RXJVW5EXAV3XD4CJZWRCEEAAR
+            cost: 300000
+            path: contracts/liquidator-v1.clar
+            anchor-block-only: true
+            clarity-version: 3
+        - contract-publish:
+            contract-name: liquidity-provider-v1
+            expected-sender: SP119QJ4NVE3RQP8RXJVW5EXAV3XD4CJZWRCEEAAR
+            cost: 100000
+            path: contracts/liquidity-provider-v1.clar
+            anchor-block-only: true
+            clarity-version: 3
+        - contract-publish:
+            contract-name: utility
+            expected-sender: SP119QJ4NVE3RQP8RXJVW5EXAV3XD4CJZWRCEEAAR
+            cost: 100000
+            path: contracts/modules/utility.clar
+            anchor-block-only: true
+            clarity-version: 3
+      epoch: "4.0"
+    - id: 2
+      transactions:
+        - contract-call:
+            contract-id: SP119QJ4NVE3RQP8RXJVW5EXAV3XD4CJZWRCEEAAR.liquidity-provider-v1
+            expected-sender: SP119QJ4NVE3RQP8RXJVW5EXAV3XD4CJZWRCEEAAR
+            method: initialize
+            parameters: []
+            cost: 50000
+        - contract-call:
+            contract-id: SP119QJ4NVE3RQP8RXJVW5EXAV3XD4CJZWRCEEAAR.pyth-adapter-v1
+            expected-sender: SP119QJ4NVE3RQP8RXJVW5EXAV3XD4CJZWRCEEAAR
+            method: initialize
+            parameters:
+              - "(list { token: 'SP3Y2ZSH8P7D50B0VBTSX11S7XSG24M1VB9YFQA4K.token-aeusdc, feed-id: u7, max-confidence-ratio: u100 } { token: 'SM3VDXK3WZZSA84XXFKAFAF15NNZX32CTSG82JFQ4.sbtc-token, feed-id: u1, max-confidence-ratio: u500 })"
+              - "u300"
+            cost: 100000
+        - contract-call:
+            contract-id: SP119QJ4NVE3RQP8RXJVW5EXAV3XD4CJZWRCEEAAR.governance-v1
+            expected-sender: SP119QJ4NVE3RQP8RXJVW5EXAV3XD4CJZWRCEEAAR
+            method: initialize-governance
+            parameters:
+              - "(list (some 'SP1ABZHX4VKG0BTQ8NTBJ591W7AK67C33KR76QD27) (some 'SPTXMEW26M54HX1ZXF6VN7QKK4XES1038ERD40T5) (some 'SP2G62YGCCMWS4PAN54ZYT2G9TCJRGBSKQ679M96Q) (some 'SP2EBZVFF99Q97GJXGTRT3Y0M7N6G7XJAKMNVGFK) (some 'SP298TX7MBC848DGTXYP0594AGSHJAKBFZE3VH1E9) (some 'SP2A7DWZMPQAQC0W941VA8RYJNX56A2WJ0GP1RS3E))"
+            cost: 100000
+      epoch: "4.0"
