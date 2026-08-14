@@ -4,47 +4,11 @@ name: USDCx Pyth Lazer cutover v2 - Lazer redeploy set (fresh deployer)
 network: mainnet
 stacks-node: "https://api.hiro.so"
 bitcoin-node: "http://blockstack:blockstacksystem@bitcoin.blockstack.com:8332"
-#
-# HARD PRECONDITION: do NOT apply before burn height 960230.
-# Epoch40 activates at burn 960230. At the time this plan was written the chain was at burn
-# 960106, still inside Epoch34 [943333, 960230). Applying earlier fails outright rather than
-# costing money, but re-verify the active epoch against the burn tip before applying.
-#
-# Anchor: SP3M2BYF7RGF8WKW5FVDNJ6WR8D7AR9BHDXAKPXZE. state-v1, math-v1, constants-v1,
-# constants-v2, staking-reward-v1, trait-flash-loan-v1 and meta-governance-v1 all stay live at the
-# anchor and are referenced fully-qualified. meta-governance-v1 is deliberately REUSED: its
-# 4-member set is untouched by this deploy.
-#
-# Publish order is derived from the hard-dependency graph, not copied from staging. A
-# (contract-call? .peer ...) needs the peer to exist at publish time; an (as-contract .peer) is
-# only a principal literal and does not. That is why withdrawal-caps-v1 publishes in batch 0
-# ahead of the borrower/liquidator/liquidity-provider trio it names via as-contract.
-# Batch 0 holds every contract with no intra-set hard dependency except staking-v1, which needs
-# linear-kinked-ir-v1 and is ordered after it. That is the only same-batch dependency and it is
-# safe: Stacks enforces per-account nonce ordering, so the later publish cannot be applied before
-# the earlier one even inside a single block. Staging's cutover relied on the same property.
-# Every batch-1 contract depends only on batch-0 contracts, so batch 1 has no internal constraint.
-#
-# `cost` is the tx fee in uSTX and is what `-d` uses, so it is deliberately generous: an
-# under-funded fee can strand the deploy mid-batch. Two reference points, both proven on mainnet:
-# the committed Lazer plan paid 100000 for contracts up to ~16KB and 200000 at ~20KB, and
-# staging's live-validated cutover published a 53KB governance-v1 at a flat 100000. Fees here are
-# therefore not strictly size-driven; the figures below apply max(100000, ceil(KB/10)*100000) as
-# headroom over the proven-flat rate. Publishes total 2100000 and the batch-2 calls 250000, so
-# 2350000 uSTX (2.35 STX) versus 1150000 (1.15 STX) at the proven-flat rate. Fund ~3 STX.
-#
-# No USDCx is needed. liquidity-provider-v1.initialize only flips its gate flag: live LP supply is
-# u4997790831428, so dust-burned is false and it takes the no-deposit branch.
-#
-# staking-v1.initialize is deliberately NOT in this plan. It is deployer-gated and stakes the
-# dead-shares floor, so it needs staking authorized plus the deployer holding MINIMUM_INITIAL_STAKE
-# of the LP token; run it after the authorize wave. Total staked is u0 today, so deferring costs
-# nothing.
+# Applied on mainnet 2026-07-30 - all 13 transactions succeeded.
 plan:
   batches:
     - id: 0
       transactions:
-        # 8.1KB - no intra-set hard dependency
         - contract-publish:
             contract-name: linear-kinked-ir-v1
             expected-sender: SPSX722NK9V3A8D3CVQT0CDY4EBQ3E9FSDDE61FT
@@ -52,7 +16,6 @@ plan:
             path: contracts/modules/linear-kinked-ir-v1.clar
             anchor-block-only: true
             clarity-version: 3
-        # 15.5KB - hard-needs linear-kinked-ir-v1, so it follows it in this batch
         - contract-publish:
             contract-name: staking-v1
             expected-sender: SPSX722NK9V3A8D3CVQT0CDY4EBQ3E9FSDDE61FT
@@ -60,7 +23,6 @@ plan:
             path: contracts/staking-v1.clar
             anchor-block-only: true
             clarity-version: 3
-        # 3.5KB
         - contract-publish:
             contract-name: flash-loan-v1
             expected-sender: SPSX722NK9V3A8D3CVQT0CDY4EBQ3E9FSDDE61FT
@@ -68,7 +30,6 @@ plan:
             path: contracts/flash-loan-v1.clar
             anchor-block-only: true
             clarity-version: 3
-        # 10.3KB
         - contract-publish:
             contract-name: pyth-adapter-v1
             expected-sender: SPSX722NK9V3A8D3CVQT0CDY4EBQ3E9FSDDE61FT
@@ -76,7 +37,6 @@ plan:
             path: contracts/modules/pyth-adapter-v1.clar
             anchor-block-only: true
             clarity-version: 3
-        # 11.5KB - names borrower/liquidator/liquidity-provider only via as-contract
         - contract-publish:
             contract-name: withdrawal-caps-v1
             expected-sender: SPSX722NK9V3A8D3CVQT0CDY4EBQ3E9FSDDE61FT
@@ -87,7 +47,6 @@ plan:
       epoch: "4.0"
     - id: 1
       transactions:
-        # 17.8KB
         - contract-publish:
             contract-name: borrower-v1
             expected-sender: SPSX722NK9V3A8D3CVQT0CDY4EBQ3E9FSDDE61FT
@@ -95,7 +54,6 @@ plan:
             path: contracts/borrower-v1.clar
             anchor-block-only: true
             clarity-version: 3
-        # 53.6KB
         - contract-publish:
             contract-name: governance-v1
             expected-sender: SPSX722NK9V3A8D3CVQT0CDY4EBQ3E9FSDDE61FT
@@ -103,7 +61,6 @@ plan:
             path: contracts/governance-v1.clar
             anchor-block-only: true
             clarity-version: 3
-        # 29.3KB
         - contract-publish:
             contract-name: liquidator-v1
             expected-sender: SPSX722NK9V3A8D3CVQT0CDY4EBQ3E9FSDDE61FT
@@ -111,7 +68,6 @@ plan:
             path: contracts/liquidator-v1.clar
             anchor-block-only: true
             clarity-version: 3
-        # 4.8KB
         - contract-publish:
             contract-name: liquidity-provider-v1
             expected-sender: SPSX722NK9V3A8D3CVQT0CDY4EBQ3E9FSDDE61FT
@@ -119,7 +75,6 @@ plan:
             path: contracts/liquidity-provider-v1.clar
             anchor-block-only: true
             clarity-version: 3
-        # 7.5KB
         - contract-publish:
             contract-name: utility
             expected-sender: SPSX722NK9V3A8D3CVQT0CDY4EBQ3E9FSDDE61FT
@@ -130,15 +85,12 @@ plan:
       epoch: "4.0"
     - id: 2
       transactions:
-        # Flips the flag gating deposit/withdraw. Takes the no-deposit branch, see the note above.
         - contract-call:
             contract-id: SPSX722NK9V3A8D3CVQT0CDY4EBQ3E9FSDDE61FT.liquidity-provider-v1
             expected-sender: SPSX722NK9V3A8D3CVQT0CDY4EBQ3E9FSDDE61FT
             method: initialize
             parameters: []
             cost: 50000
-        # Lazer numeric feed ids and confidence ratios, read live off the chain: USDC/USD u7 at
-        # u100 and BTC/USD u1 at u500, freshness delta u300 (live value; min u15, max u7200).
         - contract-call:
             contract-id: SPSX722NK9V3A8D3CVQT0CDY4EBQ3E9FSDDE61FT.pyth-adapter-v1
             expected-sender: SPSX722NK9V3A8D3CVQT0CDY4EBQ3E9FSDDE61FT
@@ -147,8 +99,6 @@ plan:
               - "(list { token: 'SP120SBRBQJ00MCWS7TM5R8WJNTTKD5K0HFRC2CNE.usdcx, feed-id: u7, max-confidence-ratio: u100 } { token: 'SM3VDXK3WZZSA84XXFKAFAF15NNZX32CTSG82JFQ4.sbtc-token, feed-id: u1, max-confidence-ratio: u500 })"
               - "u300"
             cost: 100000
-        # All SIX live guardians. The signature is (list 6 (optional principal)) in this deploy
-        # source; master's (list 5 ...) would fail here, after every publish above has been paid for.
         - contract-call:
             contract-id: SPSX722NK9V3A8D3CVQT0CDY4EBQ3E9FSDDE61FT.governance-v1
             expected-sender: SPSX722NK9V3A8D3CVQT0CDY4EBQ3E9FSDDE61FT
