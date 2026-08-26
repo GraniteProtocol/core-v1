@@ -9,9 +9,12 @@ const WIDE_STALENESS = 100_000_000_000_000n; // oracle staleness floor; adapter 
 const DEPLOYER = "ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM";
 
 // Lazer numeric feed ids for the mock tokens (arbitrary but stable; must match the seeded map + blob).
-const FEED_IDS: Record<string, number> = { btc: 1, eth: 2, usdc: 7 };
+// stx is the one real id here: 45 is Crypto.STX/USD. Do NOT use 1404, which is
+// Equity.US.STX/USD under the same ticker.
+const FEED_IDS: Record<string, number> = { btc: 1, eth: 2, usdc: 7, stx: 45 };
 
 export const get_token_feed_id = (token: string): number => {
+  if (token.includes("stx")) return FEED_IDS.stx;
   if (token.includes("btc")) return FEED_IDS.btc;
   if (token.includes("eth")) return FEED_IDS.eth;
   if (token.includes("usdc")) return FEED_IDS.usdc;
@@ -19,6 +22,7 @@ export const get_token_feed_id = (token: string): number => {
 };
 
 export const get_token_min_confidence_ratio = (token: string): number => {
+  if (token.includes("stx")) return 500; // 5%
   if (token.includes("btc")) return 500; // 5%
   if (token.includes("eth")) return 500; // 5%
   if (token.includes("usdc")) return 100; // 1%
