@@ -475,9 +475,26 @@
     (if (< collateral-value (+ current-debt collateral-reward)) true false)
 ))
 
-(define-private (get-user-total-collateral-value (user principal) (position-collaterals (list 10 principal)) (collateral-prices (list 10 uint)))
+;; What a liquidation could still seize from this collateral at a full-value repay.
+;; Zero for a residue the seizure math can never extract: the conversion floors to
+;; zero token units and state-v1.transfer-to rejects a zero-amount transfer.
+(define-private (max-seizable-for-collateral (collateral principal) (user principal) (collateral-price uint))
+  (let (
+      (collateral-info (contract-call? .state-v1 get-collateral collateral))
+      (deposited (default-to u0 (get amount (contract-call? .state-v1 get-user-collateral user collateral))))
+      (collateral-decimals (default-to u8 (get decimals collateral-info)))
+      (liquidation-premium (default-to u0 (get liquidation-premium collateral-info)))
+      (collateral-value (get-collateral-value collateral user collateral-price))
+      (repay-without-discount (contract-call? .math-v1 divide-round-up (* collateral-value SCALING-FACTOR) (+ liquidation-premium SCALING-FACTOR)))
+    )
+    (match (calc-collateral-to-give repay-without-discount liquidation-premium collateral-price collateral-decimals deposited)
+      seizable seizable
+      e u0)
+))
+
+(define-private (total-max-seizable (user principal) (position-collaterals (list 10 principal)) (collateral-prices (list 10 uint)))
   (fold +
-    (map get-collateral-value position-collaterals (
+    (map max-seizable-for-collateral position-collaterals (
         list user user user user user user user user user user
     ) collateral-prices) u0
 ))
@@ -497,12 +514,11 @@
         (position (unwrap! (get user-position repay-params) ERR-NO-POSITION))
         (total-borrowed-amount (get total-borrowed-amount repay-params))
         (user-collaterals (get collaterals position))
-        (total-collateral-value (get-user-total-collateral-value user user-collaterals collateral-prices))
         (debt-params (contract-call? .state-v1 get-debt-params))
         (remaining-debt (contract-call? .math-v1 convert-to-debt-assets debt-params (get debt-shares position) true))
       )
-      
-      (if (or (> total-collateral-value u0) (is-eq remaining-debt u0))
+
+      (if (or (> (total-max-seizable user user-collaterals collateral-prices) u0) (is-eq remaining-debt u0))
         SUCCESS
         (let (
             (user-borrowed-amount (get borrowed-amount position))
