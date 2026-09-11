@@ -8,9 +8,7 @@ const FAR_FUTURE = 100_000_000_000n; // signer expiry (seconds), effectively nev
 const WIDE_STALENESS = 100_000_000_000_000n; // oracle staleness floor; adapter time-delta is the real check
 const DEPLOYER = "ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM";
 
-// Lazer numeric feed ids for the mock tokens (arbitrary but stable; must match the seeded map + blob).
-// stx is the one real id here: 45 is Crypto.STX/USD. Do NOT use 1404, which is
-// Equity.US.STX/USD under the same ticker.
+// Lazer numeric feed ids for the mock tokens (must match the seeded map + blob).
 const FEED_IDS: Record<string, number> = { btc: 1, eth: 2, usdc: 7, stx: 45 };
 
 export const get_token_feed_id = (token: string): number => {
