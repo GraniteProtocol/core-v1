@@ -159,6 +159,11 @@ plan:
       path: contracts/stx-claim.clar
       clarity-version: 3
     - transaction-type: emulated-contract-publish
+      contract-name: stx-sip010
+      emulated-sender: ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM
+      path: contracts/stx-sip010.clar
+      clarity-version: 3
+    - transaction-type: emulated-contract-publish
       contract-name: test-gifter
       emulated-sender: ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM
       path: contracts/test/gifter.clar
