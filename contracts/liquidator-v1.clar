@@ -8,6 +8,7 @@
 (define-constant MARKET-TOKEN-DECIMALS (contract-call? .constants-v2 get-market-token-decimals))
 (define-constant SCALING-FACTOR (contract-call? .constants-v2 get-scaling-factor))
 (define-constant PRICE-SCALING-FACTOR (contract-call? .constants-v2 get-price-scaling-factor))
+(define-constant DEFAULT-COLLATERAL-DECIMALS u8)
 ;; Must have the same precision as SCALING-FACTOR
 (define-constant MINIMUM_HEALTH_RATIO u100000000)
 ;; Liquidation buffer of 2.00%
@@ -213,14 +214,28 @@
         collateral-price
         liquidator-repay-amount
         collateral-decimals
+    )))
+    (computed-collateral-to-give (get collateral-to-give liquidation-info))
+    (swept-collateral-to-give (try! (sweep-unseizable-remainder
+      computed-collateral-to-give
+      user-balance
+      bad-debt
+      (get repay-amount liquidation-info)
+      (get repay-allowed (get repayment-info liquidation-info))
+      liquidation-premium
+      collateral-price
+      collateral-decimals
     ))))
     (ok {
-      liquidation-info: liquidation-info,
+      liquidation-info: (merge liquidation-info {collateral-to-give: swept-collateral-to-give}),
       current-debt: current-debt,
       user-borrowed-amount: user-borrowed-amount,
       position-data: position-data,
       user-balance: user-balance,
       bad-debt: bad-debt,
+      swept: (if (> swept-collateral-to-give computed-collateral-to-give)
+        (some {computed: computed-collateral-to-give, given: swept-collateral-to-give})
+        none),
       collateral-price: collateral-price
     })
   )
@@ -321,6 +336,7 @@
             liquidator: contract-caller,
             user: user,
             liquidated-collateral-amount: collateral-to-give,
+            swept: (get swept liquidation-res),
             repaid-amount: repay-amount,
             repaid-shares: paid-shares,
             bad-debt: bad-debt,
@@ -418,19 +434,57 @@
     )
 ))
 
-(define-private (get-collateral-value (collateral principal) (user principal) (collateral-price uint))
+(define-private (collateral-amount-value (amount uint) (collateral-price uint) (collateral-decimals uint))
   (contract-call? .math-v1 to-fixed
-    (/
-      (* 
-        (default-to u0 (get amount (contract-call? .state-v1 get-user-collateral user collateral)))
-        collateral-price
-      )
-      PRICE-SCALING-FACTOR
-    ) 
-    (default-to u8 (get decimals (contract-call? .state-v1 get-collateral collateral)))
+    (/ (* amount collateral-price) PRICE-SCALING-FACTOR)
+    collateral-decimals
     MARKET-TOKEN-DECIMALS
   )
 )
+
+(define-private (get-collateral-value (collateral principal) (user principal) (collateral-price uint))
+  (collateral-amount-value
+    (default-to u0 (get amount (contract-call? .state-v1 get-user-collateral user collateral)))
+    collateral-price
+    (default-to DEFAULT-COLLATERAL-DECIMALS (get decimals (contract-call? .state-v1 get-collateral collateral)))
+  )
+)
+
+;; What a full-value repay could seize from `amount` at the current price.
+(define-private (max-seizable-from (amount uint) (liquidation-premium uint) (collateral-price uint) (collateral-decimals uint))
+  (let (
+      (amount-value (collateral-amount-value amount collateral-price collateral-decimals))
+      (repay-without-discount (contract-call? .math-v1 divide-round-up (* amount-value SCALING-FACTOR) (+ liquidation-premium SCALING-FACTOR)))
+    )
+    (calc-collateral-to-give repay-without-discount liquidation-premium collateral-price collateral-decimals amount)
+))
+
+;; Absorb a remainder nothing can seize at the current price, so the balance
+;; reaches zero here instead of wedging later attempts on a zero transfer.
+(define-private (sweep-unseizable-remainder
+    (collateral-to-give uint)
+    (user-balance uint)
+    (bad-debt bool)
+    (repay-amount uint)
+    (repay-allowed uint)
+    (liquidation-premium uint)
+    (collateral-price uint)
+    (collateral-decimals uint)
+  )
+  (let ((remainder (- user-balance collateral-to-give)))
+    (if (not (and bad-debt (> remainder u0)))
+      (ok collateral-to-give)
+      ;; A repay already at the allowed maximum that seized nothing cannot be
+      ;; improved on, so the balance is unreachable whatever the predicate says.
+      (if (and (is-eq repay-amount repay-allowed) (is-eq collateral-to-give u0))
+        (ok user-balance)
+        (if (is-eq (try! (max-seizable-from remainder liquidation-premium collateral-price collateral-decimals)) u0)
+          (ok user-balance)
+          (ok collateral-to-give)
+        )
+      )
+    )
+))
 
 (define-private (iterate-collateral-value-ltv (collateral principal) (user principal) (collateral-price uint))
   (let
