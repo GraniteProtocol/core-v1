@@ -4,11 +4,10 @@
 
 (impl-trait .trait-sip-010.sip-010-trait)
 
-(define-constant ERR-NOT-TOKEN-OWNER (err u4))
-
+;; Movements are native STX, so callers need an STX post-condition; a fungible one naming this
+;; contract can never match.
 (define-public (transfer (amount uint) (sender principal) (recipient principal) (memo (optional (buff 34))))
   (begin
-    (asserts! (is-eq tx-sender sender) ERR-NOT-TOKEN-OWNER)
     (match memo
       m (stx-transfer-memo? amount sender recipient m)
       (stx-transfer? amount sender recipient)

@@ -9,22 +9,32 @@ const WIDE_STALENESS = 100_000_000_000_000n; // oracle staleness floor; adapter 
 const DEPLOYER = "ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM";
 
 // Lazer numeric feed ids for the mock tokens (must match the seeded map + blob).
-const FEED_IDS: Record<string, number> = { btc: 1, eth: 2, usdc: 7, stx: 45 };
+// Keyed on the exact token/contract name - substring matching let "stx-claim" (a real
+// contract in this tree, unrelated to any price feed) silently take STX's feed.
+const FEED_IDS: Record<string, number> = {
+  "mock-btc": 1,
+  "mock-eth": 2,
+  "mock-usdc": 7,
+  "stx-sip010": 45,
+};
 
 export const get_token_feed_id = (token: string): number => {
-  if (token.includes("stx")) return FEED_IDS.stx;
-  if (token.includes("btc")) return FEED_IDS.btc;
-  if (token.includes("eth")) return FEED_IDS.eth;
-  if (token.includes("usdc")) return FEED_IDS.usdc;
-  throw new Error("invalid token feed: " + token);
+  const id = FEED_IDS[token];
+  if (id === undefined) throw new Error("invalid token feed: " + token);
+  return id;
+};
+
+const MIN_CONFIDENCE_RATIOS: Record<string, number> = {
+  "mock-btc": 500, // 5%
+  "mock-eth": 500, // 5%
+  "mock-usdc": 100, // 1%
+  "stx-sip010": 500, // 5%
 };
 
 export const get_token_min_confidence_ratio = (token: string): number => {
-  if (token.includes("stx")) return 500; // 5%
-  if (token.includes("btc")) return 500; // 5%
-  if (token.includes("eth")) return 500; // 5%
-  if (token.includes("usdc")) return 100; // 1%
-  throw new Error("invalid token feed: " + token);
+  const ratio = MIN_CONFIDENCE_RATIOS[token];
+  if (ratio === undefined) throw new Error("invalid token feed: " + token);
+  return ratio;
 };
 
 // Off-chain price registry. In the pull model prices are not stored on-chain; each price-consuming
