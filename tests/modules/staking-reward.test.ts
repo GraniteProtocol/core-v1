@@ -106,6 +106,110 @@ describe("update-reward-params tests", () => {
     );
     expect(init.result).toBeErr(Cl.uint(90000)); // FAILURE code
   });
+
+  it("calling update-reward-params with a slope outside the magnitude bound", () => {
+    const slope2 = Cl.int(-100000000); // -1, inside the bound and ordered below slope-1
+    const utilizationKink = Cl.uint(70000000); // 0.7
+    const baseReward = Cl.uint(50000000); // 0.5%
+
+    let init = simnet.callPublicFn(
+      "staking-reward-v1",
+      "update-reward-params",
+      [Cl.int(100000000000001), slope2, utilizationKink, baseReward],
+      deployer
+    );
+    expect(
+      init.result,
+      "slope-1 above the magnitude bound must be rejected"
+    ).toBeErr(Cl.uint(90005));
+
+    init = simnet.callPublicFn(
+      "staking-reward-v1",
+      "update-reward-params",
+      [slope2, Cl.int(-100000000000002), utilizationKink, baseReward],
+      deployer
+    );
+    expect(
+      init.result,
+      "slope-2 below the magnitude bound must be rejected"
+    ).toBeErr(Cl.uint(90005));
+  });
+
+  it("calling update-reward-params with a curve that exceeds 100% at the kink", () => {
+    const slope1 = Cl.int(110000000); // 1.1, above the 100% mark
+    const slope2 = Cl.int(-100000000); // -1
+    const utilizationKink = Cl.uint(70000000); // 0.7
+    const baseReward = Cl.uint(50000000); // 0.5%
+
+    const constructorArgs = [slope1, slope2, utilizationKink, baseReward];
+    const init = simnet.callPublicFn(
+      "staking-reward-v1",
+      "update-reward-params",
+      constructorArgs,
+      deployer
+    );
+    expect(
+      init.result,
+      "a curve reaching 127% at the kink must be rejected rather than clamped"
+    ).toBeErr(Cl.uint(90008));
+  });
+
+  it("calling update-reward-params with a curve that exceeds 100% only at full stake", () => {
+    const slope1 = Cl.int(100000000); // 1.0
+    const slope2 = Cl.int(40000000); // 0.4, ordered below slope-1
+    const utilizationKink = Cl.uint(10000000); // 0.1
+    const baseReward = Cl.uint(55000000); // 0.55
+
+    const constructorArgs = [slope1, slope2, utilizationKink, baseReward];
+    const init = simnet.callPublicFn(
+      "staking-reward-v1",
+      "update-reward-params",
+      constructorArgs,
+      deployer
+    );
+    expect(
+      init.result,
+      "a curve reaching 101% at one-8 must be rejected even though it is only 65% at the kink"
+    ).toBeErr(Cl.uint(90008));
+  });
+
+  it("calling update-reward-params with a curve that reaches exactly 100% at the kink", () => {
+    const slope1 = Cl.int(100000000); // 1.0
+    const slope2 = Cl.int(-100000000); // -1
+    const utilizationKink = Cl.uint(70000000); // 0.7
+    const baseReward = Cl.uint(30000000); // 0.3
+
+    const constructorArgs = [slope1, slope2, utilizationKink, baseReward];
+    const init = simnet.callPublicFn(
+      "staking-reward-v1",
+      "update-reward-params",
+      constructorArgs,
+      deployer
+    );
+    expect(
+      init.result,
+      "a curve reaching exactly 100% at the kink is safe and must be accepted, not rejected"
+    ).toBeOk(Cl.bool(true));
+  });
+
+  it("calling update-reward-params with a kink above half and a curve that exceeds 100% only at full stake", () => {
+    const slope1 = Cl.int(105000000); // 1.05, 99.5% at the kink
+    const slope2 = Cl.int(50000000); // 0.5, ordered below slope-1
+    const utilizationKink = Cl.uint(90000000); // 0.9, above half so the pre-kink carry dominates
+    const baseReward = Cl.uint(5000000); // 0.05
+
+    const constructorArgs = [slope1, slope2, utilizationKink, baseReward];
+    const init = simnet.callPublicFn(
+      "staking-reward-v1",
+      "update-reward-params",
+      constructorArgs,
+      deployer
+    );
+    expect(
+      init.result,
+      "a curve reaching 104.5% at one-8 above a kink of 0.9 must be rejected"
+    ).toBeErr(Cl.uint(90008));
+  });
 });
 
 describe("staking reward module tests", () => {

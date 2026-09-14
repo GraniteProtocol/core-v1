@@ -13,10 +13,13 @@
 (define-constant ERR-INVALID-SLOPES (err u90005))
 (define-constant ERR-LP-TOKEN-SUPPLY (err u90006))
 (define-constant ERR-INVALID-BASE-REWARD (err u90007))
+(define-constant ERR-INVALID-REWARD-PERCENTAGE (err u90008))
 
 
 ;; CONSTANTS
 (define-constant one-8 (contract-call? .constants-v1 get-scaling-factor))
+;; Keeps every product in the reward curve check ~16 orders below i128 max so it cannot trap.
+(define-constant MAX-REWARD-SLOPE 100000000000000)
 
 ;; DATA-VARS 
 (define-constant contract-deployer contract-caller)
@@ -45,6 +48,9 @@
     (asserts! (< staked-kink-val one-8) ERR-INVALID-STAKED-KINK)
     (asserts! (< base-reward-val one-8) ERR-INVALID-BASE-REWARD)
     (asserts! (> slope-1-val slope-2-val) ERR-INVALID-SLOPES)
+    (asserts! (and (>= slope-1-val (- 0 MAX-REWARD-SLOPE)) (<= slope-1-val MAX-REWARD-SLOPE)) ERR-INVALID-SLOPES)
+    (asserts! (and (>= slope-2-val (- 0 MAX-REWARD-SLOPE)) (<= slope-2-val MAX-REWARD-SLOPE)) ERR-INVALID-SLOPES)
+    (asserts! (<= (max-reward-percentage slope-1-val slope-2-val staked-kink-val base-reward-val) (to-int one-8)) ERR-INVALID-REWARD-PERCENTAGE)
     (print {
         old-slope-1: (var-get slope-1),
         new-slope-1: slope-1-val,
@@ -112,6 +118,27 @@
     ) 
     (to-int (var-get base-reward))
 ))
+
+;; The above-kink branch is affine; below the kink a negative slope-1 is at most base-reward, already asserted below one-8.
+(define-private (max-reward-percentage (slope-1-val int) (slope-2-val int) (staked-kink-val uint) (base-reward-val uint))
+  (let (
+    (at-kink (+ (/ (* slope-1-val (to-int staked-kink-val)) (to-int one-8)) (to-int base-reward-val)))
+    (at-full
+      (+
+        (/
+          (+
+            (* slope-2-val (to-int (- one-8 staked-kink-val)))
+            (* slope-1-val (to-int staked-kink-val))
+          )
+          (to-int one-8)
+        )
+        (to-int base-reward-val)
+      )
+    )
+  )
+    (if (> at-kink at-full) at-kink at-full)
+  )
+)
 
 (define-private (calculate-reward-percentage (staked-percentage uint))
   (if (is-eq staked-percentage u0) 
