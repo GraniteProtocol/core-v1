@@ -108,9 +108,14 @@ const positionOf = (who: any) => {
   };
 };
 
-// Names the error code on failure, so a red test says which guard rejected the call.
-const describeResult = (result: any) =>
-  result.type === ClarityType.ResponseOk ? "ok" : `err u${result.value.value}`;
+// Names the error on failure, so a red test says which guard rejected the call.
+const describeResult = (result: any) => {
+  if (result.type === ClarityType.ResponseOk) return "ok";
+  const payload = result.value;
+  return payload?.type === ClarityType.UInt
+    ? `err u${payload.value}`
+    : `err ${Cl.prettyPrint(payload)}`;
+};
 
 const marketBalanceOf = (who: any) => {
   const balance: any = simnet.callReadOnlyFn("mock-usdc", "get-balance", [who], deployer).result;
@@ -217,42 +222,52 @@ describe("the global principal while a position is still open", () => {
     deposit(100_000_000_000, lp);
   });
 
-  it("matches the sole position's own principal after a partial repayment", () => {
-    update_supported_collateral("mock-btc", 70_000_000, 80_000_000, 10_000_000, 8, deployer);
-    mint_token("mock-btc", 100_000_000_000, borrower);
-    add_collateral("mock-btc", 10_000_000_000, deployer, borrower);
-    borrow(1_000_000_000, borrower);
-    simnet.mineEmptyBlocks(210);
-
-    mint_token("mock-usdc", 1_000_000_000, borrower);
-    const repayment = simnet.callPublicFn(
-      "borrower-v1",
-      "repay",
-      [Cl.uint(1_000), Cl.none()],
-      borrower,
-    );
-    expect(repayment.result.type, "the partial repayment must land").toBe(ClarityType.ResponseOk);
-
-    const position = positionOf(Cl.principal(borrower));
-    expect(position.shares, "the position must still be open for this to say anything").toBeGreaterThan(0n);
-    expect(
-      totalBorrowedAmount(Cl.principal(borrower)),
-      "the global principal must equal the only open position's stored principal",
-    ).toBe(position.borrowed);
-  });
-
+  // A position can only carry stored principal above its share-derived debt when some other
+  // position moves the global counters, which one borrower cannot do to itself: the ceiling
+  // that minted its shares keeps the derived debt at or above what it stored. Writing the
+  // buckets down through governance puts a single position in that state directly.
   it("matches the sole position's own principal after a partial liquidation", async () => {
     update_supported_collateral("mock-btc", 90_000_000, 95_000_000, 5_000_000, 8, deployer);
     mint_token("mock-btc", 100_000_000_000, borrower);
     add_collateral("mock-btc", 20_000_000_000, deployer, borrower);
     borrow(18_000_000_000, borrower);
-    simnet.mineEmptyBlocks(500);
+
+    const stored = positionOf(Cl.principal(borrower)).borrowed;
+    const lpParams: any = simnet.callReadOnlyFn("state-v1", "get-lp-params", [], deployer).result;
+    const accrueParams: any = simnet.callReadOnlyFn(
+      "state-v1",
+      "get-accrue-interest-params",
+      [],
+      deployer,
+    ).result;
+    const shrink = simnet.callPublicFn(
+      "state-v1",
+      "set-accrued-interest",
+      [
+        Cl.tuple({
+          "last-accrued-block-time": Cl.uint(
+            accrueParams.value.value["last-accrued-block-time"].value,
+          ),
+          "lp-open-interest": Cl.uint(stored / 2n),
+          "staked-open-interest": Cl.uint(0),
+          "protocol-open-interest": Cl.uint(0),
+          "total-assets": Cl.uint(lpParams.value["total-assets"].value),
+        }),
+      ],
+      deployer,
+    );
+    expect(describeResult(shrink.result), "the open interest must be written down").toBe("ok");
+    expect(
+      debtParams().openInterest,
+      "the position must now owe less than the principal it has stored",
+    ).toBeLessThan(stored);
+
+    simnet.mineEmptyBlocks(6); // liquidation cooldown
     await set_price("mock-usdc", 1n, deployer);
     await set_price("mock-btc", 1n, deployer);
-    update_supported_collateral("mock-btc", 40_000_000, 50_000_000, 2_000_000, 8, deployer);
+    update_supported_collateral("mock-btc", 400_000, 800_000, 2_000_000, 8, deployer);
 
     mint_token("mock-usdc", 100_000_000_000, lp);
-    simnet.mineEmptyBlocks(6); // liquidation cooldown
     const liquidation = simnet.callPublicFn(
       "liquidator-v1",
       "liquidate-collateral",
@@ -260,14 +275,12 @@ describe("the global principal while a position is still open", () => {
         Cl.buffer(build_price_update()),
         contractPrincipalCV(deployer, "mock-btc"),
         Cl.principal(borrower),
-        Cl.uint(1_000_000_000),
+        Cl.uint(1_000_000),
         Cl.uint(1),
       ],
       lp,
     );
-    expect(liquidation.result.type, "the partial liquidation must land").toBe(
-      ClarityType.ResponseOk,
-    );
+    expect(describeResult(liquidation.result), "the partial liquidation must land").toBe("ok");
 
     const position = positionOf(Cl.principal(borrower));
     expect(position.shares, "the position must still be open for this to say anything").toBeGreaterThan(0n);
@@ -408,7 +421,7 @@ describe("a repayment sequence that closes every position", () => {
     ).toBe(0n);
   });
 
-  it("cannot then borrow market tokens against no debt", () => {
+  it("settles the follow-on borrow as ordinary debt the position still carries", () => {
     const before = marketBalanceOf(proxyA);
     const attack = simnet.callPublicFn(
       "poc-proxy-a",
