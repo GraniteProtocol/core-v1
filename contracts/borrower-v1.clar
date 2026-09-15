@@ -15,6 +15,7 @@
 (define-constant ERR-MISSING-MARKET-PRICE (err u20008))
 (define-constant ERR-NO-DEBT (err u20009))
 (define-constant ERR-NOT-TX-SENDER (err u20010))
+(define-constant ERR-ZERO-DEBT-SHARES (err u20011))
 
 ;; CONSTANTS
 (define-constant SUCCESS (ok true))
@@ -50,6 +51,8 @@
         (new-current-debt-adjusted (contract-call? .math-v1 get-market-asset-value market-asset-price new-current-debt))
       )
       (asserts! (<= new-current-debt-adjusted total-max-ltv) ERR-MAX-LTV)
+      ;; Debt the share accounting cannot represent is debt no LTV check or repay can see.
+      (asserts! (> new-debt-shares u0) ERR-ZERO-DEBT-SHARES)
       (try! (contract-call? .state-v1 update-borrow-state {
         user: user,
         user-debt-shares: total-user-debt-shares,
@@ -103,8 +106,9 @@
         (effective-staked-lp-tokens (if is-wiped u0 staked-lp-tokens))
         (total-user-debt-shares (unwrap! (contract-call? .math-v1 sub (get debt-shares position) shares) ERR-NOT-ENOUGH-SHARES))
         (updated-borrowed-amount (contract-call? .math-v1 safe-sub effective-borrowed-amount principal-part))
-        (updated-total-borrowed-amount (contract-call? .math-v1 safe-sub total-borrowed-amount
-          (if (is-eq total-user-debt-shares u0) borrowed-amount principal-part)))
+        ;; The global principal must move by what the user's stored principal actually moved.
+        (user-principal-delta (contract-call? .math-v1 safe-sub borrowed-amount updated-borrowed-amount))
+        (updated-total-borrowed-amount (contract-call? .math-v1 safe-sub total-borrowed-amount user-principal-delta))
       )
       (asserts! (<= shares (get debt-shares position)) ERR-NOT-ENOUGH-SHARES)
       (try! (contract-call? .withdrawal-caps-v1 repay repay-amount))
