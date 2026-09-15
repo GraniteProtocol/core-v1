@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { Cl, ClarityType, ClarityVersion, contractPrincipalCV } from "@stacks/transactions";
 import {
   add_collateral,
+  borrow,
   deposit,
   initialize_ir,
   initialize_lp,
@@ -12,7 +13,13 @@ import {
   set_asset_cap,
   update_supported_collateral,
 } from "./utils";
-import { build_price_update, init_pyth, set_initial_price, set_pyth_time_delta } from "./pyth";
+import {
+  build_price_update,
+  init_pyth,
+  set_initial_price,
+  set_price,
+  set_pyth_time_delta,
+} from "./pyth";
 
 const accounts = simnet.getAccounts();
 const deployer = accounts.get("deployer")!;
@@ -40,15 +47,24 @@ const PROXY_A = `
 (define-public (seed-borrow (update (buff 8192)))
   (as-contract (contract-call? .borrower-v1 borrow update u53277 none)))
 
-;; The repayment sequence that drove the counters apart, closing both positions.
-(define-public (close-both (update (buff 8192)))
+;; The repayment sequence that drove the counters apart, stopping once A is closed
+;; and B is still carrying debt.
+(define-public (close-a (update (buff 8192)))
   (begin
     (try! (contract-call? .poc-proxy-b borrow update u8454268468))
     (try! (contract-call? .poc-proxy-b send-market .poc-proxy-a u8454268468))
     (try! (as-contract (contract-call? .borrower-v1 repay u26640 none)))
     (try! (as-contract (contract-call? .borrower-v1 repay u1 (some .poc-proxy-b))))
     (try! (as-contract (contract-call? .borrower-v1 repay u100000000000 none)))
-    (try! (as-contract (contract-call? .borrower-v1 repay u100000000000 (some .poc-proxy-b))))
+    (ok true)))
+
+(define-public (close-b)
+  (as-contract (contract-call? .borrower-v1 repay u100000000000 (some .poc-proxy-b))))
+
+(define-public (close-both (update (buff 8192)))
+  (begin
+    (try! (close-a update))
+    (try! (close-b))
     (ok true)))
 
 (define-public (attack (update (buff 8192)))
@@ -69,11 +85,11 @@ const debtParams = () => {
   };
 };
 
-const totalBorrowedAmount = () => {
+const totalBorrowedAmount = (who: any = proxyA) => {
   const result: any = simnet.callReadOnlyFn(
     "state-v1",
     "get-borrow-repay-params",
-    [proxyA],
+    [who],
     deployer,
   ).result;
   return result.value["total-borrowed-amount"].value as bigint;
@@ -91,6 +107,10 @@ const positionOf = (who: any) => {
     borrowed: position.value.value["borrowed-amount"].value as bigint,
   };
 };
+
+// Names the error code on failure, so a red test says which guard rejected the call.
+const describeResult = (result: any) =>
+  result.type === ClarityType.ResponseOk ? "ok" : `err u${result.value.value}`;
 
 const marketBalanceOf = (who: any) => {
   const balance: any = simnet.callReadOnlyFn("mock-usdc", "get-balance", [who], deployer).result;
@@ -164,6 +184,97 @@ describe("a borrow that would mint no debt shares", () => {
       marketBalanceOf(Cl.principal(borrower)) - before,
       "the refused borrow must not move market tokens",
     ).toBe(0n);
+  });
+
+  it("is refused for a zero amount against an ordinary market", () => {
+    // A zero borrow mints no shares, so the guard now rejects what used to be a no-op.
+    const result = simnet.callPublicFn(
+      "borrower-v1",
+      "borrow",
+      [Cl.buffer(build_price_update()), Cl.uint(0), Cl.none()],
+      borrower,
+    );
+    expect(
+      describeResult(result.result),
+      "borrowing nothing must be refused rather than settling as a no-op",
+    ).toBe("err u20011");
+  });
+});
+
+describe("the global principal while a position is still open", () => {
+  beforeEach(async () => {
+    init_pyth(deployer);
+    set_pyth_time_delta(7200, deployer);
+    set_allowed_contracts(deployer);
+    set_asset_cap(deployer, 10_000_000_000_000n);
+    initialize_ir(deployer);
+    initialize_staking_reward(deployer);
+    initialize_lp(deployer);
+    await set_initial_price("mock-usdc", 1n, deployer);
+    await set_initial_price("mock-btc", 1n, deployer);
+
+    mint_token("mock-usdc", 100_000_000_000, lp);
+    deposit(100_000_000_000, lp);
+  });
+
+  it("matches the sole position's own principal after a partial repayment", () => {
+    update_supported_collateral("mock-btc", 70_000_000, 80_000_000, 10_000_000, 8, deployer);
+    mint_token("mock-btc", 100_000_000_000, borrower);
+    add_collateral("mock-btc", 10_000_000_000, deployer, borrower);
+    borrow(1_000_000_000, borrower);
+    simnet.mineEmptyBlocks(210);
+
+    mint_token("mock-usdc", 1_000_000_000, borrower);
+    const repayment = simnet.callPublicFn(
+      "borrower-v1",
+      "repay",
+      [Cl.uint(1_000), Cl.none()],
+      borrower,
+    );
+    expect(repayment.result.type, "the partial repayment must land").toBe(ClarityType.ResponseOk);
+
+    const position = positionOf(Cl.principal(borrower));
+    expect(position.shares, "the position must still be open for this to say anything").toBeGreaterThan(0n);
+    expect(
+      totalBorrowedAmount(Cl.principal(borrower)),
+      "the global principal must equal the only open position's stored principal",
+    ).toBe(position.borrowed);
+  });
+
+  it("matches the sole position's own principal after a partial liquidation", async () => {
+    update_supported_collateral("mock-btc", 90_000_000, 95_000_000, 5_000_000, 8, deployer);
+    mint_token("mock-btc", 100_000_000_000, borrower);
+    add_collateral("mock-btc", 20_000_000_000, deployer, borrower);
+    borrow(18_000_000_000, borrower);
+    simnet.mineEmptyBlocks(500);
+    await set_price("mock-usdc", 1n, deployer);
+    await set_price("mock-btc", 1n, deployer);
+    update_supported_collateral("mock-btc", 40_000_000, 50_000_000, 2_000_000, 8, deployer);
+
+    mint_token("mock-usdc", 100_000_000_000, lp);
+    simnet.mineEmptyBlocks(6); // liquidation cooldown
+    const liquidation = simnet.callPublicFn(
+      "liquidator-v1",
+      "liquidate-collateral",
+      [
+        Cl.buffer(build_price_update()),
+        contractPrincipalCV(deployer, "mock-btc"),
+        Cl.principal(borrower),
+        Cl.uint(1_000_000_000),
+        Cl.uint(1),
+      ],
+      lp,
+    );
+    expect(liquidation.result.type, "the partial liquidation must land").toBe(
+      ClarityType.ResponseOk,
+    );
+
+    const position = positionOf(Cl.principal(borrower));
+    expect(position.shares, "the position must still be open for this to say anything").toBeGreaterThan(0n);
+    expect(
+      totalBorrowedAmount(Cl.principal(borrower)),
+      "the global principal must equal the only open position's stored principal",
+    ).toBe(position.borrowed);
   });
 });
 
@@ -247,6 +358,35 @@ describe("a repayment sequence that closes every position", () => {
     simnet.mineEmptyBlocks(210);
   });
 
+  it("keeps the position left open counted while the other one closes", () => {
+    const closed = simnet.callPublicFn(
+      "poc-proxy-a",
+      "close-a",
+      [Cl.buffer(build_price_update(600n))],
+      attacker,
+    );
+    expect(closed.result.type, "closing the first position must land").toBe(
+      ClarityType.ResponseOk,
+    );
+
+    const a = positionOf(proxyA);
+    const b = positionOf(proxyB);
+    expect(a.shares, "the first position must be closed").toBe(0n);
+    expect(b.shares, "the second position must still be open").toBeGreaterThan(0n);
+    expect(
+      totalBorrowedAmount(),
+      "the global principal must equal the principal of the one position still open",
+    ).toBe(b.borrowed);
+
+    // Debt that survives a neighbour closing must still be repayable.
+    const repayment = simnet.callPublicFn("poc-proxy-a", "close-b", [], attacker);
+    expect(
+      repayment.result.type,
+      "the surviving position's debt must still be repayable",
+    ).toBe(ClarityType.ResponseOk);
+    expect(positionOf(proxyB).shares, "repaying it in full must close it").toBe(0n);
+  });
+
   it("leaves no global principal or open interest behind", () => {
     const closed = simnet.callPublicFn(
       "poc-proxy-a",
@@ -277,13 +417,15 @@ describe("a repayment sequence that closes every position", () => {
       attacker,
     );
     expect(
-      attack.result.type,
+      describeResult(attack.result),
       "the sequence must settle as an ordinary borrow rather than reaching a zero-share state",
-    ).toBe(ClarityType.ResponseOk);
+    ).toBe("ok");
 
     const gained = marketBalanceOf(proxyA) - before;
     const position = positionOf(proxyA);
     expect(gained, "the sequence must still pay the borrow out").toBeGreaterThan(0n);
+    // Shares and market units are only comparable here because the sequence leaves open
+    // interest at zero, so the borrow mints one share per unit. Keep that true if you retune it.
     expect(
       position.shares,
       "every market token paid out must be matched by debt shares the position carries",
