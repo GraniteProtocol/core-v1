@@ -283,10 +283,10 @@
         (staked-lp-tokens (contract-call? .math-v1 convert-to-shares asset-params staked-part false))
         (is-wiped (contract-call? .staking-v1 is-staking-wiped-out))
         (effective-staked-lp-tokens (if is-wiped u0 staked-lp-tokens))
-        (remaining-user-debt-shares (contract-call? .math-v1 safe-sub (get debt-shares position-for-block-check) paid-shares))
         (updated-borrowed-amount (contract-call? .math-v1 safe-sub effective-borrowed-amount principal-part))
-        (updated-total-borrowed-amount (contract-call? .math-v1 safe-sub total-borrowed-amount
-          (if (is-eq remaining-user-debt-shares u0) user-borrowed-amount principal-part)))
+        ;; The global principal must move by what the user's stored principal actually moved.
+        (user-principal-delta (contract-call? .math-v1 safe-sub user-borrowed-amount updated-borrowed-amount))
+        (updated-total-borrowed-amount (contract-call? .math-v1 safe-sub total-borrowed-amount user-principal-delta))
         (remaining-collateral-balance (- user-balance collateral-to-give))
         (updated-collaterals-list (if (is-eq remaining-collateral-balance u0)
           (get new-list (contract-call? .state-v1 remove-item (get collaterals position-data) collateral-token))
