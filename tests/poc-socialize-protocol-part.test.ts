@@ -128,17 +128,19 @@ describe("socializing bad debt", () => {
     );
     expect(event, "the position must have reached socialization").toBeDefined();
     const protocolPart = (event as any).data.value.value["protocol-part"].value as bigint;
-    expect(protocolPart, "protocol-part must be non-zero for this scenario to bite").toBeGreaterThan(
-      0n,
-    );
+    expect(
+      protocolPart,
+      "protocol-part must clear the dust budget or a double-count of it fits inside the tolerance",
+    ).toBeGreaterThan(DUST);
 
     const stranded = surplus();
     expect(
       stranded,
       `socialization stranded market tokens no claim points at (protocol-part ${protocolPart})`,
     ).toBeLessThanOrEqual(DUST);
-    expect(stranded, "socialization wrote claims down past the tokens backing them").toBeGreaterThanOrEqual(
-      0n,
-    );
+    expect(
+      stranded,
+      "socialization left claims exceeding the tokens backing them",
+    ).toBeGreaterThanOrEqual(0n);
   });
 });
