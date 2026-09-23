@@ -581,7 +581,7 @@
             (staked-lp-tokens (contract-call? .staking-v1 get-total-staked-lp-tokens))
             (is-wiped (contract-call? .staking-v1 is-staking-wiped-out))
             (effective-staked-lp-tokens (if is-wiped u0 staked-lp-tokens))
-            (burned-staking-lp-tokens (try! (contract-call? .state-v1 socialize-user-bad-debt user remaining-debt lp-part staked-part protocol-part updated-total-borrowed-amount .staking-v1 effective-staked-lp-tokens)))
+            (burned-staking-lp-tokens (try! (contract-call? .state-v1 socialize-user-bad-debt user (contract-call? .math-v1 safe-sub remaining-debt protocol-part) lp-part staked-part protocol-part updated-total-borrowed-amount .staking-v1 effective-staked-lp-tokens)))
           )
           (print {
             user: user,
