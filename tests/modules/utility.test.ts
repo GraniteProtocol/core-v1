@@ -124,6 +124,21 @@ describe("utility per-collateral reads", () => {
   });
 
   it("computes the sBTC bucket and keeps the non-collateral caps separate", () => {
+    const lpCapResponse = simnet.callPublicFn(
+      "withdrawal-caps-v1",
+      "set-lp-cap",
+      [Cl.uint(40_000_000)],
+      deployer
+    );
+    expect(lpCapResponse.result).toBeOk(Cl.bool(true));
+    const debtCapResponse = simnet.callPublicFn(
+      "withdrawal-caps-v1",
+      "set-debt-cap",
+      [Cl.uint(70_000_000)],
+      deployer
+    );
+    expect(debtCapResponse.result).toBeOk(Cl.bool(true));
+
     const capFactor = 0.8 * SCALING_FACTOR;
     const capResponse = simnet.callPublicFn(
       "withdrawal-caps-v1",
@@ -158,8 +173,22 @@ describe("utility per-collateral reads", () => {
         "max-bucket": Cl.uint(80_000_000),
       })
     );
-    expect(combined.type).toBe(ClarityType.ResponseOk);
-    expect((combined as any).value.value.collateral).toBeUndefined();
+    expect(combined).toBeOk(
+      Cl.tuple({
+        lp: Cl.tuple({
+          "cap-factor": Cl.uint(40_000_000),
+          "old-bucket": Cl.uint(0),
+          "new-bucket": Cl.uint(inflow + 400),
+          "max-bucket": Cl.uint(400),
+        }),
+        debt: Cl.tuple({
+          "cap-factor": Cl.uint(70_000_000),
+          "old-bucket": Cl.uint(0),
+          "new-bucket": Cl.uint(inflow + 700),
+          "max-bucket": Cl.uint(700),
+        }),
+      })
+    );
   });
 
   it("errors u120004 for a token with no collateral config", () => {
