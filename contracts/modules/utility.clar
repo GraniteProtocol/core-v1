@@ -7,6 +7,7 @@
 (define-constant ERR-INTEREST-PARAMS (err u120001))
 (define-constant ERR-FAILED-TO-GET-BALANCE (err u120002))
 (define-constant ERR-FAILED-TO-GET-DEBT-BUCKET (err u120003))
+(define-constant ERR-COLLATERAL-NOT-SUPPORTED (err u120004))
 
 
 ;; read-only functions
@@ -50,14 +51,20 @@
     ))
 ))
 
-(define-read-only (get-withdrawal-caps (inflow uint))
+(define-read-only (get-market-withdrawal-caps (inflow uint))
   (let (
       (lp (try! (get-lp-bucket inflow)))
       (debt (unwrap! (get-debt-bucket inflow) ERR-FAILED-TO-GET-DEBT-BUCKET))
-      (collateral (try! (get-collateral-bucket inflow)))
     )
-    (ok {lp: lp, debt: debt, collateral: collateral})
+    (ok {lp: lp, debt: debt})
 ))
+
+;; Callers pass the token's get-balance of state-v1 as total-liquidity; Clarity forbids trait calls in read-only functions.
+(define-read-only (get-collateral-withdrawal-caps (collateral-token principal) (total-liquidity uint) (inflow uint))
+  (match (contract-call? .state-v1 get-collateral collateral-token)
+    collateral-info (collateral-bucket collateral-token total-liquidity inflow)
+    ERR-COLLATERAL-NOT-SUPPORTED)
+)
 
 
 
@@ -130,17 +137,15 @@
   )
 )
 
-(define-private (get-collateral-bucket (inflow uint))
+(define-private (collateral-bucket (collateral principal) (total-liquidity uint) (inflow uint))
   (let
     (
       (time-now (get-time-now))
-      (collateral-token .mock-btc)
-      (last-ts (contract-call? .withdrawal-caps-v1 get-last-collateral-bucket-update collateral-token))
-      (total-liquidity (unwrap! (contract-call? .mock-btc get-balance .state-v1) ERR-FAILED-TO-GET-BALANCE))
-      (collateral-cap-factor (contract-call? .withdrawal-caps-v1 get-collateral-cap-factor collateral-token))
+      (last-ts (contract-call? .withdrawal-caps-v1 get-last-collateral-bucket-update collateral))
+      (collateral-cap-factor (contract-call? .withdrawal-caps-v1 get-collateral-cap-factor collateral))
       (max-collateral-bucket (/ (* total-liquidity collateral-cap-factor) SCALING-FACTOR))
-      (current-bucket (contract-call? .withdrawal-caps-v1 get-collateral-bucket collateral-token))
-      (new-bucket-value (if (>= current-bucket max-collateral-bucket) 
+      (current-bucket (contract-call? .withdrawal-caps-v1 get-collateral-bucket collateral))
+      (new-bucket-value (if (>= current-bucket max-collateral-bucket)
           (decay-bucket-amount last-ts time-now max-collateral-bucket current-bucket inflow)
           (refill-bucket-amount last-ts time-now max-collateral-bucket current-bucket inflow)))
     )
