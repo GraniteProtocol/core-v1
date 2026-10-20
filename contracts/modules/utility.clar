@@ -55,9 +55,8 @@
   (let (
       (lp (try! (get-lp-bucket inflow)))
       (debt (unwrap! (get-debt-bucket inflow) ERR-FAILED-TO-GET-DEBT-BUCKET))
-      (collateral (try! (get-collateral-bucket inflow)))
     )
-    (ok {lp: lp, debt: debt, collateral: collateral})
+    (ok {lp: lp, debt: debt})
 ))
 
 ;; Callers pass the token's get-balance of state-v1 (the caps read names it total-liquidity); Clarity forbids trait calls in read-only functions.
@@ -170,8 +169,3 @@
   )
 )
 
-(define-private (get-collateral-bucket (inflow uint))
-  (collateral-bucket .mock-btc
-    (unwrap! (contract-call? .mock-btc get-balance .state-v1) ERR-FAILED-TO-GET-BALANCE)
-    inflow)
-)

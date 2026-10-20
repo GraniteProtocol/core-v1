@@ -123,7 +123,7 @@ describe("utility per-collateral reads", () => {
     );
   });
 
-  it("returns the same collateral bucket as get-withdrawal-caps for sBTC", () => {
+  it("computes the sBTC bucket and keeps the non-collateral caps separate", () => {
     const capFactor = 0.8 * SCALING_FACTOR;
     const capResponse = simnet.callPublicFn(
       "withdrawal-caps-v1",
@@ -158,7 +158,8 @@ describe("utility per-collateral reads", () => {
         "max-bucket": Cl.uint(80_000_000),
       })
     );
-    expect(perToken.value).toEqual(combined.value.value.collateral);
+    expect(combined.type).toBe(ClarityType.ResponseOk);
+    expect((combined as any).value.value.collateral).toBeUndefined();
   });
 
   it("errors u120004 for a token with no collateral config", () => {
