@@ -75,55 +75,7 @@ describe("utility per-collateral reads", () => {
     );
   });
 
-  it("reads sBTC balance and collateral config from state-v1", () => {
-    const amount = 250_000_000;
-    mint_token("mock-btc", amount, borrower);
-    add_collateral("mock-btc", amount, deployer, borrower);
-
-    expect(
-      read("get-collateral-market-state", [
-        BTC,
-        Cl.uint(tokenBalance("mock-btc")),
-      ])
-    ).toBeOk(
-      Cl.tuple({
-        "collateral-token": BTC,
-        "collateral-balance": Cl.uint(amount),
-        "collateral-info": Cl.tuple({
-          "max-ltv": Cl.uint(70000000),
-          "liquidation-ltv": Cl.uint(80000000),
-          "liquidation-premium": Cl.uint(10000000),
-          decimals: Cl.uint(8),
-        }),
-      })
-    );
-  });
-
-  it("reads a second SIP-010 collateral without being pinned to sBTC", () => {
-    const amount = 123_450_000;
-    mint_token("mock-eth", amount, borrower);
-    add_collateral("mock-eth", amount, deployer, borrower);
-
-    expect(
-      read("get-collateral-market-state", [
-        ETH,
-        Cl.uint(tokenBalance("mock-eth")),
-      ])
-    ).toBeOk(
-      Cl.tuple({
-        "collateral-token": ETH,
-        "collateral-balance": Cl.uint(amount),
-        "collateral-info": Cl.tuple({
-          "max-ltv": Cl.uint(50000000),
-          "liquidation-ltv": Cl.uint(70000000),
-          "liquidation-premium": Cl.uint(10000000),
-          decimals: Cl.uint(8),
-        }),
-      })
-    );
-  });
-
-  it("computes the sBTC bucket and keeps the non-collateral caps separate", () => {
+  it("computes the sBTC bucket and keeps the market caps separate", () => {
     const lpCapResponse = simnet.callPublicFn(
       "withdrawal-caps-v1",
       "set-lp-cap",
@@ -155,7 +107,7 @@ describe("utility per-collateral reads", () => {
     const inflow = 12_345_678;
     const combined = simnet.callReadOnlyFn(
       "utility",
-      "get-withdrawal-caps",
+      "get-market-withdrawal-caps",
       [Cl.uint(inflow)],
       deployer
     ).result;
@@ -192,9 +144,6 @@ describe("utility per-collateral reads", () => {
   });
 
   it("errors u120004 for a token with no collateral config", () => {
-    expect(read("get-collateral-market-state", [STX, Cl.uint(0)])).toBeErr(
-      Cl.uint(120004)
-    );
     expect(
       read("get-collateral-withdrawal-caps", [STX, Cl.uint(0), Cl.uint(0)])
     ).toBeErr(Cl.uint(120004));

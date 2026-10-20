@@ -51,7 +51,7 @@
     ))
 ))
 
-(define-read-only (get-withdrawal-caps (inflow uint))
+(define-read-only (get-market-withdrawal-caps (inflow uint))
   (let (
       (lp (try! (get-lp-bucket inflow)))
       (debt (unwrap! (get-debt-bucket inflow) ERR-FAILED-TO-GET-DEBT-BUCKET))
@@ -59,18 +59,7 @@
     (ok {lp: lp, debt: debt})
 ))
 
-;; Callers pass the token's get-balance of state-v1 (the caps read names it total-liquidity); Clarity forbids trait calls in read-only functions.
-(define-read-only (get-collateral-market-state (collateral-token principal) (collateral-balance uint))
-  (let (
-      (collateral-info (unwrap! (contract-call? .state-v1 get-collateral collateral-token) ERR-COLLATERAL-NOT-SUPPORTED))
-    )
-    (ok {
-      collateral-token: collateral-token,
-      collateral-balance: collateral-balance,
-      collateral-info: collateral-info
-    })
-))
-
+;; Callers pass the token's get-balance of state-v1 as total-liquidity; Clarity forbids trait calls in read-only functions.
 (define-read-only (get-collateral-withdrawal-caps (collateral-token principal) (total-liquidity uint) (inflow uint))
   (match (contract-call? .state-v1 get-collateral collateral-token)
     collateral-info (collateral-bucket collateral-token total-liquidity inflow)
