@@ -16,6 +16,14 @@ const NODE_URL = "http://localhost:20443";
 export type TxResult = { txid: string; status: "success"; result?: string };
 export type TxOutcome = { ok: boolean; txid: string; status: string; repr?: string };
 
+/** The devnet's Stacks tip has frozen: a known clarinet quirk at PoX reward-cycle boundaries. */
+export class DevnetStallError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "DevnetStallError";
+  }
+}
+
 /**
  * Returns the nonce the next transaction for `address` must use. The chain is authoritative: a
  * locally remembered nonce that runs ahead of it is a gap the next transaction would sit behind
@@ -178,8 +186,11 @@ export class Chain {
     return this.waitTx(txid);
   }
 
-  async waitTx(txid: string, timeoutMs = 180_000): Promise<TxOutcome> {
+  async waitTx(txid: string, timeoutMs = 180_000, stallMs = 75_000): Promise<TxOutcome> {
     const deadline = Date.now() + timeoutMs;
+    let tip = await this.blockHeight();
+    let tipSince = Date.now();
+    let lastTipCheck = Date.now();
     while (Date.now() < deadline) {
       const res = await fetch(`${this.apiUrl}/extended/v1/tx/${txid}`, { redirect: "follow" });
       if (res.ok) {
@@ -196,6 +207,16 @@ export class Chain {
           };
         }
       }
+      if (Date.now() - lastTipCheck >= 3000) {
+        lastTipCheck = Date.now();
+        const height = await this.blockHeight();
+        if (height > tip) {
+          tip = height;
+          tipSince = Date.now();
+        } else if (Date.now() - tipSince >= stallMs) {
+          throw new DevnetStallError(`stacks tip stuck at ${height} for ${stallMs}ms while ${txid} was pending`);
+        }
+      }
       await sleep(250);
     }
     throw new Error(`transaction ${txid} not confirmed in ${timeoutMs}ms`);
@@ -207,14 +228,23 @@ export class Chain {
     return json.stacks_tip_height;
   }
 
-  async waitBlocks(count: number, timeoutMs = 180_000): Promise<number> {
+  async waitBlocks(count: number, timeoutMs = 240_000, stallMs = 75_000): Promise<number> {
     return this.enqueue("__blocks__", async () => {
-      const target = (await this.blockHeight()) + count;
+      const start = await this.blockHeight();
+      const target = start + count;
       const deadline = Date.now() + timeoutMs;
+      let tip = start;
+      let tipSince = Date.now();
       while (Date.now() < deadline) {
         const height = await this.blockHeight();
         if (height >= target) return height;
-        await sleep(250);
+        if (height > tip) {
+          tip = height;
+          tipSince = Date.now();
+        } else if (Date.now() - tipSince >= stallMs) {
+          throw new DevnetStallError(`stacks tip stuck at ${height} for ${stallMs}ms waiting for ${count} blocks`);
+        }
+        await sleep(500);
       }
       throw new Error(`chain did not advance ${count} blocks in ${timeoutMs}ms`);
     });

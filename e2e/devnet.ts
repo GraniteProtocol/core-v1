@@ -87,6 +87,7 @@ export async function ensureDocker(timeoutMs = 120_000): Promise<void> {
 export async function startDevnet(opts: {
   repoRoot?: string;
   logDir?: string;
+  logName?: string;
   apiUrl?: string;
   nodeUrl?: string;
   contractTimeoutMs?: number;
@@ -94,7 +95,7 @@ export async function startDevnet(opts: {
   const repoRoot = opts.repoRoot ?? process.cwd();
   const logDir = opts.logDir ?? `/tmp/local-e2e-${Date.now()}`;
   mkdirSync(logDir, { recursive: true });
-  const logPath = join(logDir, "devnet.log");
+  const logPath = join(logDir, opts.logName ?? "devnet.log");
   const apiUrl = opts.apiUrl ?? "http://localhost:3999";
   const nodeUrl = opts.nodeUrl ?? "http://localhost:20443";
 

@@ -1,5 +1,5 @@
 import { mkdirSync } from "node:fs";
-import { Chain } from "./chain.ts";
+import { Chain, DevnetStallError } from "./chain.ts";
 import { startDevnet, stopDevnet, type DevnetHandle } from "./devnet.ts";
 import { loadAccounts } from "./keys.ts";
 import type { Account } from "./keys.ts";
@@ -9,10 +9,17 @@ import { createContext, type Scenario } from "./scenario.ts";
 import { happy } from "./scenarios/happy.ts";
 import { matrix } from "./scenarios/matrix.ts";
 import { FUZZ_MAX_OPS, FUZZ_MIN_OPS, FUZZ_SEQUENCES, generate, type Op } from "./fuzz.ts";
-import { accountingStats, checkInvariants, failed, resetAccounting } from "./invariants.ts";
+import {
+  accountingStats,
+  checkInvariants,
+  failed,
+  resetAccounting,
+  resetDriftBaseline,
+} from "./invariants.ts";
+import { resetToBaseline, setPrice } from "./prices.ts";
 
 const DEBT_OPS = new Set(["borrow", "repay", "liquidate"]);
-import { resetToBaseline, setPrice } from "./prices.ts";
+const MAX_RESTARTS = 20;
 import { Cl } from "@stacks/transactions";
 import { writeReport, type ScenarioResult } from "./report.ts";
 import { proposeLearnings } from "./learn.ts";
@@ -132,12 +139,26 @@ function isContractAbort(error: unknown): boolean {
   return /\(err u\d+\)/.test(message) || message.includes("abort_by_response") || message.includes("abort_by_post_condition");
 }
 
-async function runScenario(
-  chain: Chain,
-  actors: Actors,
-  baseline: Awaited<ReturnType<typeof setup>>,
-  scenario: Scenario,
-): Promise<ScenarioResult> {
+type Session = {
+  devnet: DevnetHandle;
+  chain: Chain;
+  actors: Actors;
+  baseline: Awaited<ReturnType<typeof setup>>;
+};
+
+async function startSession(reportDir: string, deployer: Account, index: number): Promise<Session> {
+  const devnet = await startDevnet({
+    logDir: reportDir,
+    logName: index === 0 ? "devnet.log" : `devnet-${index + 1}.log`,
+  });
+  const chain = new Chain(deployer.address);
+  const actors = await bootstrapActors(chain, deployer);
+  const baseline = await setup(chain, actors);
+  return { devnet, chain, actors, baseline };
+}
+
+async function runScenario(session: Session, scenario: Scenario): Promise<ScenarioResult> {
+  const { chain, actors, baseline } = session;
   resetToBaseline();
   const context = createContext(chain, actors, baseline);
   const started = Date.now();
@@ -150,6 +171,8 @@ async function runScenario(
       invariantFailures: context.invariantFailures,
     };
   } catch (error) {
+    // A frozen devnet is infrastructure, not a scenario failure: let main restart and retry.
+    if (error instanceof DevnetStallError) throw error;
     const failure = error instanceof Error ? error.message : String(error);
     return {
       name: scenario.name,
@@ -172,59 +195,92 @@ async function main(): Promise<number> {
   mkdirSync(reportDir, { recursive: true });
 
   const deployer = loadDeployer();
-  const chain = new Chain(deployer.address);
-  let devnet: DevnetHandle | null = null;
-  let scenarios: ScenarioResult[] = [];
+  let session: Session | null = null;
+  let restarts = 0;
+  const scenarios: ScenarioResult[] = [];
   const fuzz = { sequences: FUZZ_SEQUENCES, ops: 0, failures: 0, firstFailure: undefined as string | undefined };
+
+  const restart = async (reason: string): Promise<void> => {
+    if (!session) throw new Error("no devnet session to restart");
+    restarts += 1;
+    if (restarts > MAX_RESTARTS) {
+      throw new Error(`devnet stalled ${restarts} times, giving up (last: ${reason})`);
+    }
+    console.log(`devnet stall: ${reason}; restart ${restarts}/${MAX_RESTARTS}`);
+    await stopDevnet(session.devnet);
+    session = await startSession(reportDir, deployer, restarts);
+    resetDriftBaseline();
+    console.log("devnet restarted and set up");
+  };
 
   try {
     console.log(`report dir: ${reportDir}`);
-    devnet = await startDevnet({ logDir: reportDir });
-    console.log(`devnet up: api=${devnet.apiUrl} pid=${devnet.pid}`);
-
-    const actors = await bootstrapActors(chain, deployer);
-    console.log("actors funded");
-    const baseline = await setup(chain, actors);
+    session = await startSession(reportDir, deployer, 0);
+    console.log(`devnet up: api=${session.devnet.apiUrl} pid=${session.devnet.pid}`);
     console.log("setup complete");
 
     const allScenarios = [happy, ...matrix];
     for (const scenario of allScenarios) {
-      scenarios.push(await runScenario(chain, actors, baseline, scenario));
-      const result = scenarios[scenarios.length - 1];
-      console.log(`  ${result.passed ? "PASS" : "FAIL"} ${result.name}${result.failure ? `: ${result.failure}` : ""}`);
+      for (let attempt = 0; ; attempt++) {
+        try {
+          const result = await runScenario(session, scenario);
+          scenarios.push(result);
+          console.log(`  ${result.passed ? "PASS" : "FAIL"} ${result.name}${result.failure ? `: ${result.failure}` : ""}`);
+          break;
+        } catch (error) {
+          if (error instanceof DevnetStallError && attempt < 2) {
+            await restart(error.message);
+            continue;
+          }
+          throw error;
+        }
+      }
     }
 
     console.log(`fuzz: ${FUZZ_SEQUENCES} sequences`);
-    for (let index = 0; index < FUZZ_SEQUENCES; index++) {
+    let fuzzFailed = false;
+    for (let index = 0; index < FUZZ_SEQUENCES && !fuzzFailed; index++) {
       const length = FUZZ_MIN_OPS + ((seed + index * 7919) % (FUZZ_MAX_OPS - FUZZ_MIN_OPS + 1));
       const ops = generate(seed + index, length);
       for (const op of ops) {
         fuzz.ops += 1;
-        try {
-          await executeOp(chain, actors, op);
-        } catch (error) {
-          if (!isContractAbort(error)) {
+        for (let attempt = 0; ; attempt++) {
+          try {
+            await executeOp(session.chain, session.actors, op);
+            break;
+          } catch (error) {
+            if (error instanceof DevnetStallError && attempt < 2) {
+              await restart(error.message);
+              continue;
+            }
+            // An aborted fuzz op is an expected outcome; its state change is nil.
+            if (isContractAbort(error)) break;
             fuzz.failures += 1;
             fuzz.firstFailure = `sequence ${index} (seed ${seed + index}) op ${JSON.stringify(op)}: ${
               error instanceof Error ? error.message : String(error)
             }`;
+            fuzzFailed = true;
             break;
           }
         }
-        const violations = failed(await checkInvariants(chain, DEBT_OPS.has(op.op) ? "debt" : "non-debt"));
+        if (fuzzFailed) break;
+        // An aborted fuzz op is an expected outcome; its state change is nil, so still verify.
+        const violations = failed(
+          await checkInvariants(session.chain, DEBT_OPS.has(op.op) ? "debt" : "non-debt"),
+        );
         if (violations.length > 0) {
           fuzz.failures += 1;
           fuzz.firstFailure = `sequence ${index} (seed ${seed + index}) op ${JSON.stringify(op)}: ${violations
             .map((violation) => `${violation.name}: ${violation.detail}`)
             .join("; ")}`;
+          fuzzFailed = true;
           break;
         }
       }
-      if (fuzz.failures > 0) break;
       if (index % 10 === 0) console.log(`  sequence ${index + 1}/${FUZZ_SEQUENCES} (${fuzz.ops} ops)`);
     }
 
-    const finalViolations = failed(await checkInvariants(chain));
+    const finalViolations = failed(await checkInvariants(session.chain));
     if (finalViolations.length > 0 && fuzz.failures === 0) {
       fuzz.failures += 1;
       fuzz.firstFailure = `final invariants: ${finalViolations.map((v) => `${v.name}: ${v.detail}`).join("; ")}`;
@@ -237,7 +293,8 @@ async function main(): Promise<number> {
       seed,
       scenarios,
       fuzz,
-      devnetLog: devnet.logPath,
+      devnetLog: session.devnet.logPath,
+      devnetRestarts: restarts,
       accounting: {
         drift: accounting.drift.toString(),
         debtOps: accounting.debtOps,
@@ -256,6 +313,7 @@ async function main(): Promise<number> {
     console.log(
       `accounting: gap=${accounting.drift} debt-ops=${accounting.debtOps} max-step=${accounting.maxStepDrift}`,
     );
+    console.log(`devnet restarts: ${restarts}`);
     if (!accounting.exactZero) {
       console.log(
         "warning: the accounting gap is non-zero (integer rounding residue; see report.json accounting)",
@@ -265,8 +323,8 @@ async function main(): Promise<number> {
     console.log(await proposeLearnings(report));
     return ok ? 0 : 1;
   } finally {
-    if (devnet && !keep) await stopDevnet(devnet);
-    if (devnet && keep) console.log(`devnet kept up (pid ${devnet.pid}); stop it with SIGTERM`);
+    if (session && !keep) await stopDevnet(session.devnet);
+    if (session && keep) console.log(`devnet kept up (pid ${session.devnet.pid}); stop it with SIGTERM`);
   }
 }
 

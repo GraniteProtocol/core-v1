@@ -117,6 +117,11 @@ export function accountingStats(): AccountingStats {
   return stats;
 }
 
+/** Keeps the run statistics but re-baselines the drift after a devnet restart. */
+export function resetDriftBaseline(): void {
+  lastDrift = undefined;
+}
+
 const abs = (value: bigint): bigint => (value < 0n ? -value : value);
 
 /**

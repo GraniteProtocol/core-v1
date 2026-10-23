@@ -79,8 +79,10 @@ disable_stacks_api = false
 stacks_node_image_url = "ghcr.io/stacks-network/stacks-core:4.0.1-alpine"
 stacks_signer_image_url = "ghcr.io/stacks-network/stacks-signer:4.0.1-alpine"
 epoch_4_0 = 162
-# 5s bitcoin blocks keep block-height waits short; 1s was too fast for the PoX anchor at cycle 3.
 bitcoin_controller_block_time = 5_000
+# Mine Nakamoto blocks without waiting on the signer set, which otherwise stalls at some reward-cycle
+# boundaries during long runs.
+pre_nakamoto_mock_signing = true
 # disable_subnet_api = false
 # disable_bitcoin_explorer = true
 # working_dir = "tmp/devnet"

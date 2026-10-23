@@ -16,6 +16,7 @@ export type RunReport = {
   scenarios: ScenarioResult[];
   fuzz: { sequences: number; ops: number; failures: number; firstFailure?: string };
   devnetLog?: string;
+  devnetRestarts?: number;
   accounting?: { drift: string; debtOps: number; maxStepDrift: string; exactZero: boolean };
 };
 
@@ -40,6 +41,7 @@ export async function writeReport(
     `- fuzz: ${report.fuzz.sequences} sequences, ${report.fuzz.ops} ops, ${report.fuzz.failures} failures`,
   ];
   if (report.devnetLog) lines.push(`- devnet log: ${report.devnetLog}`);
+  if (report.devnetRestarts) lines.push(`- devnet restarts: ${report.devnetRestarts}`);
   if (report.accounting) {
     lines.push(
       `- accounting: gap=${report.accounting.drift}, debt-ops=${report.accounting.debtOps}, max-step=${report.accounting.maxStepDrift}`,
