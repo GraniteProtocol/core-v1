@@ -141,14 +141,28 @@ scenario("health-across-collaterals", async (ctx) => {
     healthy !== null && healthy.positionHealth > HUNDRED_PCT,
     `health ${healthy?.positionHealth}`,
   );
+  setPrice(ETH, 2_000n);
+  const afterGradualDrop = await healthOf(chain, borrower.address);
+  await ctx.assert(
+    "a gradual ETH drop keeps the position above water",
+    afterGradualDrop !== null && afterGradualDrop.positionHealth > HUNDRED_PCT,
+    `health ${afterGradualDrop?.positionHealth}`,
+  );
   setPrice(ETH, 1_000n);
   const unhealthy = await healthOf(chain, borrower.address);
   await ctx.assert(
-    "an ETH price drop turns the position unhealthy",
+    "a sudden ETH drop turns the position unhealthy",
     unhealthy !== null && unhealthy.positionHealth < HUNDRED_PCT,
     `health ${unhealthy?.positionHealth}`,
   );
   await ctx.attempt("borrowing against a sick position aborts", () => borrow(chain, borrower, 1n * USDC), "u20002");
+  setPrice(ETH, 3_000n);
+  const recovered = await healthOf(chain, borrower.address);
+  await ctx.assert(
+    "the position recovers with the price",
+    recovered !== null && recovered.positionHealth > HUNDRED_PCT,
+    `health ${recovered?.positionHealth}`,
+  );
   resetToBaseline();
 });
 
@@ -172,6 +186,34 @@ scenario("direct-liquidation", async (ctx) => {
     "position is healthy after liquidation",
     health === null || health.positionHealth >= HUNDRED_PCT,
     `health ${health?.positionHealth}`,
+  );
+
+  // ETH collateral: 10 ETH at $3,000 borrows 14,000; a crash to $1,000 makes it liquidatable.
+  const ethBorrower = await fund(ctx, "liq-eth-borrower", { eth: 20n * UNIT });
+  await ctx.step("add 10 ETH", () => addCollateral(chain, ethBorrower, ETH, 10n * UNIT));
+  await ctx.step("borrow 14,000 against ETH", () => borrow(chain, ethBorrower, 14_000n * USDC));
+  await ctx.step(`wait ${LIQUIDATION_BLOCK_GAP} blocks`, () => chain.waitBlocks(LIQUIDATION_BLOCK_GAP));
+  setPrice(ETH, 1_000n);
+  const ethBefore = await tokenBalance(chain, ETH, liquidator.address);
+  await ctx.step("liquidate ETH collateral", () =>
+    liquidate(chain, liquidator, ETH, ethBorrower.address, 100_000n * USDC),
+  );
+  const ethAfter = await tokenBalance(chain, ETH, liquidator.address);
+  await ctx.assert("liquidator received ETH", ethAfter > ethBefore, `${ethBefore} -> ${ethAfter}`);
+
+  // STX collateral: 10,000 STX at $2 borrows 9,000; a crash to $1 makes it liquidatable.
+  const stxBorrower = await fund(ctx, "liq-stx-borrower", { usdc: 0n });
+  await ctx.step("add 10,000 STX", () => addCollateral(chain, stxBorrower, STX, 10_000n * 1_000_000n));
+  await ctx.step("borrow 9,000 against STX", () => borrow(chain, stxBorrower, 9_000n * USDC));
+  await ctx.step(`wait ${LIQUIDATION_BLOCK_GAP} blocks`, () => chain.waitBlocks(LIQUIDATION_BLOCK_GAP));
+  setPrice(STX, 1n);
+  await ctx.step("liquidate STX collateral", () =>
+    liquidate(chain, liquidator, STX, stxBorrower.address, 100_000n * USDC),
+  );
+  await ctx.assert(
+    "STX collateral was seized",
+    (await userCollateral(chain, stxBorrower.address, STX)) < 10_000n * 1_000_000n,
+    "STX collateral unchanged",
   );
   resetToBaseline();
 });
@@ -260,7 +302,7 @@ scenario("staking", async (ctx) => {
   await ctx.assert("staked balance is positive", staked > 0n, "no staked LP tokens");
   await ctx.step("initiate unstake", () => initiateUnstake(chain, actors.staker, staked / 2n));
   await ctx.attempt("finalizing early aborts", () => finalizeUnstake(chain, actors.staker, 0n), "u60004");
-  await ctx.step("wait the finalization period", () => chain.waitBlocks(101));
+  await ctx.step("wait the finalization period", () => chain.waitBlocks(11));
   await ctx.step("finalize after the period", () => finalizeUnstake(chain, actors.staker, 0n));
 });
 

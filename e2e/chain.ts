@@ -50,9 +50,16 @@ export class Chain {
   }
 
   private async accountNonce(address: string): Promise<number> {
-    const res = await fetch(`${this.apiUrl}/v2/accounts/${address}?proof=0`);
-    if (!res.ok) throw new Error(`account read failed for ${address}: ${res.status}`);
-    const json = (await res.json()) as { nonce: number };
+    // possible-next includes mempool txs, which the plain account nonce ignores. The devnet sends
+    // its own pox stacking transactions from several of the same wallets.
+    const res = await fetch(`${this.apiUrl}/extended/v1/address/${address}/nonces`);
+    if (res.ok) {
+      const json = (await res.json()) as { possible_next_nonce?: number };
+      if (typeof json.possible_next_nonce === "number") return json.possible_next_nonce;
+    }
+    const fallback = await fetch(`${this.apiUrl}/v2/accounts/${address}?proof=0`);
+    if (!fallback.ok) throw new Error(`account read failed for ${address}: ${fallback.status}`);
+    const json = (await fallback.json()) as { nonce: number };
     return json.nonce;
   }
 

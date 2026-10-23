@@ -79,8 +79,8 @@ disable_stacks_api = false
 stacks_node_image_url = "ghcr.io/stacks-network/stacks-core:4.0.1-alpine"
 stacks_signer_image_url = "ghcr.io/stacks-network/stacks-signer:4.0.1-alpine"
 epoch_4_0 = 162
-# 1s bitcoin blocks keep block-height waits (liquidation gap, staking finalization) short.
-bitcoin_controller_block_time = 1_000
+# 5s bitcoin blocks keep block-height waits short; 1s was too fast for the PoX anchor at cycle 3.
+bitcoin_controller_block_time = 5_000
 # disable_subnet_api = false
 # disable_bitcoin_explorer = true
 # working_dir = "tmp/devnet"

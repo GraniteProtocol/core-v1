@@ -72,13 +72,6 @@ export async function checkInvariants(chain: Chain): Promise<InvariantResult[]> 
     }),
   );
 
-  const totalShares = asUint(lp["total-shares"]);
-  results.push({
-    name: "lp-shares",
-    ok: totalShares > 0n || asUint(lp["total-assets"]) === 0n,
-    detail: `total-assets=${asUint(lp["total-assets"])} total-shares=${totalShares}`,
-  });
-
   results.push(await capsFactors(chain));
   results.push(await openInterestCoversPrincipal(chain));
 

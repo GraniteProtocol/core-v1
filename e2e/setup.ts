@@ -143,6 +143,8 @@ export async function setup(chain: Chain, actors: Actors): Promise<Snapshot> {
   ]);
   // A zero minimum stake skips the deployer dust stake, which would need LP tokens it does not hold.
   await call("staking-v1", "initialize", [Cl.some(Cl.uint(0))]);
+  // 10 blocks instead of 100 keeps the unstake scenario short on the devnet.
+  await call("staking-v1", "update-withdrawal-finalization-period", [Cl.uint(10)]);
 
   // 2. Allow the contracts that move assets through state-v1.
   for (const name of [
