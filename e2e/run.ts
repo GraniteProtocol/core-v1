@@ -160,16 +160,19 @@ async function startSession(
   deployer: Account,
   index: number,
   onRetry?: (reason: string) => void,
-  attempts = 4,
+  attempts = 6,
 ): Promise<Session> {
   let lastError: unknown;
   for (let attempt = 1; attempt <= attempts; attempt++) {
     let devnet: DevnetHandle | null = null;
+    let booting = true;
     try {
       devnet = await startDevnet({
         logDir: reportDir,
         logName: index === 0 && attempt === 1 ? "devnet.log" : `devnet-${index + 1}-${attempt}.log`,
+        contractTimeoutMs: 180_000,
       });
+      booting = false;
       const chain = new Chain(deployer.address);
       const actors = await bootstrapActors(chain, deployer);
       const baseline = await setup(chain, actors);
@@ -177,9 +180,12 @@ async function startSession(
     } catch (error) {
       lastError = error;
       if (devnet) await stopDevnet(devnet);
-      if (!(error instanceof DevnetStallError)) throw error;
-      console.log(`devnet boot or setup froze; retrying the boot (${attempt}/${attempts})`);
-      onRetry?.(error.message);
+      // A boot can also lose the race to register the PoX signer set; a fresh boot is the fix.
+      const retryable = error instanceof DevnetStallError || booting;
+      if (!retryable) throw error;
+      const reason = error instanceof Error ? error.message : String(error);
+      console.log(`devnet boot or setup failed; retrying the boot (${attempt}/${attempts}): ${reason}`);
+      onRetry?.(reason);
     }
   }
   throw lastError;

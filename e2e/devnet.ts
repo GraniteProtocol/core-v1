@@ -102,7 +102,7 @@ export async function startDevnet(opts: {
 
   await ensureDocker();
   const out = await import("node:fs").then((fs) => fs.openSync(logPath, "w"));
-  const proc = spawn("clarinet", ["devnet", "start", "--no-dashboard", "--from-genesis", "--save-container-logs"], {
+  const proc = spawn("clarinet", ["devnet", "start", "--no-dashboard", "--from-genesis"], {
     cwd: repoRoot,
     env: { ...process.env, PATH: childPath() },
     stdio: ["pipe", out, out],
