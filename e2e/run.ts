@@ -231,6 +231,18 @@ async function main(): Promise<number> {
   const deployer = loadDeployer();
   let session: Session | null = null;
   let restarts = 0;
+  let shuttingDown = false;
+  const handleSignal = (signal: string): void => {
+    if (shuttingDown) return;
+    shuttingDown = true;
+    console.log(`\n${signal} received; tearing the devnet down`);
+    void (async () => {
+      if (session) await stopDevnet(session.devnet);
+      process.exit(1);
+    })();
+  };
+  process.on("SIGINT", () => handleSignal("SIGINT"));
+  process.on("SIGTERM", () => handleSignal("SIGTERM"));
   const restartLog: RestartEvent[] = [];
   const scenarios: ScenarioResult[] = [];
   const fuzz = { sequences: FUZZ_SEQUENCES, ops: 0, failures: 0, firstFailure: undefined as string | undefined };
