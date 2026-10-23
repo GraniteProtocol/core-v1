@@ -16,12 +16,14 @@ const NODE_URL = "http://localhost:20443";
 export type TxResult = { txid: string; status: "success"; result?: string };
 export type TxOutcome = { ok: boolean; txid: string; status: string; repr?: string };
 
-/** Returns the nonce the next transaction for `address` must use, preferring the chain when it is ahead. */
+/**
+ * Returns the nonce the next transaction for `address` must use. The chain is authoritative: a
+ * locally remembered nonce that runs ahead of it is a gap the next transaction would sit behind
+ * forever, so it is never used.
+ */
 export function nextNonce(cache: Map<string, number>, address: string, chainNonce: number): number {
-  const cached = cache.get(address);
-  const nonce = cached !== undefined && cached > chainNonce ? cached : chainNonce;
-  cache.set(address, nonce + 1);
-  return nonce;
+  cache.set(address, chainNonce);
+  return chainNonce;
 }
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -68,6 +70,26 @@ export class Chain {
     return nextNonce(this.nonces, account.address, chainNonce);
   }
 
+  /**
+   * Builds and broadcasts a signed transaction, rebuilding it with a fresh nonce if the node reports
+   * a nonce conflict (its mempool view can lag ours by a moment).
+   */
+  private async send(account: Account, build: (nonce: number) => Promise<Uint8Array>): Promise<TxOutcome> {
+    let lastError: unknown;
+    for (let attempt = 0; attempt < 3; attempt++) {
+      const bytes = await build(await this.nonce(account));
+      try {
+        return await this.broadcastAndWait(bytes);
+      } catch (error) {
+        lastError = error;
+        const message = error instanceof Error ? error.message : String(error);
+        if (!/ConflictingNonce|nonce/i.test(message)) throw error;
+        await sleep(1500);
+      }
+    }
+    throw lastError;
+  }
+
   async call(
     account: Account,
     contract: string,
@@ -89,51 +111,57 @@ export class Chain {
     args: ClarityValue[],
     opts: { fee?: bigint; deployer?: string } = {},
   ): Promise<TxOutcome> {
-    return this.enqueue(account.address, async () => {
-      const tx = await makeContractCall({
-        contractAddress: opts.deployer ?? this.deployer,
-        contractName: contract,
-        functionName: fn,
-        functionArgs: args,
-        senderKey: account.privateKey,
-        network: "testnet",
-        // The default deny mode aborts any call that moves a token, which every market op does.
-        postConditionMode: "allow",
-        fee: opts.fee ?? 10_000n,
-        nonce: await this.nonce(account),
-      });
-      return this.broadcastAndWait(tx.serializeBytes());
-    });
+    return this.enqueue(account.address, () =>
+      this.send(account, async (nonce) => {
+        const tx = await makeContractCall({
+          contractAddress: opts.deployer ?? this.deployer,
+          contractName: contract,
+          functionName: fn,
+          functionArgs: args,
+          senderKey: account.privateKey,
+          network: "testnet",
+          // The default deny mode aborts any call that moves a token, which every market op does.
+          postConditionMode: "allow",
+          fee: opts.fee ?? 10_000n,
+          nonce,
+        });
+        return tx.serializeBytes();
+      }),
+    );
   }
 
   async transfer(account: Account, recipient: string, amount: bigint): Promise<TxResult> {
-    const outcome = await this.enqueue(account.address, async () => {
-      const tx = await makeSTXTokenTransfer({
-        recipient,
-        amount,
-        senderKey: account.privateKey,
-        network: "testnet",
-        fee: 10_000n,
-        nonce: await this.nonce(account),
-      });
-      return this.broadcastAndWait(tx.serializeBytes());
-    });
+    const outcome = await this.enqueue(account.address, () =>
+      this.send(account, async (nonce) => {
+        const tx = await makeSTXTokenTransfer({
+          recipient,
+          amount,
+          senderKey: account.privateKey,
+          network: "testnet",
+          fee: 10_000n,
+          nonce,
+        });
+        return tx.serializeBytes();
+      }),
+    );
     if (!outcome.ok) throw new Error(`stx transfer aborted: ${outcome.repr ?? outcome.status}`);
     return { txid: outcome.txid, status: "success" };
   }
 
   async deploy(account: Account, name: string, code: string): Promise<TxResult> {
-    const outcome = await this.enqueue(account.address, async () => {
-      const tx = await makeContractDeploy({
-        contractName: name,
-        codeBody: code,
-        senderKey: account.privateKey,
-        network: "testnet",
-        fee: 100_000n,
-        nonce: await this.nonce(account),
-      });
-      return this.broadcastAndWait(tx.serializeBytes());
-    });
+    const outcome = await this.enqueue(account.address, () =>
+      this.send(account, async (nonce) => {
+        const tx = await makeContractDeploy({
+          contractName: name,
+          codeBody: code,
+          senderKey: account.privateKey,
+          network: "testnet",
+          fee: 100_000n,
+          nonce,
+        });
+        return tx.serializeBytes();
+      }),
+    );
     if (!outcome.ok) throw new Error(`${name} deploy aborted: ${outcome.repr ?? outcome.status}`);
     return { txid: outcome.txid, status: "success" };
   }

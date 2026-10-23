@@ -3,6 +3,7 @@ import { Chain } from "./chain.ts";
 import { startDevnet, stopDevnet, type DevnetHandle } from "./devnet.ts";
 import { loadAccounts } from "./keys.ts";
 import type { Account } from "./keys.ts";
+import { fundAccount, newAccount } from "./accounts.ts";
 import { setup, BTC, ETH, MARKET, STX, type Actors } from "./setup.ts";
 import { createContext, type Scenario } from "./scenario.ts";
 import { happy } from "./scenarios/happy.ts";
@@ -39,24 +40,29 @@ function parseArgs(argv: string[]): { keep: boolean; seed: number } {
   return { keep, seed };
 }
 
-function loadActors(): Actors {
+const ACTOR_NAMES: Array<EnumeratedActor> = ["lp", "safe", "max", "near", "under", "liquidator", "staker", "flash"];
+type EnumeratedActor = Exclude<keyof Actors, "deployer">;
+
+function loadDeployer(): Account {
   const accounts = loadAccounts("settings/Devnet.toml");
-  const byName = (name: string): Account => {
-    const account = accounts.find((entry) => entry.name === name);
-    if (!account) throw new Error(`missing devnet account: ${name}`);
-    return account;
-  };
-  return {
-    deployer: byName("deployer"),
-    lp: byName("wallet_1"),
-    safe: byName("wallet_2"),
-    max: byName("wallet_3"),
-    near: byName("wallet_4"),
-    under: byName("wallet_5"),
-    liquidator: byName("wallet_6"),
-    staker: byName("wallet_7"),
-    flash: byName("wallet_8"),
-  };
+  const deployer = accounts.find((entry) => entry.name === "deployer");
+  if (!deployer) throw new Error("missing devnet deployer account");
+  return deployer;
+}
+
+/**
+ * Dedicated funded accounts rather than the devnet wallets: clarinet sends its own pox stacking
+ * transactions from wallet_1..3, and sharing an account with those puts our transactions behind a
+ * nonce we do not control.
+ */
+async function bootstrapActors(chain: Chain, deployer: Account): Promise<Actors> {
+  const actors = { deployer } as Actors;
+  for (const role of ACTOR_NAMES) {
+    const account = newAccount(role);
+    await fundAccount(chain, deployer, account);
+    actors[role] = account;
+  }
+  return actors;
 }
 
 function fuzzAccount(actors: Actors, name: string): Account {
@@ -165,8 +171,8 @@ async function main(): Promise<number> {
   const reportDir = `/tmp/local-e2e-${startedAt.getTime()}`;
   mkdirSync(reportDir, { recursive: true });
 
-  const actors = loadActors();
-  const chain = new Chain(actors.deployer.address);
+  const deployer = loadDeployer();
+  const chain = new Chain(deployer.address);
   let devnet: DevnetHandle | null = null;
   let scenarios: ScenarioResult[] = [];
   const fuzz = { sequences: FUZZ_SEQUENCES, ops: 0, failures: 0, firstFailure: undefined as string | undefined };
@@ -176,6 +182,8 @@ async function main(): Promise<number> {
     devnet = await startDevnet({ logDir: reportDir });
     console.log(`devnet up: api=${devnet.apiUrl} pid=${devnet.pid}`);
 
+    const actors = await bootstrapActors(chain, deployer);
+    console.log("actors funded");
     const baseline = await setup(chain, actors);
     console.log("setup complete");
 
