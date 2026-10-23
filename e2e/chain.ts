@@ -90,10 +90,12 @@ export class Chain {
         functionArgs: args,
         senderKey: account.privateKey,
         network: "testnet",
+        // The default deny mode aborts any call that moves a token, which every market op does.
+        postConditionMode: "allow",
         fee: opts.fee ?? 10_000n,
         nonce: await this.nonce(account),
       });
-      return this.broadcastAndWait(tx.serialize());
+      return this.broadcastAndWait(tx.serializeBytes());
     });
   }
 
@@ -107,7 +109,7 @@ export class Chain {
         fee: 10_000n,
         nonce: await this.nonce(account),
       });
-      return this.broadcastAndWait(tx.serialize());
+      return this.broadcastAndWait(tx.serializeBytes());
     });
     if (!outcome.ok) throw new Error(`stx transfer aborted: ${outcome.repr ?? outcome.status}`);
     return { txid: outcome.txid, status: "success" };
@@ -123,7 +125,7 @@ export class Chain {
         fee: 100_000n,
         nonce: await this.nonce(account),
       });
-      return this.broadcastAndWait(tx.serialize());
+      return this.broadcastAndWait(tx.serializeBytes());
     });
     if (!outcome.ok) throw new Error(`${name} deploy aborted: ${outcome.repr ?? outcome.status}`);
     return { txid: outcome.txid, status: "success" };
