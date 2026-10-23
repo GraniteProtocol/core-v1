@@ -146,15 +146,31 @@ type Session = {
   baseline: Awaited<ReturnType<typeof setup>>;
 };
 
-async function startSession(reportDir: string, deployer: Account, index: number): Promise<Session> {
-  const devnet = await startDevnet({
-    logDir: reportDir,
-    logName: index === 0 ? "devnet.log" : `devnet-${index + 1}.log`,
-  });
-  const chain = new Chain(deployer.address);
-  const actors = await bootstrapActors(chain, deployer);
-  const baseline = await setup(chain, actors);
-  return { devnet, chain, actors, baseline };
+async function startSession(
+  reportDir: string,
+  deployer: Account,
+  index: number,
+  attempts = 4,
+): Promise<Session> {
+  let lastError: unknown;
+  for (let attempt = 1; attempt <= attempts; attempt++) {
+    const devnet = await startDevnet({
+      logDir: reportDir,
+      logName: index === 0 && attempt === 1 ? "devnet.log" : `devnet-${index + 1}-${attempt}.log`,
+    });
+    try {
+      const chain = new Chain(deployer.address);
+      const actors = await bootstrapActors(chain, deployer);
+      const baseline = await setup(chain, actors);
+      return { devnet, chain, actors, baseline };
+    } catch (error) {
+      lastError = error;
+      await stopDevnet(devnet);
+      if (!(error instanceof DevnetStallError)) throw error;
+      console.log(`setup hit a frozen devnet; retrying the boot (${attempt}/${attempts})`);
+    }
+  }
+  throw lastError;
 }
 
 async function runScenario(session: Session, scenario: Scenario): Promise<ScenarioResult> {
