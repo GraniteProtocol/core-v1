@@ -75,8 +75,12 @@ balance = 100_000_000_000_000
 [devnet]
 disable_stacks_explorer = false
 disable_stacks_api = false
-stacks_node_image_url = "quay.io/hirosystems/stacks-node:devnet-v4"
-stacks_signer_image_url = "ghcr.io/stacks-network/stacks-signer:4.0.5-alpine"
+# default stacks-core:4.0.0-alpine was never published; 4.0 nodes also need a later-reward-cycle Epoch 4.0
+stacks_node_image_url = "ghcr.io/stacks-network/stacks-core:4.0.1-alpine"
+stacks_signer_image_url = "ghcr.io/stacks-network/stacks-signer:4.0.1-alpine"
+epoch_4_0 = 162
+# 1s bitcoin blocks keep block-height waits (liquidation gap, staking finalization) short.
+bitcoin_controller_block_time = 1_000
 # disable_subnet_api = false
 # disable_bitcoin_explorer = true
 # working_dir = "tmp/devnet"
