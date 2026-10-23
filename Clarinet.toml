@@ -30,6 +30,11 @@ path = 'contracts/governance-v1.clar'
 clarity_version = 3
 epoch = "3.4"
 
+[contracts.governance-test]
+path = 'contracts/test/governance-test.clar'
+clarity_version = 3
+epoch = "3.4"
+
 [contracts.linear-kinked-ir-v1]
 path = 'contracts/modules/linear-kinked-ir-v1.clar'
 clarity_version = 3
