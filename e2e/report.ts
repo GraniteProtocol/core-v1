@@ -17,7 +17,21 @@ export type RunReport = {
   fuzz: { sequences: number; ops: number; failures: number; firstFailure?: string };
   devnetLog?: string;
   devnetRestarts?: number;
-  accounting?: { drift: string; debtOps: number; maxStepDrift: string; exactZero: boolean };
+  restarts?: Array<{
+    at: string;
+    phase: string;
+    reason: string;
+    sequence?: number;
+    op?: string;
+    driftAtRestart: string;
+  }>;
+  accounting?: {
+    drift: string;
+    debtOps: number;
+    maxStepDrift: string;
+    exactZero: boolean;
+    rebaselines?: Array<{ at: string; phase: string; drift: string }>;
+  };
 };
 
 export async function writeReport(
@@ -41,7 +55,15 @@ export async function writeReport(
     `- fuzz: ${report.fuzz.sequences} sequences, ${report.fuzz.ops} ops, ${report.fuzz.failures} failures`,
   ];
   if (report.devnetLog) lines.push(`- devnet log: ${report.devnetLog}`);
-  if (report.devnetRestarts) lines.push(`- devnet restarts: ${report.devnetRestarts}`);
+  if (report.devnetRestarts) {
+    lines.push(
+      `- devnet restarts: ${report.devnetRestarts} (frozen Stacks tip for 75s at a PoX reward-cycle boundary; the documented clarinet workaround)`,
+    );
+    for (const event of report.restarts ?? []) {
+      const where = event.sequence !== undefined ? ` sequence ${event.sequence}${event.op ? ` ${event.op}` : ""}` : "";
+      lines.push(`  - ${event.at} [${event.phase}${where}] ${event.reason} (drift at restart: ${event.driftAtRestart})`);
+    }
+  }
   if (report.accounting) {
     lines.push(
       `- accounting: gap=${report.accounting.drift}, debt-ops=${report.accounting.debtOps}, max-step=${report.accounting.maxStepDrift}`,

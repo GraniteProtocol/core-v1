@@ -146,10 +146,20 @@ type Session = {
   baseline: Awaited<ReturnType<typeof setup>>;
 };
 
+type RestartEvent = {
+  at: string;
+  phase: string;
+  reason: string;
+  sequence?: number;
+  op?: string;
+  driftAtRestart: string;
+};
+
 async function startSession(
   reportDir: string,
   deployer: Account,
   index: number,
+  onRetry?: (reason: string) => void,
   attempts = 4,
 ): Promise<Session> {
   let lastError: unknown;
@@ -168,6 +178,7 @@ async function startSession(
       await stopDevnet(devnet);
       if (!(error instanceof DevnetStallError)) throw error;
       console.log(`setup hit a frozen devnet; retrying the boot (${attempt}/${attempts})`);
+      onRetry?.(error.message);
     }
   }
   throw lastError;
@@ -213,18 +224,36 @@ async function main(): Promise<number> {
   const deployer = loadDeployer();
   let session: Session | null = null;
   let restarts = 0;
+  const restartLog: RestartEvent[] = [];
   const scenarios: ScenarioResult[] = [];
   const fuzz = { sequences: FUZZ_SEQUENCES, ops: 0, failures: 0, firstFailure: undefined as string | undefined };
 
-  const restart = async (reason: string): Promise<void> => {
-    if (!session) throw new Error("no devnet session to restart");
+  const recordRestart = (phase: string, reason: string, extra: { sequence?: number; op?: string } = {}): void => {
     restarts += 1;
+    restartLog.push({
+      at: new Date().toISOString(),
+      phase,
+      reason,
+      ...extra,
+      driftAtRestart: accountingStats().drift.toString(),
+    });
     if (restarts > MAX_RESTARTS) {
-      throw new Error(`devnet stalled ${restarts} times, giving up (last: ${reason})`);
+      throw new Error(`devnet restarted ${restarts} times, above the cap of ${MAX_RESTARTS}; last reason: ${reason}`);
     }
-    console.log(`devnet stall: ${reason}; restart ${restarts}/${MAX_RESTARTS}`);
+    console.log(`devnet stall: ${reason}; restart ${restarts}/${MAX_RESTARTS} (${phase})`);
+  };
+
+  const restart = async (
+    reason: string,
+    phase: string,
+    extra: { sequence?: number; op?: string } = {},
+  ): Promise<void> => {
+    if (!session) throw new Error("no devnet session to restart");
+    recordRestart(phase, reason, extra);
     await stopDevnet(session.devnet);
-    session = await startSession(reportDir, deployer, restarts);
+    session = await startSession(reportDir, deployer, restarts, (retryReason) =>
+      recordRestart("boot", retryReason),
+    );
     resetDriftBaseline();
     console.log("devnet restarted and set up");
   };
@@ -245,7 +274,7 @@ async function main(): Promise<number> {
           break;
         } catch (error) {
           if (error instanceof DevnetStallError && attempt < 2) {
-            await restart(error.message);
+            await restart(error.message, `matrix:${scenario.name}`);
             continue;
           }
           throw error;
@@ -266,7 +295,7 @@ async function main(): Promise<number> {
             break;
           } catch (error) {
             if (error instanceof DevnetStallError && attempt < 2) {
-              await restart(error.message);
+              await restart(error.message, "fuzz", { sequence: index, op: JSON.stringify(op) });
               continue;
             }
             // An aborted fuzz op is an expected outcome; its state change is nil.
@@ -311,11 +340,13 @@ async function main(): Promise<number> {
       fuzz,
       devnetLog: session.devnet.logPath,
       devnetRestarts: restarts,
+      restarts: restartLog,
       accounting: {
         drift: accounting.drift.toString(),
         debtOps: accounting.debtOps,
         maxStepDrift: accounting.maxStepDrift.toString(),
         exactZero: accounting.exactZero,
+        rebaselines: restartLog.map((event) => ({ at: event.at, phase: event.phase, drift: event.driftAtRestart })),
       },
     };
     const paths = await writeReport(reportDir, report);
@@ -329,7 +360,13 @@ async function main(): Promise<number> {
     console.log(
       `accounting: gap=${accounting.drift} debt-ops=${accounting.debtOps} max-step=${accounting.maxStepDrift}`,
     );
-    console.log(`devnet restarts: ${restarts}`);
+    console.log(
+      `devnet restarts: ${restarts} (frozen Stacks tip for 75s at a PoX reward-cycle boundary)`,
+    );
+    for (const event of restartLog) {
+      const where = event.sequence !== undefined ? ` sequence ${event.sequence}` : "";
+      console.log(`  - [${event.phase}${where}] ${event.reason} (drift at restart ${event.driftAtRestart})`);
+    }
     if (!accounting.exactZero) {
       console.log(
         "warning: the accounting gap is non-zero (integer rounding residue; see report.json accounting)",
