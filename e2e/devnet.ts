@@ -110,31 +110,45 @@ export async function startDevnet(opts: {
   proc.stdin?.write("y\n");
   proc.stdin?.end();
 
-  const fail = (reason: string): never => {
-    try {
-      proc.kill("SIGTERM");
-    } catch {
-      /* already gone */
-    }
-    throw new Error(`${reason}\n--- devnet log tail ---\n${logTail(logPath)}`);
+  const handle: DevnetHandle = {
+    pid: proc.pid ?? -1,
+    logPath,
+    apiUrl,
+    nodeUrl,
+    network: "granite-core.devnet",
+    proc,
   };
 
-  const deadline = Date.now() + 300_000;
-  while (Date.now() < deadline) {
-    if (proc.exitCode !== null) fail(`clarinet exited with code ${proc.exitCode} before the API was ready`);
-    if ((await httpStatus(`${apiUrl}/v2/info`)) === 200) break;
-    await sleep(1000);
+  // Every failed start must leave nothing behind: an orphaned clarinet holds the ports and poisons
+  // the next boot.
+  try {
+    const deadline = Date.now() + 300_000;
+    while (Date.now() < deadline) {
+      if (proc.exitCode !== null) {
+        throw new Error(`clarinet exited with code ${proc.exitCode} before the API was ready`);
+      }
+      if ((await httpStatus(`${apiUrl}/v2/info`)) === 200) break;
+      await sleep(1000);
+    }
+    if ((await httpStatus(`${apiUrl}/v2/info`)) !== 200) {
+      throw new Error(`devnet API did not answer on ${apiUrl} within 300s`);
+    }
+
+    const contracts = manifestContractNames(join(repoRoot, "Clarinet.toml"));
+    const deployer = loadDeployer(join(repoRoot, "settings/Devnet.toml"));
+    await waitForContracts(contracts, deployer, apiUrl, opts.contractTimeoutMs ?? 300_000, () => {
+      if (proc.exitCode !== null) {
+        throw new Error(`clarinet exited with code ${proc.exitCode} before all contracts deployed`);
+      }
+    });
+    return handle;
+  } catch (error) {
+    await stopDevnet(handle);
+    const reason = error instanceof Error ? error.message : String(error);
+    const message = `${reason}\n--- devnet log tail ---\n${logTail(logPath)}`;
+    if (error instanceof DevnetStallError) throw new DevnetStallError(message);
+    throw new Error(message);
   }
-  if ((await httpStatus(`${apiUrl}/v2/info`)) !== 200) fail(`devnet API did not answer on ${apiUrl} within 300s`);
-
-  const network = "granite-core.devnet";
-  const contracts = manifestContractNames(join(repoRoot, "Clarinet.toml"));
-  const deployer = loadDeployer(join(repoRoot, "settings/Devnet.toml"));
-  await waitForContracts(contracts, deployer, apiUrl, opts.contractTimeoutMs ?? 300_000, () => {
-    if (proc.exitCode !== null) fail(`clarinet exited with code ${proc.exitCode} before all contracts deployed`);
-  });
-
-  return { pid: proc.pid ?? -1, logPath, apiUrl, nodeUrl, network, proc };
 }
 
 export function loadDeployer(settingsPath: string): string {
