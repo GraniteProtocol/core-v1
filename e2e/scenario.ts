@@ -1,4 +1,4 @@
-import { checkInvariants, failed } from "./invariants.ts";
+import { checkInvariants, failed, type OpKind } from "./invariants.ts";
 import type { Chain } from "./chain.ts";
 import type { Actors, Snapshot } from "./setup.ts";
 
@@ -10,8 +10,8 @@ export type ScenarioContext = {
   baseline: Snapshot;
   steps: StepResult[];
   invariantFailures: string[];
-  step: (name: string, action: () => Promise<unknown>) => Promise<void>;
-  attempt: (name: string, action: () => Promise<unknown>, code: string) => Promise<void>;
+  step: (name: string, action: () => Promise<unknown>, kind?: OpKind) => Promise<void>;
+  attempt: (name: string, action: () => Promise<unknown>, code: string, kind?: OpKind) => Promise<void>;
   assert: (name: string, condition: boolean, detail: string) => void;
 };
 
@@ -21,8 +21,8 @@ export function createContext(chain: Chain, actors: Actors, baseline: Snapshot):
   const steps: StepResult[] = [];
   const invariantFailures: string[] = [];
 
-  const verify = async (label: string): Promise<void> => {
-    const results = failed(await checkInvariants(chain));
+  const verify = async (label: string, kind: OpKind): Promise<void> => {
+    const results = failed(await checkInvariants(chain, kind));
     if (results.length > 0) {
       const detail = results.map((result) => `${result.name}: ${result.detail}`).join("; ");
       invariantFailures.push(`${label}: ${detail}`);
@@ -40,7 +40,7 @@ export function createContext(chain: Chain, actors: Actors, baseline: Snapshot):
     baseline,
     steps,
     invariantFailures,
-    async step(name, action) {
+    async step(name, action, kind = "non-debt") {
       try {
         await action();
         record(name, true);
@@ -49,9 +49,9 @@ export function createContext(chain: Chain, actors: Actors, baseline: Snapshot):
         record(name, false, failure);
         throw error;
       }
-      await verify(name);
+      await verify(name, kind);
     },
-    async attempt(name, action, code) {
+    async attempt(name, action, code, kind = "non-debt") {
       try {
         await action();
       } catch (error) {
@@ -62,7 +62,7 @@ export function createContext(chain: Chain, actors: Actors, baseline: Snapshot):
           throw new Error(failure);
         }
         record(name, true);
-        await verify(name);
+        await verify(name, kind);
         return;
       }
       const failure = `expected abort ${code}, but the call succeeded`;

@@ -74,8 +74,10 @@ scenario("lp-withdraw-cap", async (ctx) => {
   const lp = await fund(ctx, "cap-lp", { usdc: 1_000_000n * USDC });
   await ctx.step("lp deposits 1,000,000", () => deposit(chain, lp, 1_000_000n * USDC));
   await ctx.step("wait for the decay window", () => sleep(61_000));
+  // The bucket only syncs inside a successful call; an aborted one rolls its sync back.
+  await ctx.step("withdraw one unit to sync the bucket", () => withdraw(chain, lp, 1n));
   const bucket = asUint(await chain.read("withdrawal-caps-v1", "get-lp-bucket"));
-  await ctx.assert("bucket is positive after decay", bucket > 0n, `bucket ${bucket}`);
+  await ctx.assert("bucket is positive after decay", bucket > 1n, `bucket ${bucket}`);
   await ctx.attempt(
     "withdrawal above the bucket aborts",
     () => withdraw(chain, lp, bucket * 2n),
@@ -83,8 +85,9 @@ scenario("lp-withdraw-cap", async (ctx) => {
   );
   await ctx.step("withdraw at the bucket succeeds", () => withdraw(chain, lp, bucket));
   await ctx.step("wait for the refill window", () => sleep(121_000));
+  await ctx.step("withdraw one unit to sync the bucket", () => withdraw(chain, lp, 1n));
   const refilled = asUint(await chain.read("withdrawal-caps-v1", "get-lp-bucket"));
-  await ctx.assert("the bucket refilled", refilled > 0n, `bucket ${refilled}`);
+  await ctx.assert("the bucket refilled", refilled > 1n, `bucket ${refilled}`);
   await ctx.step("withdraw after refill succeeds", () => withdraw(chain, lp, refilled));
   await ctx.step("reset lp cap", () =>
     callAsDeployer(chain, actors.deployer, "withdrawal-caps-v1", "set-lp-cap", [Cl.uint(0)]),
@@ -95,13 +98,13 @@ scenario("ltv-boundary", async (ctx) => {
   const { chain } = ctx;
   const borrower = await fund(ctx, "ltv-borrower", { btc: 2n * UNIT, usdc: 1_000n * USDC });
   await ctx.step("add 1 BTC", () => addCollateral(chain, borrower, BTC, UNIT));
-  await ctx.step("borrow at the 70% limit", () => borrow(chain, borrower, 42_000n * USDC));
-  await ctx.attempt("one unit over the limit aborts", () => borrow(chain, borrower, 1n * USDC), "u20002");
-  await ctx.step("full repay", () => repay(chain, borrower, 10n ** 30n));
+  await ctx.step("borrow at the 70% limit", () => borrow(chain, borrower, 42_000n * USDC), "debt");
+  await ctx.attempt("one unit over the limit aborts", () => borrow(chain, borrower, 1n * USDC), "u20002", "debt");
+  await ctx.step("full repay", () => repay(chain, borrower, 10n ** 30n), "debt");
   const afterFull = await positionOf(chain, borrower.address);
   await ctx.assert("full repay clears debt", afterFull !== null && afterFull.debtShares === 0n, "debt shares remain");
-  await ctx.step("borrow 10,000", () => borrow(chain, borrower, 10_000n * USDC));
-  await ctx.step("partial repay 4,000", () => repay(chain, borrower, 4_000n * USDC));
+  await ctx.step("borrow 10,000", () => borrow(chain, borrower, 10_000n * USDC), "debt");
+  await ctx.step("partial repay 4,000", () => repay(chain, borrower, 4_000n * USDC), "debt");
   const afterPartial = await positionOf(chain, borrower.address);
   await ctx.assert(
     "partial repay leaves debt between 0 and 10,000",
@@ -117,8 +120,8 @@ scenario("mixed-collateral", async (ctx) => {
     await addCollateral(chain, borrower, BTC, UNIT);
     await addCollateral(chain, borrower, ETH, 10n * UNIT);
   });
-  await ctx.step("borrow 50,000", () => borrow(chain, borrower, 50_000n * USDC));
-  await ctx.step("repay 20,000", () => repay(chain, borrower, 20_000n * USDC));
+  await ctx.step("borrow 50,000", () => borrow(chain, borrower, 50_000n * USDC), "debt");
+  await ctx.step("repay 20,000", () => repay(chain, borrower, 20_000n * USDC), "debt");
   await ctx.assert(
     "both collaterals stay posted",
     (await userCollateral(chain, borrower.address, BTC)) === UNIT &&
@@ -134,7 +137,7 @@ scenario("health-across-collaterals", async (ctx) => {
     await addCollateral(chain, borrower, BTC, UNIT);
     await addCollateral(chain, borrower, ETH, 10n * UNIT);
   });
-  await ctx.step("borrow 57,000", () => borrow(chain, borrower, 57_000n * USDC));
+  await ctx.step("borrow 57,000", () => borrow(chain, borrower, 57_000n * USDC), "debt");
   const healthy = await healthOf(chain, borrower.address);
   await ctx.assert(
     "position starts healthy",
@@ -155,7 +158,7 @@ scenario("health-across-collaterals", async (ctx) => {
     unhealthy !== null && unhealthy.positionHealth < HUNDRED_PCT,
     `health ${unhealthy?.positionHealth}`,
   );
-  await ctx.attempt("borrowing against a sick position aborts", () => borrow(chain, borrower, 1n * USDC), "u20002");
+  await ctx.attempt("borrowing against a sick position aborts", () => borrow(chain, borrower, 1n * USDC), "u20002", "debt");
   setPrice(ETH, 3_000n);
   const recovered = await healthOf(chain, borrower.address);
   await ctx.assert(
@@ -171,12 +174,12 @@ scenario("direct-liquidation", async (ctx) => {
   const borrower = await fund(ctx, "liq-borrower", { btc: 2n * UNIT });
   const liquidator = await fund(ctx, "liq-liquidator", { usdc: 100_000n * USDC });
   await ctx.step("add 1 BTC", () => addCollateral(chain, borrower, BTC, UNIT));
-  await ctx.step("borrow 42,000", () => borrow(chain, borrower, 42_000n * USDC));
+  await ctx.step("borrow 42,000", () => borrow(chain, borrower, 42_000n * USDC), "debt");
   await ctx.step(`wait ${LIQUIDATION_BLOCK_GAP} blocks`, () => chain.waitBlocks(LIQUIDATION_BLOCK_GAP));
   setPrice(BTC, 50_000n);
   const collateralBefore = await userCollateral(chain, borrower.address, BTC);
   const seizedBefore = await tokenBalance(chain, BTC, liquidator.address);
-  await ctx.step("liquidate", () => liquidate(chain, liquidator, BTC, borrower.address, 100_000n * USDC));
+  await ctx.step("liquidate", () => liquidate(chain, liquidator, BTC, borrower.address, 100_000n * USDC), "debt");
   const collateralAfter = await userCollateral(chain, borrower.address, BTC);
   const seizedAfter = await tokenBalance(chain, BTC, liquidator.address);
   await ctx.assert("collateral seized", collateralAfter < collateralBefore, `collateral ${collateralAfter}`);
@@ -191,12 +194,12 @@ scenario("direct-liquidation", async (ctx) => {
   // ETH collateral: 10 ETH at $3,000 borrows 14,000; a crash to $1,000 makes it liquidatable.
   const ethBorrower = await fund(ctx, "liq-eth-borrower", { eth: 20n * UNIT });
   await ctx.step("add 10 ETH", () => addCollateral(chain, ethBorrower, ETH, 10n * UNIT));
-  await ctx.step("borrow 14,000 against ETH", () => borrow(chain, ethBorrower, 14_000n * USDC));
+  await ctx.step("borrow 14,000 against ETH", () => borrow(chain, ethBorrower, 14_000n * USDC), "debt");
   await ctx.step(`wait ${LIQUIDATION_BLOCK_GAP} blocks`, () => chain.waitBlocks(LIQUIDATION_BLOCK_GAP));
   setPrice(ETH, 1_000n);
   const ethBefore = await tokenBalance(chain, ETH, liquidator.address);
   await ctx.step("liquidate ETH collateral", () =>
-    liquidate(chain, liquidator, ETH, ethBorrower.address, 100_000n * USDC),
+    liquidate(chain, liquidator, ETH, ethBorrower.address, 100_000n * USDC), "debt",
   );
   const ethAfter = await tokenBalance(chain, ETH, liquidator.address);
   await ctx.assert("liquidator received ETH", ethAfter > ethBefore, `${ethBefore} -> ${ethAfter}`);
@@ -204,11 +207,11 @@ scenario("direct-liquidation", async (ctx) => {
   // STX collateral: 10,000 STX at $2 borrows 9,000; a crash to $1 makes it liquidatable.
   const stxBorrower = await fund(ctx, "liq-stx-borrower", { usdc: 0n });
   await ctx.step("add 10,000 STX", () => addCollateral(chain, stxBorrower, STX, 10_000n * 1_000_000n));
-  await ctx.step("borrow 9,000 against STX", () => borrow(chain, stxBorrower, 9_000n * USDC));
+  await ctx.step("borrow 9,000 against STX", () => borrow(chain, stxBorrower, 9_000n * USDC), "debt");
   await ctx.step(`wait ${LIQUIDATION_BLOCK_GAP} blocks`, () => chain.waitBlocks(LIQUIDATION_BLOCK_GAP));
   setPrice(STX, 1n);
   await ctx.step("liquidate STX collateral", () =>
-    liquidate(chain, liquidator, STX, stxBorrower.address, 100_000n * USDC),
+    liquidate(chain, liquidator, STX, stxBorrower.address, 100_000n * USDC), "debt",
   );
   await ctx.assert(
     "STX collateral was seized",
@@ -227,7 +230,7 @@ scenario("batch-liquidation", async (ctx) => {
     await ctx.step(`open ${borrower.name}`, async () => {
       await addCollateral(chain, borrower, BTC, UNIT);
       await borrow(chain, borrower, 42_000n * USDC);
-    });
+    }, "debt");
   }
   await ctx.step(`wait ${LIQUIDATION_BLOCK_GAP} blocks`, () => chain.waitBlocks(LIQUIDATION_BLOCK_GAP));
   setPrice(BTC, 50_000n);
@@ -236,7 +239,7 @@ scenario("batch-liquidation", async (ctx) => {
     batchLiquidate(chain, liquidator, BTC, [
       { user: first.address, repayAmount: 20_000n * USDC, minCollateralExpected: 0n },
       { user: second.address, repayAmount: 20_000n * USDC, minCollateralExpected: 0n },
-    ]),
+    ]), "debt",
   );
   const after = await Promise.all([first, second].map((b) => userCollateral(chain, b.address, BTC)));
   await ctx.assert(
@@ -251,7 +254,7 @@ scenario("flash-loan-liquidation", async (ctx) => {
   const { chain, actors } = ctx;
   const borrower = await fund(ctx, "flash-liq-borrower", { btc: 2n * UNIT });
   await ctx.step("add 1 BTC", () => addCollateral(chain, borrower, BTC, UNIT));
-  await ctx.step("borrow 42,000", () => borrow(chain, borrower, 42_000n * USDC));
+  await ctx.step("borrow 42,000", () => borrow(chain, borrower, 42_000n * USDC), "debt");
   await ctx.step(`wait ${LIQUIDATION_BLOCK_GAP} blocks`, () => chain.waitBlocks(LIQUIDATION_BLOCK_GAP));
   setPrice(BTC, 50_000n);
   const before = await userCollateral(chain, borrower.address, BTC);
@@ -262,7 +265,7 @@ scenario("flash-loan-liquidation", async (ctx) => {
       Cl.uint(100_000n * USDC),
       Cl.uint(0),
       Cl.contractPrincipal(chain.deployer, "mock-liquidator-with-flash-loan"),
-    ]),
+    ]), "debt",
   );
   const after = await userCollateral(chain, borrower.address, BTC);
   await ctx.assert("flash-loan path seized collateral", after < before, `collateral ${before} -> ${after}`);
@@ -274,11 +277,11 @@ scenario("dust-sweep", async (ctx) => {
   const borrower = await fund(ctx, "dust-borrower", { btc: 2n * UNIT });
   const liquidator = await fund(ctx, "dust-liquidator", { usdc: 100_000n * USDC });
   await ctx.step("add 1 BTC plus dust", () => addCollateral(chain, borrower, BTC, UNIT + 101n));
-  await ctx.step("borrow 42,000", () => borrow(chain, borrower, 42_000n * USDC));
+  await ctx.step("borrow 42,000", () => borrow(chain, borrower, 42_000n * USDC), "debt");
   await ctx.step(`wait ${LIQUIDATION_BLOCK_GAP} blocks`, () => chain.waitBlocks(LIQUIDATION_BLOCK_GAP));
   setPriceRaw(BTC, 2_013_742_000_000n); // $20,137.42, a price with cents
   await ctx.step("liquidate a deep bad-debt position", () =>
-    liquidate(chain, liquidator, BTC, borrower.address, 100_000n * USDC),
+    liquidate(chain, liquidator, BTC, borrower.address, 100_000n * USDC), "debt",
   );
   const remaining = await userCollateral(chain, borrower.address, BTC);
   await ctx.assert("no dust is left behind", remaining === 0n, `collateral left: ${remaining}`);
@@ -347,24 +350,25 @@ scenario("caps", async (ctx) => {
   );
   await ctx.step("add 10 BTC", () => addCollateral(chain, borrower, BTC, 10n * UNIT));
   await ctx.step("wait for the decay window", () => sleep(61_000));
+  // The bucket only syncs inside a successful call; an aborted one rolls its sync back.
+  await ctx.step("remove one unit to sync the bucket", () => removeCollateral(chain, borrower, BTC, 1n));
   const bucket = asUint(
     await chain.read("withdrawal-caps-v1", "get-collateral-bucket", [Cl.contractPrincipal(chain.deployer, BTC)]),
   );
-  await ctx.assert("collateral bucket is positive after decay", bucket > 0n, `bucket ${bucket}`);
-  const overBucket = (await userCollateral(chain, borrower.address, BTC)) < bucket * 2n
-    ? (await userCollateral(chain, borrower.address, BTC))
-    : bucket * 2n;
+  await ctx.assert("collateral bucket is positive after decay", bucket > 1n, `bucket ${bucket}`);
+  const collateral = await userCollateral(chain, borrower.address, BTC);
   await ctx.attempt(
     "removing more than the bucket aborts",
-    () => removeCollateral(chain, borrower, BTC, overBucket),
+    () => removeCollateral(chain, borrower, BTC, collateral),
     "u120004",
   );
   await ctx.step("removing up to the bucket succeeds", () => removeCollateral(chain, borrower, BTC, bucket));
   await ctx.step("wait for the refill window", () => sleep(121_000));
+  await ctx.step("remove one unit to sync the bucket", () => removeCollateral(chain, borrower, BTC, 1n));
   const refilled = asUint(
     await chain.read("withdrawal-caps-v1", "get-collateral-bucket", [Cl.contractPrincipal(chain.deployer, BTC)]),
   );
-  await ctx.assert("collateral bucket refilled", refilled > 0n, `bucket ${refilled}`);
+  await ctx.assert("collateral bucket refilled", refilled > 1n, `bucket ${refilled}`);
   await ctx.step("removing the refilled amount succeeds", () => removeCollateral(chain, borrower, BTC, refilled));
   await ctx.step("zero the collateral cap factor", () =>
     callAsDeployer(chain, actors.deployer, "withdrawal-caps-v1", "set-collateral-cap", [
@@ -390,13 +394,13 @@ scenario("bad-debt-socialization", async (ctx) => {
     await stake(chain, actors.staker, balance / 10n);
   });
   await ctx.step("add 1 BTC", () => addCollateral(chain, borrower, BTC, UNIT));
-  await ctx.step("borrow 42,000", () => borrow(chain, borrower, 42_000n * USDC));
+  await ctx.step("borrow 42,000", () => borrow(chain, borrower, 42_000n * USDC), "debt");
   await ctx.step(`wait ${LIQUIDATION_BLOCK_GAP} blocks`, () => chain.waitBlocks(LIQUIDATION_BLOCK_GAP));
   setPrice(BTC, 10_000n);
   const stakedBefore = await totalStakedLpTokens(chain);
   const assetsBefore = (await lpParams(chain)).totalAssets;
   await ctx.step("liquidate an insolvent position", () =>
-    liquidate(chain, actors.liquidator, BTC, borrower.address, 100_000n * USDC),
+    liquidate(chain, actors.liquidator, BTC, borrower.address, 100_000n * USDC), "debt",
   );
   const position = await positionOf(chain, borrower.address);
   const stakedAfter = await totalStakedLpTokens(chain);
@@ -415,7 +419,7 @@ scenario("remove-collateral-stuck", async (ctx) => {
     await addCollateral(chain, borrower, BTC, UNIT);
     await addCollateral(chain, borrower, ETH, UNIT);
   });
-  await ctx.step("borrow 30,000", () => borrow(chain, borrower, 30_000n * USDC));
+  await ctx.step("borrow 30,000", () => borrow(chain, borrower, 30_000n * USDC), "debt");
   await ctx.step("de-list ETH as a collateral", () =>
     callAsDeployer(chain, actors.deployer, "state-v1", "remove-collateral", [
       Cl.contractPrincipal(chain.deployer, ETH),
@@ -432,6 +436,7 @@ scenario("remove-collateral-stuck", async (ctx) => {
     "liquidating a de-listed collateral aborts",
     () => liquidate(chain, actors.liquidator, ETH, borrower.address, 1_000n * USDC),
     "u30005",
+    "debt",
   );
   await ctx.step("restore ETH settings", () =>
     callAsDeployer(chain, actors.deployer, "state-v1", "update-collateral-settings", [

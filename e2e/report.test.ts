@@ -16,6 +16,7 @@ describe("report", () => {
         { name: "caps", passed: false, failure: "expected err u120002", steps: 5 },
       ],
       fuzz: { sequences: 200, ops: 6000, failures: 0 },
+      accounting: { drift: "1", debtOps: 12, maxStepDrift: "1", exactZero: false },
     });
     const md = readFileSync(paths.mdPath, "utf8");
     const json = JSON.parse(readFileSync(paths.jsonPath, "utf8"));
@@ -23,5 +24,7 @@ describe("report", () => {
     expect(md).toContain("seed: 7");
     expect(json.seed).toBe(7);
     expect(json.scenarios[1].failure).toBe("expected err u120002");
+    expect(md).toContain("accounting: gap=1");
+    expect(md).toContain("warning: the accounting gap is non-zero");
   });
 });

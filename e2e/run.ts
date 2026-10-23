@@ -8,7 +8,9 @@ import { createContext, type Scenario } from "./scenario.ts";
 import { happy } from "./scenarios/happy.ts";
 import { matrix } from "./scenarios/matrix.ts";
 import { FUZZ_MAX_OPS, FUZZ_MIN_OPS, FUZZ_SEQUENCES, generate, type Op } from "./fuzz.ts";
-import { checkInvariants, failed } from "./invariants.ts";
+import { accountingStats, checkInvariants, failed, resetAccounting } from "./invariants.ts";
+
+const DEBT_OPS = new Set(["borrow", "repay", "liquidate"]);
 import { resetToBaseline, setPrice } from "./prices.ts";
 import { Cl } from "@stacks/transactions";
 import { writeReport, type ScenarioResult } from "./report.ts";
@@ -158,6 +160,7 @@ async function runScenario(
 
 async function main(): Promise<number> {
   const { keep, seed } = parseArgs(process.argv.slice(2));
+  resetAccounting();
   const startedAt = new Date();
   const reportDir = `/tmp/local-e2e-${startedAt.getTime()}`;
   mkdirSync(reportDir, { recursive: true });
@@ -200,7 +203,7 @@ async function main(): Promise<number> {
             break;
           }
         }
-        const violations = failed(await checkInvariants(chain));
+        const violations = failed(await checkInvariants(chain, DEBT_OPS.has(op.op) ? "debt" : "non-debt"));
         if (violations.length > 0) {
           fuzz.failures += 1;
           fuzz.firstFailure = `sequence ${index} (seed ${seed + index}) op ${JSON.stringify(op)}: ${violations
@@ -219,6 +222,7 @@ async function main(): Promise<number> {
       fuzz.firstFailure = `final invariants: ${finalViolations.map((v) => `${v.name}: ${v.detail}`).join("; ")}`;
     }
 
+    const accounting = accountingStats();
     const report = {
       startedAt: startedAt.toISOString(),
       durationMs: Date.now() - startedAt.getTime(),
@@ -226,6 +230,12 @@ async function main(): Promise<number> {
       scenarios,
       fuzz,
       devnetLog: devnet.logPath,
+      accounting: {
+        drift: accounting.drift.toString(),
+        debtOps: accounting.debtOps,
+        maxStepDrift: accounting.maxStepDrift.toString(),
+        exactZero: accounting.exactZero,
+      },
     };
     const paths = await writeReport(reportDir, report);
     const passed = scenarios.filter((scenario) => scenario.passed).length;
@@ -235,6 +245,14 @@ async function main(): Promise<number> {
         (report.durationMs / 1000).toFixed(1)
       }s, ${ok ? "PASS" : "FAIL"}`,
     );
+    console.log(
+      `accounting: gap=${accounting.drift} debt-ops=${accounting.debtOps} max-step=${accounting.maxStepDrift}`,
+    );
+    if (!accounting.exactZero) {
+      console.log(
+        "warning: the accounting gap is non-zero (integer rounding residue; see report.json accounting)",
+      );
+    }
     console.log(`report: ${paths.mdPath}`);
     console.log(await proposeLearnings(report));
     return ok ? 0 : 1;

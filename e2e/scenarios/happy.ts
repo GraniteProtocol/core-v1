@@ -21,14 +21,14 @@ export const happy: Scenario = {
     );
 
     await ctx.step("borrower adds 1 BTC", () => addCollateral(chain, borrower, BTC, 100_000_000n));
-    await ctx.step("borrower borrows 30,000", () => borrow(chain, borrower, 30_000n * USDC));
+    await ctx.step("borrower borrows 30,000", () => borrow(chain, borrower, 30_000n * USDC), "debt");
     await ctx.assert(
       "borrow credited",
       (await tokenBalance(chain, MARKET, borrower.address)) === 30_000n * USDC,
       "borrower did not receive the borrowed USDC",
     );
 
-    await ctx.step("borrower repays 15,000", () => repay(chain, borrower, 15_000n * USDC));
+    await ctx.step("borrower repays 15,000", () => repay(chain, borrower, 15_000n * USDC), "debt");
     await ctx.assert(
       "repay debited",
       (await tokenBalance(chain, MARKET, borrower.address)) === 15_000n * USDC,
