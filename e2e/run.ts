@@ -164,20 +164,21 @@ async function startSession(
 ): Promise<Session> {
   let lastError: unknown;
   for (let attempt = 1; attempt <= attempts; attempt++) {
-    const devnet = await startDevnet({
-      logDir: reportDir,
-      logName: index === 0 && attempt === 1 ? "devnet.log" : `devnet-${index + 1}-${attempt}.log`,
-    });
+    let devnet: DevnetHandle | null = null;
     try {
+      devnet = await startDevnet({
+        logDir: reportDir,
+        logName: index === 0 && attempt === 1 ? "devnet.log" : `devnet-${index + 1}-${attempt}.log`,
+      });
       const chain = new Chain(deployer.address);
       const actors = await bootstrapActors(chain, deployer);
       const baseline = await setup(chain, actors);
       return { devnet, chain, actors, baseline };
     } catch (error) {
       lastError = error;
-      await stopDevnet(devnet);
+      if (devnet) await stopDevnet(devnet);
       if (!(error instanceof DevnetStallError)) throw error;
-      console.log(`setup hit a frozen devnet; retrying the boot (${attempt}/${attempts})`);
+      console.log(`devnet boot or setup froze; retrying the boot (${attempt}/${attempts})`);
       onRetry?.(error.message);
     }
   }

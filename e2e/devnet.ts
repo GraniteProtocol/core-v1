@@ -2,6 +2,7 @@ import { spawn, spawnSync, type ChildProcess } from "node:child_process";
 import { existsSync, readFileSync, mkdirSync } from "node:fs";
 import { join } from "node:path";
 import { deriveKey } from "./keys.ts";
+import { DevnetStallError } from "./chain.ts";
 
 export type DevnetHandle = {
   pid: number;
@@ -101,7 +102,7 @@ export async function startDevnet(opts: {
 
   await ensureDocker();
   const out = await import("node:fs").then((fs) => fs.openSync(logPath, "w"));
-  const proc = spawn("clarinet", ["devnet", "start", "--no-dashboard", "--from-genesis"], {
+  const proc = spawn("clarinet", ["devnet", "start", "--no-dashboard", "--from-genesis", "--save-container-logs"], {
     cwd: repoRoot,
     env: { ...process.env, PATH: childPath() },
     stdio: ["pipe", out, out],
@@ -146,6 +147,17 @@ export function loadDeployer(settingsPath: string): string {
   return deriveKey(mnemonic).address;
 }
 
+async function tipHeight(apiUrl: string): Promise<number> {
+  try {
+    const res = await fetch(`${apiUrl}/v2/info`);
+    if (!res.ok) return -1;
+    const json = (await res.json()) as { stacks_tip_height?: number };
+    return json.stacks_tip_height ?? -1;
+  } catch {
+    return -1;
+  }
+}
+
 export async function waitForContracts(
   names: string[],
   deployer: string,
@@ -157,12 +169,27 @@ export async function waitForContracts(
 ): Promise<void> {
   const missing = new Set(names);
   const deadline = Date.now() + timeoutMs;
+  let tip = -1;
+  let tipSince = Date.now();
+  let lastTipCheck = 0;
   while (Date.now() < deadline) {
     for (const name of [...missing]) {
       if ((await httpStatus(`${apiUrl}/v2/contracts/source/${deployer}/${name}`)) === 200) missing.delete(name);
     }
     if (missing.size === 0) return;
     onDead();
+    if (Date.now() - lastTipCheck >= 3000) {
+      lastTipCheck = Date.now();
+      const height = await tipHeight(apiUrl);
+      if (height > tip) {
+        tip = height;
+        tipSince = Date.now();
+      } else if (Date.now() - tipSince >= 120_000) {
+        throw new DevnetStallError(
+          `stacks tip stuck at ${height} for 120s while waiting for ${missing.size} contracts`,
+        );
+      }
+    }
     await sleep(1000);
   }
   throw new Error(`contracts never resolved: ${[...missing].join(", ")}`);
