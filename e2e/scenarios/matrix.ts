@@ -428,7 +428,7 @@ scenario("remove-collateral-stuck", async (ctx) => {
   await ctx.attempt(
     "withdrawing a de-listed collateral aborts",
     () => removeCollateral(chain, borrower, ETH, UNIT),
-    "u20007",
+    "u108",
   );
   await ctx.step(`wait ${LIQUIDATION_BLOCK_GAP} blocks`, () => chain.waitBlocks(LIQUIDATION_BLOCK_GAP));
   setPrice(BTC, 30_000n);
@@ -472,22 +472,25 @@ scenario("governance", async (ctx) => {
     label: string,
     propose: () => Promise<string>,
     verify: () => Promise<boolean>,
+    autoExecutes = false,
   ) => {
     let proposalId = "";
     await ctx.step(`propose ${label}`, async () => {
       proposalId = await propose();
     });
-    await ctx.step(`wait the test timelock for ${label}`, () => chain.waitBlocks(11));
-    await ctx.step(`execute ${label}`, () =>
-      chain.call(actors.deployer, "governance-test", "execute", [Cl.buffer(proposalId)]),
-    );
+    if (!autoExecutes) {
+      await ctx.step(`wait the test timelock for ${label}`, () => chain.waitBlocks(11));
+      await ctx.step(`execute ${label}`, () =>
+        chain.call(actors.deployer, "governance-test", "execute", [Cl.bufferFromHex(proposalId)]),
+      );
+    }
     await ctx.assert(`${label} took effect`, await verify(), `${label} did not change state`);
   };
 
   const proposalIdFrom = (repr: string | undefined): string => {
-    const match = repr?.match(/0x[0-9a-f]{64}/);
+    const match = repr?.match(/0x([0-9a-f]{64})/);
     if (!match) throw new Error(`no proposal id in ${repr}`);
-    return match[0];
+    return match[1];
   };
 
   await proposeAndExecute(
@@ -565,6 +568,7 @@ scenario("governance", async (ctx) => {
       return proposalIdFrom(result.result);
     },
     async () => asBool(await chain.read("state-v1", "is-borrow-enabled")) === true,
+    true, // unpausing is not time-locked, so it executes when the proposal is created
   );
 
   await proposeAndExecute(

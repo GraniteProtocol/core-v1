@@ -90,11 +90,11 @@ export async function healthOf(chain: Chain, user: string): Promise<Health | nul
 }
 
 export async function lpBalance(chain: Chain, user: string): Promise<bigint> {
-  return asUint(await chain.read("state-v1", "get-balance", [Cl.principal(user)]));
+  return okUint(await chain.read("state-v1", "get-balance", [Cl.principal(user)]));
 }
 
 export async function stakedBalance(chain: Chain, user: string): Promise<bigint> {
-  return asUint(await chain.read("staking-v1", "get-balance", [Cl.principal(user)]));
+  return okUint(await chain.read("staking-v1", "get-balance", [Cl.principal(user)]));
 }
 
 export async function totalStakedLpTokens(chain: Chain): Promise<bigint> {
