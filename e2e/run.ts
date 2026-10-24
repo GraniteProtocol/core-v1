@@ -19,6 +19,7 @@ import {
   resetProbeUsers,
 } from "./invariants.ts";
 import { resetToBaseline, setPrice } from "./prices.ts";
+import { positionOf } from "./reads.ts";
 
 const DEBT_OPS = new Set(["borrow", "repay", "liquidate"]);
 const MAX_RESTARTS = 20;
@@ -117,7 +118,19 @@ async function executeOp(chain: Chain, actors: Actors, op: Op): Promise<void> {
       return void (await repay(chain, actor, BigInt(op.args.amount) * USDC));
     case "liquidate": {
       const targets = [actors.safe, actors.max, actors.near, actors.under];
-      const target = targets[op.args.target % targets.length];
+      // Pick a target that actually holds BTC collateral and is past the contract's liquidation
+      // block gap, then crash the price so the liquidation is exercisable rather than a no-op.
+      const height = await chain.blockHeight();
+      let target = targets[op.args.target % targets.length];
+      for (const candidate of targets) {
+        const position = await positionOf(chain, candidate.address);
+        if (!position) continue;
+        const hasBtc = position.collaterals.some((collateral) => collateral.endsWith(".mock-btc"));
+        if (!hasBtc || BigInt(height) < position.borrowedBlock + 6n) continue;
+        target = candidate;
+        break;
+      }
+      setPrice(BTC, 1n);
       return void (await liquidate(chain, actors.liquidator, BTC, target.address, BigInt(op.args.amount) * USDC));
     }
     case "stake":

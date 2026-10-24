@@ -344,7 +344,7 @@ scenario("staking", async (ctx) => {
   await ctx.step("initiate unstake", () => initiateUnstake(chain, actors.staker, staked / 2n));
   await ctx.attempt("finalizing early aborts", () => finalizeUnstake(chain, actors.staker, 0n), "u60004");
   const lpBeforeFinalize = await lpBalance(chain, actors.staker.address);
-  await ctx.step("wait the finalization period", () => chain.waitBlocks(3));
+  await ctx.step("wait the finalization period", () => chain.waitBlocks(6));
   await ctx.step("finalize after the period", () => finalizeUnstake(chain, actors.staker, 0n));
   const lpAfterFinalize = await lpBalance(chain, actors.staker.address);
   await ctx.assert(
