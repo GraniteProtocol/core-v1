@@ -89,6 +89,14 @@ export function gateStepDrift(drift: bigint, kind: OpKind): InvariantResult {
 const probeUsers: string[] = [];
 let probeIndex = 0;
 
+// The de-listing scenario deliberately constructs the documented stuck state and asserts it; the
+// exitability invariant is the general rule that a run never leaves one behind.
+let exitabilitySuspended = false;
+
+export function suspendExitability(value: boolean): void {
+  exitabilitySuspended = value;
+}
+
 export function resetProbeUsers(actors: Actors): void {
   probeUsers.length = 0;
   probeUsers.push(...Object.values(actors).map((account) => account.address));
@@ -260,7 +268,13 @@ export async function checkInvariants(chain: Chain, kind: OpKind = "non-debt"): 
       openInterestCoversPrincipal(chain),
       collateralSettingsSane(chain),
       healthMirror(chain),
-      exitability(chain),
+      exitabilitySuspended
+        ? Promise.resolve({
+            name: "exitability",
+            ok: true,
+            detail: "suspended while the de-listing scenario constructs the stuck state",
+          })
+        : exitability(chain),
     ]);
   const lp = asTuple(lpValue);
   const reserve = asUint(reserveValue);

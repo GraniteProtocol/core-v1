@@ -20,6 +20,7 @@ import {
 import { BTC, ETH, MARKET, STX, collateralSettingsOf, lpParams, mint } from "../setup.ts";
 import { priceUpdate, resetToBaseline, setPrice, setPriceRaw } from "../prices.ts";
 import { healthOf, lpBalance, positionOf, stakedBalance, tokenBalance, totalStakedLpTokens, userCollateral } from "../reads.ts";
+import { suspendExitability } from "../invariants.ts";
 import { asBool, asOptional, asPrincipal, asTuple, asUint, okUint } from "../values.ts";
 
 const USDC = 100_000_000n;
@@ -510,7 +511,11 @@ scenario("bad-debt-socialization", async (ctx) => {
 
 scenario("remove-collateral-stuck", async (ctx) => {
   const { chain, actors } = ctx;
-  const borrower = await fund(ctx, "stuck-borrower", { btc: 2n * UNIT, eth: 2n * UNIT });
+  // This scenario deliberately builds the documented stuck state, so the exitability invariant is
+  // suspended here and restored in the finally.
+  suspendExitability(true);
+  try {
+    const borrower = await fund(ctx, "stuck-borrower", { btc: 2n * UNIT, eth: 2n * UNIT });
   await ctx.step("add 1 BTC and 1 ETH", async () => {
     await addCollateral(chain, borrower, BTC, UNIT);
     await addCollateral(chain, borrower, ETH, UNIT);
@@ -543,7 +548,10 @@ scenario("remove-collateral-stuck", async (ctx) => {
       Cl.uint(8),
     ]),
   );
-  resetToBaseline();
+    resetToBaseline();
+  } finally {
+    suspendExitability(false);
+  }
 });
 
 scenario("governance", async (ctx) => {
