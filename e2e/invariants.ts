@@ -173,18 +173,6 @@ async function capsFactors(chain: Chain): Promise<InvariantResult> {
   };
 }
 
-function bucketBounds(
-  label: string,
-  bucket: bigint,
-  liquidity: bigint,
-  factor: bigint,
-): string | null {
-  const max = factor === 0n ? liquidity : (liquidity * factor) / SCALING_FACTOR;
-  // A deposit/repay is an inflow on top of the refilled max; nothing can exceed max + liquidity.
-  if (bucket > max + liquidity) return `${label}: bucket ${bucket} above ${max + liquidity}`;
-  return null;
-}
-
 async function capsBuckets(chain: Chain): Promise<InvariantResult> {
   const stateContract = Cl.contractPrincipal(chain.deployer, "state-v1");
   const cp = (name: string) => Cl.contractPrincipal(chain.deployer, name);
@@ -211,16 +199,20 @@ async function capsBuckets(chain: Chain): Promise<InvariantResult> {
   const decay = asUint(windows[1]);
   if (refill !== expected.refill) problems.push(`refill window ${refill} != ${expected.refill}`);
   if (decay !== expected.decay) problems.push(`decay window ${decay} != ${expected.decay}`);
-  const lp = bucketBounds("lp", asUint(values[0]), okUint(values[2]), asUint(values[1]));
-  if (lp) problems.push(lp);
-  const debt = bucketBounds("debt", asUint(values[3]), asUint(values[5]), asUint(values[4]));
-  if (debt) problems.push(debt);
-  COLLATERALS.forEach((token, index) => {
-    const base = 6 + index * 3;
-    const problem = bucketBounds(token, asUint(values[base]), okUint(values[base + 2]), asUint(values[base + 1]));
-    if (problem) problems.push(problem);
-  });
-  return { name: "caps-buckets", ok: problems.length === 0, detail: problems.join("; ") || "within bounds" };
+  // A bucket is a withdrawal credit, not a liquidity measure: inflows add on top of the cap and
+  // external outflows (liquidation seizures) shrink liquidity without touching the credit, so a
+  // per-step bucket-vs-liquidity bound is not valid. The cap behaviour itself is asserted exactly
+  // by the caps scenarios (withdrawal above the bucket aborts, refill/decay equal the cap).
+  const buckets = [
+    `lp=${asUint(values[0])}`,
+    `debt=${asUint(values[3])}`,
+    ...COLLATERALS.map((token, index) => `${token}=${asUint(values[6 + index * 3])}`),
+  ];
+  return {
+    name: "caps-buckets",
+    ok: problems.length === 0,
+    detail: `${problems.join("; ") || "windows in bounds"}; buckets ${buckets.join(" ")}`,
+  };
 }
 
 async function openInterestCoversPrincipal(chain: Chain): Promise<InvariantResult> {
