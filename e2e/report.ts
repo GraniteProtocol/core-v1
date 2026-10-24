@@ -10,14 +10,36 @@ export type ScenarioResult = {
   invariantFailures?: string[];
 };
 
+export type FuzzStats = {
+  sequences: number;
+  sequencesCompleted: number;
+  ops: number;
+  succeeded: number;
+  aborted: number;
+  failures: number;
+  perOp: Record<string, { attempts: number; succeeded: number; aborted: number }>;
+  firstFailure?: string;
+};
+
 export type RunReport = {
   startedAt: string;
   durationMs: number;
   seed: number;
+  phase?: string;
+  error?: string | null;
+  expectedScenarios?: string[];
   scenarios: ScenarioResult[];
-  fuzz: { sequences: number; ops: number; failures: number; firstFailure?: string };
-  devnetLog?: string;
+  fuzz: FuzzStats;
+  devnetLog?: string | null;
   devnetRestarts?: number;
+  bootAttempts?: Array<{ attempt: number; logPath: string; ok: boolean; reason?: string }>;
+  summary?: {
+    scenariosPassed: number;
+    scenariosExpected: number;
+    fuzzSucceeded: number;
+    fuzzAborted: number;
+    successRatio: number;
+  };
   timings?: {
     bootMs: number;
     setupMs: number;
@@ -53,18 +75,22 @@ export async function writeReport(
   const mdPath = join(dir, "report.md");
   writeFileSync(jsonPath, `${JSON.stringify(report, null, 2)}\n`);
 
+  const expected = report.expectedScenarios ?? report.scenarios.map((scenario) => scenario.name);
   const passed = report.scenarios.filter((scenario) => scenario.passed).length;
-  const failed = report.scenarios.length - passed;
+  const failed = expected.length - passed;
   const seconds = (report.durationMs / 1000).toFixed(1);
+  const ratio = report.fuzz.ops > 0 ? (report.fuzz.succeeded / report.fuzz.ops).toFixed(3) : "0";
   const lines: string[] = [
     "# local e2e report",
     "",
     `- started: ${report.startedAt}`,
+    `- phase: ${report.phase ?? "complete"}`,
     `- runtime: ${seconds}s`,
     `- seed: ${report.seed}`,
-    `- scenarios: ${passed} passed, ${failed} failed`,
-    `- fuzz: ${report.fuzz.sequences} sequences, ${report.fuzz.ops} ops, ${report.fuzz.failures} failures`,
+    `- scenarios: ${passed} passed, ${failed} not passed of ${expected.length} expected`,
+    `- fuzz: ${report.fuzz.sequencesCompleted}/${report.fuzz.sequences} sequences, ${report.fuzz.ops} ops (${report.fuzz.succeeded} succeeded, ${report.fuzz.aborted} expected aborts, ratio ${ratio}), ${report.fuzz.failures} failures`,
   ];
+  if (report.error) lines.push(`- error: ${report.error}`);
   if (report.timings) {
     const t = report.timings;
     lines.push(
@@ -79,6 +105,16 @@ export async function writeReport(
     lines.push("");
   }
   if (report.devnetLog) lines.push(`- devnet log: ${report.devnetLog}`);
+  if (report.bootAttempts) {
+    lines.push(`- boot attempts: ${report.bootAttempts.length}`);
+    for (const attempt of report.bootAttempts) {
+      lines.push(
+        `  - attempt ${attempt.attempt}: ${attempt.ok ? "used" : "failed"} ${attempt.logPath}${
+          attempt.reason ? ` (${attempt.reason.split("\n")[0]})` : ""
+        }`,
+      );
+    }
+  }
   if (report.devnetRestarts) {
     lines.push(
       `- devnet restarts: ${report.devnetRestarts} (frozen Stacks tip for 75s at a PoX reward-cycle boundary; the documented clarinet workaround)`,
@@ -98,11 +134,19 @@ export async function writeReport(
       );
     }
   }
-  lines.push("", "| scenario | result | failure |", "| --- | --- | --- |");
+  lines.push(
+    "",
+    "| op | attempts | succeeded | expected aborts |",
+    "| --- | --- | --- | --- |",
+  );
+  for (const [name, stat] of Object.entries(report.fuzz.perOp)) {
+    lines.push(`| ${name} | ${stat.attempts} | ${stat.succeeded} | ${stat.aborted} |`);
+  }
+  lines.push("", "| scenario | result | steps | failure |", "| --- | --- | --- | --- |");
   for (const scenario of report.scenarios) {
     const result = scenario.passed ? "PASS" : "FAIL";
     const failure = (scenario.failure ?? "").replace(/\|/g, "\\|").replace(/\n/g, " ");
-    lines.push(`| ${scenario.name} | ${result} | ${failure} |`);
+    lines.push(`| ${scenario.name} | ${result} | ${scenario.steps} | ${failure} |`);
   }
   if (report.fuzz.firstFailure) {
     lines.push("", "## first fuzz failure", "", report.fuzz.firstFailure);

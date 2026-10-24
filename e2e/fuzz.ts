@@ -7,6 +7,11 @@ export const FUZZ_MAX_OPS = 40;
 
 export const FUZZ_ACTORS = ["lp", "safe", "max", "near", "under", "liquidator", "staker"] as const;
 
+/** Actors that hold USDC (and LP tokens after depositing). */
+const FUNDED_IN_USDC = ["lp", "staker", "liquidator"] as const;
+/** Actors that hold the mock collaterals (BTC/ETH) and native STX. */
+const BORROWERS = ["safe", "max", "near", "under"] as const;
+
 const OPERATIONS: Array<{ op: string; weight: number }> = [
   { op: "deposit", weight: 10 },
   { op: "withdraw", weight: 8 },
@@ -51,34 +56,47 @@ export function generate(seed: number, length: number): Op[] {
   const random = mulberry32(seed);
   const ops: Op[] = [];
   for (let i = 0; i < length; i++) {
-    const actor = FUZZ_ACTORS[Math.floor(random() * FUZZ_ACTORS.length)];
     const op = pickOperation(random);
     switch (op) {
+      // Actor choice follows the op's domain: only USDC-funded actors deposit, only borrowers post
+      // collateral or borrow, so ops are attempts at real state changes rather than certain no-ops.
       case "deposit":
-        ops.push({ actor: actor === "liquidator" || actor === "staker" ? actor : "lp", op, args: { amount: amountWithin(random, 50_000) } });
+        ops.push({
+          actor: FUNDED_IN_USDC[Math.floor(random() * FUNDED_IN_USDC.length)],
+          op,
+          args: { amount: amountWithin(random, 50_000) },
+        });
         break;
       case "withdraw":
         ops.push({ actor: "lp", op, args: { amount: amountWithin(random, 20_000) } });
         break;
       case "addCollateral":
         ops.push({
-          actor,
+          actor: BORROWERS[Math.floor(random() * BORROWERS.length)],
           op,
           args: { token: Math.floor(random() * 3), amount: amountWithin(random, 5) },
         });
         break;
       case "removeCollateral":
         ops.push({
-          actor,
+          actor: BORROWERS[Math.floor(random() * BORROWERS.length)],
           op,
           args: { token: Math.floor(random() * 3), amount: amountWithin(random, 2) },
         });
         break;
       case "borrow":
-        ops.push({ actor, op, args: { amount: amountWithin(random, 20_000) } });
+        ops.push({
+          actor: BORROWERS[Math.floor(random() * BORROWERS.length)],
+          op,
+          args: { amount: amountWithin(random, 20_000) },
+        });
         break;
       case "repay":
-        ops.push({ actor, op, args: { amount: amountWithin(random, 10_000) } });
+        ops.push({
+          actor: BORROWERS[Math.floor(random() * BORROWERS.length)],
+          op,
+          args: { amount: amountWithin(random, 10_000) },
+        });
         break;
       case "liquidate":
         ops.push({ actor: "liquidator", op, args: { target: Math.floor(random() * 4), amount: amountWithin(random, 20_000) } });

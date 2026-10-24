@@ -1,10 +1,11 @@
 import { mkdirSync } from "node:fs";
+import { join } from "node:path";
 import { Chain, DevnetStallError } from "./chain.ts";
-import { startDevnet, stopDevnet, type DevnetHandle } from "./devnet.ts";
+import { startDevnet, stopDevnet, type BootAttempt, type DevnetHandle } from "./devnet.ts";
 import { loadAccounts } from "./keys.ts";
 import type { Account } from "./keys.ts";
 import { fundAccount, newAccount } from "./accounts.ts";
-import { setup, BTC, ETH, MARKET, STX, type Actors } from "./setup.ts";
+import { setup, BTC, ETH, STX, type Actors } from "./setup.ts";
 import { createContext, type Scenario } from "./scenario.ts";
 import { happy } from "./scenarios/happy.ts";
 import { matrix } from "./scenarios/matrix.ts";
@@ -15,11 +16,16 @@ import {
   failed,
   resetAccounting,
   resetDriftBaseline,
+  resetProbeUsers,
 } from "./invariants.ts";
 import { resetToBaseline, setPrice } from "./prices.ts";
 
 const DEBT_OPS = new Set(["borrow", "repay", "liquidate"]);
 const MAX_RESTARTS = 20;
+// A fuzz run where most ops abort (or an op type never succeeds) is not exercising the protocol.
+const MIN_SUCCESS_RATIO = 0.5;
+const MIN_OP_RATIO = 0.05;
+const MIN_OP_ATTEMPTS = 5;
 import { Cl } from "@stacks/transactions";
 import { writeReport, type ScenarioResult } from "./report.ts";
 import { proposeLearnings } from "./learn.ts";
@@ -133,10 +139,14 @@ async function executeOp(chain: Chain, actors: Actors, op: Op): Promise<void> {
   }
 }
 
-/** A contract abort is an acceptable fuzz outcome; an infrastructure error is not. */
-function isContractAbort(error: unknown): boolean {
+/**
+ * Only a contract error code is an acceptable fuzz outcome. Runtime errors surface as `(err none)`,
+ * and a post-condition abort cannot legitimately occur with allow-mode and no post-conditions, so
+ * both are harness failures, not expected aborts.
+ */
+function isExpectedContractAbort(error: unknown): boolean {
   const message = error instanceof Error ? error.message : String(error);
-  return /\(err u\d+\)/.test(message) || message.includes("abort_by_response") || message.includes("abort_by_post_condition");
+  return /aborted \([^)]*\): \(err u\d+\)/.test(message);
 }
 
 type Session = {
@@ -160,21 +170,24 @@ async function startSession(
   reportDir: string,
   deployer: Account,
   index: number,
+  bootAttempts: BootAttempt[],
   onRetry?: (reason: string) => void,
+  onHandle?: (handle: DevnetHandle) => void,
   attempts = 6,
 ): Promise<Session> {
   let lastError: unknown;
   for (let attempt = 1; attempt <= attempts; attempt++) {
     let devnet: DevnetHandle | null = null;
     let booting = true;
+    const logName = index === 0 && attempt === 1 ? "devnet.log" : `devnet-${index + 1}-${attempt}.log`;
     try {
       const bootStarted = Date.now();
-      devnet = await startDevnet({
-        logDir: reportDir,
-        logName: index === 0 && attempt === 1 ? "devnet.log" : `devnet-${index + 1}-${attempt}.log`,
-        contractTimeoutMs: 180_000,
-      });
+      devnet = await startDevnet(
+        { logDir: reportDir, logName, contractTimeoutMs: 180_000 },
+        onHandle,
+      );
       const bootMs = Date.now() - bootStarted;
+      bootAttempts.push({ attempt, logPath: devnet.logPath, ok: true });
       booting = false;
       const setupStarted = Date.now();
       const chain = new Chain(deployer.address);
@@ -183,11 +196,12 @@ async function startSession(
       return { devnet, chain, actors, baseline, timings: { bootMs, setupMs: Date.now() - setupStarted } };
     } catch (error) {
       lastError = error;
+      const reason = error instanceof Error ? error.message : String(error);
+      bootAttempts.push({ attempt, logPath: join(reportDir, logName), ok: false, reason });
       if (devnet) await stopDevnet(devnet);
       // A boot can also lose the race to register the PoX signer set; a fresh boot is the fix.
       const retryable = error instanceof DevnetStallError || booting;
       if (!retryable) throw error;
-      const reason = error instanceof Error ? error.message : String(error);
       console.log(`devnet boot or setup failed; retrying the boot (${attempt}/${attempts}): ${reason}`);
       onRetry?.(reason);
     }
@@ -235,29 +249,46 @@ async function main(): Promise<number> {
   mkdirSync(reportDir, { recursive: true });
 
   const deployer = loadDeployer();
+  const expectedScenarios = [happy, ...matrix].map((scenario) => scenario.name);
   let session: Session | null = null;
+  let liveHandle: DevnetHandle | null = null;
   let restarts = 0;
+  let phase = "startup";
+  let runError: string | undefined;
+  let reportWritten = false;
   let shuttingDown = false;
   const handleSignal = (signal: string): void => {
     if (shuttingDown) return;
     shuttingDown = true;
     console.log(`\n${signal} received; tearing the devnet down`);
     void (async () => {
-      if (session) await stopDevnet(session.devnet);
+      const handle = liveHandle ?? session?.devnet;
+      if (handle) await stopDevnet(handle);
       process.exit(1);
     })();
   };
   process.on("SIGINT", () => handleSignal("SIGINT"));
   process.on("SIGTERM", () => handleSignal("SIGTERM"));
   const restartLog: RestartEvent[] = [];
+  const bootAttempts: BootAttempt[] = [];
   const scenarios: ScenarioResult[] = [];
-  const fuzz = { sequences: FUZZ_SEQUENCES, ops: 0, failures: 0, firstFailure: undefined as string | undefined };
+  const fuzz = {
+    sequences: FUZZ_SEQUENCES,
+    sequencesCompleted: 0,
+    ops: 0,
+    succeeded: 0,
+    aborted: 0,
+    failures: 0,
+    perOp: {} as Record<string, { attempts: number; succeeded: number; aborted: number }>,
+    ms: 0,
+    firstFailure: undefined as string | undefined,
+  };
 
-  const recordRestart = (phase: string, reason: string, extra: { sequence?: number; op?: string } = {}): void => {
+  const recordRestart = (restartPhase: string, reason: string, extra: { sequence?: number; op?: string } = {}): void => {
     restarts += 1;
     restartLog.push({
       at: new Date().toISOString(),
-      phase,
+      phase: restartPhase,
       reason,
       ...extra,
       driftAtRestart: accountingStats().drift.toString(),
@@ -265,32 +296,116 @@ async function main(): Promise<number> {
     if (restarts > MAX_RESTARTS) {
       throw new Error(`devnet restarted ${restarts} times, above the cap of ${MAX_RESTARTS}; last reason: ${reason}`);
     }
-    console.log(`devnet stall: ${reason}; restart ${restarts}/${MAX_RESTARTS} (${phase})`);
+    console.log(`devnet stall: ${reason}; restart ${restarts}/${MAX_RESTARTS} (${restartPhase})`);
   };
 
   const restart = async (
     reason: string,
-    phase: string,
+    restartPhase: string,
     extra: { sequence?: number; op?: string } = {},
   ): Promise<void> => {
     if (!session) throw new Error("no devnet session to restart");
-    recordRestart(phase, reason, extra);
+    recordRestart(restartPhase, reason, extra);
     await stopDevnet(session.devnet);
-    session = await startSession(reportDir, deployer, restarts, (retryReason) =>
-      recordRestart("boot", retryReason),
+    liveHandle = null;
+    session = await startSession(
+      reportDir,
+      deployer,
+      restarts,
+      bootAttempts,
+      (retryReason) => recordRestart("boot", retryReason),
+      (handle) => {
+        liveHandle = handle;
+      },
     );
+    liveHandle = session.devnet;
     resetDriftBaseline();
+    resetProbeUsers(session.actors);
     console.log("devnet restarted and set up");
+  };
+
+  const finalAccounting = () => {
+    const accounting = accountingStats();
+    return {
+      drift: accounting.drift.toString(),
+      debtOps: accounting.debtOps,
+      maxStepDrift: accounting.maxStepDrift.toString(),
+      exactZero: accounting.exactZero,
+      rebaselines: restartLog.map((event) => ({ at: event.at, phase: event.phase, drift: event.driftAtRestart })),
+    };
+  };
+
+  const buildReport = (errorMessage?: string) => {
+    const accounting = finalAccounting();
+    const passedScenarios = scenarios.filter((scenario) => scenario.passed).length;
+    return {
+      startedAt: startedAt.toISOString(),
+      durationMs: Date.now() - startedAt.getTime(),
+      seed,
+      phase,
+      error: errorMessage ?? null,
+      expectedScenarios,
+      scenarios,
+      fuzz,
+      devnetLog: session?.devnet.logPath ?? bootAttempts.find((attempt) => attempt.ok)?.logPath ?? null,
+      devnetRestarts: restarts,
+      restarts: restartLog,
+      bootAttempts,
+      timings: session
+        ? {
+            bootMs: session.timings.bootMs,
+            setupMs: session.timings.setupMs,
+            scenarios: scenarios.map((scenario) => ({ name: scenario.name, ms: scenario.ms ?? 0 })),
+            matrixMs: scenarios.reduce((sum, scenario) => sum + (scenario.ms ?? 0), 0),
+            fuzzMs: fuzz.ms,
+            fuzzOps: fuzz.ops,
+            perOpMs: fuzz.ops > 0 ? Math.round(fuzz.ms / fuzz.ops) : 0,
+            totalMs: Date.now() - startedAt.getTime(),
+          }
+        : undefined,
+      accounting,
+      summary: {
+        scenariosPassed: passedScenarios,
+        scenariosExpected: expectedScenarios.length,
+        fuzzSucceeded: fuzz.succeeded,
+        fuzzAborted: fuzz.aborted,
+        successRatio: fuzz.ops > 0 ? Number((fuzz.succeeded / fuzz.ops).toFixed(3)) : 0,
+      },
+    };
+  };
+
+  const writePartialReport = async (errorMessage: string): Promise<void> => {
+    if (reportWritten) return;
+    reportWritten = true;
+    try {
+      const paths = await writeReport(reportDir, buildReport(errorMessage));
+      console.error(`partial report (phase ${phase}): ${paths.mdPath}`);
+    } catch (reportError) {
+      console.error(`could not write the partial report: ${reportError instanceof Error ? reportError.message : reportError}`);
+    }
   };
 
   try {
     console.log(`report dir: ${reportDir}`);
-    session = await startSession(reportDir, deployer, 0);
+    phase = "boot";
+    session = await startSession(
+      reportDir,
+      deployer,
+      0,
+      bootAttempts,
+      (retryReason) => recordRestart("boot", retryReason),
+      (handle) => {
+        liveHandle = handle;
+      },
+    );
+    liveHandle = session.devnet;
+    resetProbeUsers(session.actors);
     console.log(`devnet up: api=${session.devnet.apiUrl} pid=${session.devnet.pid}`);
     console.log("setup complete");
 
-    const allScenarios = [happy, ...matrix];
-    for (const scenario of allScenarios) {
+    phase = "matrix";
+    for (const scenario of [happy, ...matrix]) {
+      phase = `matrix:${scenario.name}`;
       for (let attempt = 0; ; attempt++) {
         try {
           const result = await runScenario(session, scenario);
@@ -308,6 +423,7 @@ async function main(): Promise<number> {
     }
 
     console.log(`fuzz: ${FUZZ_SEQUENCES} sequences`);
+    phase = "fuzz";
     const fuzzStarted = Date.now();
     let fuzzFailed = false;
     for (let index = 0; index < FUZZ_SEQUENCES && !fuzzFailed; index++) {
@@ -315,27 +431,41 @@ async function main(): Promise<number> {
       const ops = generate(seed + index, length);
       for (const op of ops) {
         fuzz.ops += 1;
+        const stat = (fuzz.perOp[op.op] ??= { attempts: 0, succeeded: 0, aborted: 0 });
+        stat.attempts += 1;
+        let outcome: "succeeded" | "aborted" | "failed" = "failed";
         for (let attempt = 0; ; attempt++) {
           try {
             await executeOp(session.chain, session.actors, op);
+            outcome = "succeeded";
             break;
           } catch (error) {
             if (error instanceof DevnetStallError && attempt < 2) {
               await restart(error.message, "fuzz", { sequence: index, op: JSON.stringify(op) });
               continue;
             }
-            // An aborted fuzz op is an expected outcome; its state change is nil.
-            if (isContractAbort(error)) break;
+            // Only a contract error code is an expected abort; anything else is a failure.
+            if (isExpectedContractAbort(error)) {
+              outcome = "aborted";
+              break;
+            }
             fuzz.failures += 1;
             fuzz.firstFailure = `sequence ${index} (seed ${seed + index}) op ${JSON.stringify(op)}: ${
               error instanceof Error ? error.message : String(error)
             }`;
+            console.error(`fuzz failure: ${fuzz.firstFailure}`);
             fuzzFailed = true;
             break;
           }
         }
         if (fuzzFailed) break;
-        // An aborted fuzz op is an expected outcome; its state change is nil, so still verify.
+        if (outcome === "succeeded") {
+          fuzz.succeeded += 1;
+          stat.succeeded += 1;
+        } else if (outcome === "aborted") {
+          fuzz.aborted += 1;
+          stat.aborted += 1;
+        }
         const violations = failed(
           await checkInvariants(session.chain, DEBT_OPS.has(op.op) ? "debt" : "non-debt"),
         );
@@ -344,72 +474,86 @@ async function main(): Promise<number> {
           fuzz.firstFailure = `sequence ${index} (seed ${seed + index}) op ${JSON.stringify(op)}: ${violations
             .map((violation) => `${violation.name}: ${violation.detail}`)
             .join("; ")}`;
+          console.error(`fuzz failure: ${fuzz.firstFailure}`);
           fuzzFailed = true;
           break;
         }
       }
-      if (index % 10 === 0) console.log(`  sequence ${index + 1}/${FUZZ_SEQUENCES} (${fuzz.ops} ops)`);
+      if (!fuzzFailed) fuzz.sequencesCompleted = index + 1;
+      if (index % 2 === 0) console.log(`  sequence ${index + 1}/${FUZZ_SEQUENCES} (${fuzz.ops} ops)`);
     }
+    fuzz.ms = Date.now() - fuzzStarted;
 
-    const finalViolations = failed(await checkInvariants(session.chain));
-    if (finalViolations.length > 0 && fuzz.failures === 0) {
+    const summary = buildReport().summary;
+    if (summary.successRatio < MIN_SUCCESS_RATIO) {
       fuzz.failures += 1;
-      fuzz.firstFailure = `final invariants: ${finalViolations.map((v) => `${v.name}: ${v.detail}`).join("; ")}`;
+      fuzz.firstFailure ??= `fuzz success ratio ${summary.successRatio} below ${MIN_SUCCESS_RATIO} (${fuzz.succeeded}/${fuzz.ops})`;
+      console.error(`fuzz failure: ${fuzz.firstFailure}`);
+    }
+    for (const [opName, stat] of Object.entries(fuzz.perOp)) {
+      if (stat.attempts >= MIN_OP_ATTEMPTS && stat.succeeded / stat.attempts < MIN_OP_RATIO) {
+        fuzz.failures += 1;
+        fuzz.firstFailure ??= `fuzz op ${opName} succeeded ${stat.succeeded}/${stat.attempts}, below ${MIN_OP_RATIO}`;
+        console.error(`fuzz failure: ${fuzz.firstFailure}`);
+      }
     }
 
-    const fuzzMs = Date.now() - fuzzStarted;
-    const matrixMs = scenarios.reduce((sum, scenario) => sum + (scenario.ms ?? 0), 0);
-    const accounting = accountingStats();
-    const report = {
-      startedAt: startedAt.toISOString(),
-      durationMs: Date.now() - startedAt.getTime(),
-      seed,
-      scenarios,
-      fuzz,
-      devnetLog: session.devnet.logPath,
-      devnetRestarts: restarts,
-      restarts: restartLog,
-      timings: {
-        bootMs: session.timings.bootMs,
-        setupMs: session.timings.setupMs,
-        scenarios: scenarios.map((scenario) => ({ name: scenario.name, ms: scenario.ms ?? 0 })),
-        matrixMs,
-        fuzzMs,
-        fuzzOps: fuzz.ops,
-        perOpMs: fuzz.ops > 0 ? Math.round(fuzzMs / fuzz.ops) : 0,
-        totalMs: Date.now() - startedAt.getTime(),
-      },
-      accounting: {
-        drift: accounting.drift.toString(),
-        debtOps: accounting.debtOps,
-        maxStepDrift: accounting.maxStepDrift.toString(),
-        exactZero: accounting.exactZero,
-        rebaselines: restartLog.map((event) => ({ at: event.at, phase: event.phase, drift: event.driftAtRestart })),
-      },
-    };
+    phase = "final";
+    try {
+      const finalViolations = failed(await checkInvariants(session.chain));
+      if (finalViolations.length > 0) {
+        fuzz.failures += 1;
+        fuzz.firstFailure ??= `final invariants: ${finalViolations.map((v) => `${v.name}: ${v.detail}`).join("; ")}`;
+        console.error(`fuzz failure: ${fuzz.firstFailure}`);
+      }
+    } catch (error) {
+      fuzz.failures += 1;
+      fuzz.firstFailure ??= `final invariants could not run: ${error instanceof Error ? error.message : error}`;
+      console.error(`fuzz failure: ${fuzz.firstFailure}`);
+    }
+
+    const report = buildReport();
     const paths = await writeReport(reportDir, report);
+    reportWritten = true;
+    const covered =
+      expectedScenarios.every((name) => scenarios.filter((scenario) => scenario.name === name).length === 1) &&
+      scenarios.length === expectedScenarios.length;
+    const scenariosOk =
+      covered &&
+      scenarios.every(
+        (scenario) => scenario.passed && scenario.steps > 0 && (scenario.invariantFailures ?? []).length === 0,
+      );
+    const fuzzOk = fuzz.failures === 0 && fuzz.sequencesCompleted === FUZZ_SEQUENCES;
+    const ok = scenariosOk && fuzzOk;
     const passed = scenarios.filter((scenario) => scenario.passed).length;
-    const ok = passed === scenarios.length && fuzz.failures === 0;
     console.log(
-      `\nsummary: ${passed}/${scenarios.length} scenarios passed, ${fuzz.ops} fuzz ops, seed ${seed}, ${
-        (report.durationMs / 1000).toFixed(1)
-      }s, ${ok ? "PASS" : "FAIL"}`,
+      `\nsummary: ${passed}/${expectedScenarios.length} scenarios passed, ${fuzz.succeeded}/${fuzz.ops} fuzz ops succeeded (${
+        fuzz.aborted
+      } expected aborts), seed ${seed}, ${(report.durationMs / 1000).toFixed(1)}s, ${ok ? "PASS" : "FAIL"}`,
     );
+    if (!covered) console.log(`scenario coverage failed: recorded ${scenarios.map((s) => s.name).join(", ")}`);
+    const timings = report.timings!;
     console.log(
-      `timings: boot ${(report.timings.bootMs / 1000).toFixed(1)}s, setup ${(
-        report.timings.setupMs / 1000
-      ).toFixed(1)}s, matrix ${(matrixMs / 1000).toFixed(1)}s, fuzz ${(fuzzMs / 1000).toFixed(1)}s (${fuzz.ops} ops, ${
-        report.timings.perOpMs
-      }ms/op), total ${(report.timings.totalMs / 1000).toFixed(1)}s`,
+      `timings: boot ${(timings.bootMs / 1000).toFixed(1)}s, setup ${(timings.setupMs / 1000).toFixed(1)}s, matrix ${(
+        timings.matrixMs / 1000
+      ).toFixed(1)}s, fuzz ${(timings.fuzzMs / 1000).toFixed(1)}s (${fuzz.ops} ops, ${timings.perOpMs}ms/op), total ${(
+        timings.totalMs / 1000
+      ).toFixed(1)}s`,
     );
-    for (const scenario of report.timings.scenarios) {
+    for (const scenario of timings.scenarios) {
       console.log(`  ${scenario.name}: ${(scenario.ms / 1000).toFixed(1)}s`);
     }
+    console.log(
+      `fuzz per op: ${Object.entries(fuzz.perOp)
+        .map(([name, stat]) => `${name} ${stat.succeeded}/${stat.attempts}`)
+        .join(", ")}`,
+    );
+    const accounting = report.accounting!;
     console.log(
       `accounting: gap=${accounting.drift} debt-ops=${accounting.debtOps} max-step=${accounting.maxStepDrift}`,
     );
     console.log(
-      `devnet restarts: ${restarts} (frozen Stacks tip for 75s at a PoX reward-cycle boundary)`,
+      `devnet restarts: ${restarts} (frozen Stacks tip for 75s at a PoX reward-cycle boundary); boot attempts: ${bootAttempts.length}`,
     );
     for (const event of restartLog) {
       const where = event.sequence !== undefined ? ` sequence ${event.sequence}` : "";
@@ -421,11 +565,19 @@ async function main(): Promise<number> {
       );
     }
     console.log(`report: ${paths.mdPath}`);
-    console.log(await proposeLearnings(report));
+    const learn = await proposeLearnings(report, reportDir);
+    console.log(learn.proposal);
+    console.log(`learn: proposal at ${learn.proposalPath}; state at ${learn.statePath}`);
     return ok ? 0 : 1;
+  } catch (error) {
+    runError = error instanceof Error ? error.message : String(error);
+    console.error(`run failed in phase ${phase}: ${runError}`);
+    return 1;
   } finally {
     if (session && !keep) await stopDevnet(session.devnet);
+    liveHandle = null;
     if (session && keep) console.log(`devnet kept up (pid ${session.devnet.pid}); stop it with SIGTERM`);
+    if (runError) await writePartialReport(runError);
   }
 }
 

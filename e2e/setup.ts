@@ -73,9 +73,12 @@ export async function balanceOf(chain: Chain, token: string, owner: string): Pro
   return okUint(await chain.read(token, "get-balance", [principal(owner)]));
 }
 
-export async function collateralSettingsOf(chain: Chain, token: string): Promise<CollateralConfig> {
+export async function collateralSettingsIfConfigured(
+  chain: Chain,
+  token: string,
+): Promise<CollateralConfig | null> {
   const stored = asOptional(await chain.read("state-v1", "get-collateral", [contractPrincipal(chain.deployer, token)]));
-  if (!stored) throw new Error(`collateral not configured: ${token}`);
+  if (!stored) return null;
   const tuple = asTuple(stored);
   return {
     maxLtv: asUint(tuple["max-ltv"]),
@@ -83,6 +86,12 @@ export async function collateralSettingsOf(chain: Chain, token: string): Promise
     liquidationPremium: asUint(tuple["liquidation-premium"]),
     decimals: asUint(tuple.decimals),
   };
+}
+
+export async function collateralSettingsOf(chain: Chain, token: string): Promise<CollateralConfig> {
+  const config = await collateralSettingsIfConfigured(chain, token);
+  if (!config) throw new Error(`collateral not configured: ${token}`);
+  return config;
 }
 
 export async function lpParams(chain: Chain): Promise<{ totalAssets: bigint; totalShares: bigint }> {
@@ -194,9 +203,14 @@ export async function setup(chain: Chain, actors: Actors): Promise<Snapshot> {
   await mint(chain, actors.deployer, MARKET, 100n * usdc, cp("mock-flash-loan-callback"));
   await mint(chain, actors.deployer, MARKET, 100_000n * usdc, cp("mock-liquidator-with-flash-loan"));
   for (const borrower of [actors.safe, actors.max, actors.near, actors.under]) {
-    await mint(chain, actors.deployer, BTC, 10n * 100_000_000n, borrower.address);
-    await mint(chain, actors.deployer, ETH, 100n * 100_000_000n, borrower.address);
+    await mint(chain, actors.deployer, BTC, 100n * 100_000_000n, borrower.address);
+    await mint(chain, actors.deployer, ETH, 1000n * 100_000_000n, borrower.address);
   }
+  // Seed the staker with LP tokens so stake/unstake fuzz ops can actually succeed.
+  await chain.call(actors.staker, "liquidity-provider-v1", "deposit", [
+    Cl.uint(10_000n * usdc),
+    Cl.principal(actors.staker.address),
+  ]);
 
   // 7. Prices and the Lazer oracle the adapter verifies against.
   setPrice(MARKET, 1n);

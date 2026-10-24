@@ -39,7 +39,6 @@ export type FeedSpec = { id: number; props: Array<[number, bigint | null]> };
 const PROP_WIDTH: Record<number, number> = {
   0: 8, 1: 8, 2: 8, 3: 2, 4: 2, 5: 8, 9: 2, 10: 8, 11: 8,
 };
-const PROP_SIGNED = new Set([0, 1, 2, 4, 6, 10]);
 const EXISTENCE_FLAGGED = new Set([6, 7, 8, 12]);
 
 const uBE = (value: bigint, width: number): Uint8Array => {
