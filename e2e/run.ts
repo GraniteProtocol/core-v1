@@ -18,8 +18,8 @@ import {
   resetDriftBaseline,
   resetProbeUsers,
 } from "./invariants.ts";
-import { resetToBaseline, setPrice } from "./prices.ts";
-import { positionOf, userCollateral } from "./reads.ts";
+import { convertedPrice, resetToBaseline, setPrice } from "./prices.ts";
+import { healthOf, positionOf } from "./reads.ts";
 
 const DEBT_OPS = new Set(["borrow", "repay", "liquidate"]);
 const MAX_RESTARTS = 20;
@@ -118,10 +118,10 @@ async function executeOp(chain: Chain, actors: Actors, op: Op): Promise<void> {
       return void (await repay(chain, actor, BigInt(op.args.amount) * USDC));
     case "liquidate": {
       const targets = [actors.safe, actors.max, actors.near, actors.under];
-      // Pick a target that actually holds BTC collateral and is past the contract's liquidation
-      // block gap. Price the collateral at 1.2x its debt so the position is liquidatable but the
-      // seizure does not wipe it out: a socializing liquidation splits interest twice in one
-      // transaction and would move the accounting gate by more than its per-operation residue.
+      // Pick a target that holds BTC collateral and is past the contract's liquidation block gap,
+      // then scale all of its collateral prices so the whole position is 2% under water while its
+      // collateral still exceeds debt + reward. That exercises liquidation without a socializing
+      // write-off, whose second interest split would move the accounting gate past its residue.
       const height = await chain.blockHeight();
       let target = targets[op.args.target % targets.length];
       for (const candidate of targets) {
@@ -130,11 +130,17 @@ async function executeOp(chain: Chain, actors: Actors, op: Op): Promise<void> {
         const hasBtc = position.collaterals.some((collateral) => collateral.endsWith(".mock-btc"));
         if (!hasBtc || position.borrowedAmount === 0n) continue;
         if (BigInt(height) < position.borrowedBlock + 6n) continue;
-        const amount = await userCollateral(chain, candidate.address, BTC);
-        if (amount === 0n) continue;
+        const health = await healthOf(chain, candidate.address);
+        if (!health || health.currentDebt === 0n || health.totalLiquidLtv === 0n) continue;
         target = candidate;
-        const price = (position.borrowedAmount * 120n) / (amount * 100n);
-        setPrice(BTC, price > 0n ? price : 1n);
+        const numerator = health.currentDebt * 98n;
+        const denominator = health.totalLiquidLtv * 100n;
+        for (const collateral of position.collaterals) {
+          const token = collateral.split(".").pop() ?? collateral;
+          const dollars = convertedPrice(token) / 100_000_000n;
+          const scaled = (dollars * numerator) / denominator;
+          setPrice(token, scaled > 0n ? scaled : 1n);
+        }
         break;
       }
       return void (await liquidate(chain, actors.liquidator, BTC, target.address, BigInt(op.args.amount) * USDC));
@@ -423,23 +429,34 @@ async function main(): Promise<number> {
     console.log("setup complete");
 
     phase = "matrix";
-    for (const scenario of [happy, ...matrix]) {
-      phase = `matrix:${scenario.name}`;
-      for (let attempt = 0; ; attempt++) {
-        try {
-          const result = await runScenario(session, scenario);
-          scenarios.push(result);
-          console.log(`  ${result.passed ? "PASS" : "FAIL"} ${result.name}${result.failure ? `: ${result.failure}` : ""}`);
-          break;
-        } catch (error) {
-          if (error instanceof DevnetStallError && attempt < 2) {
-            await restart(error.message, `matrix:${scenario.name}`);
-            continue;
+    // A restart inside the matrix resets the chain, and later scenarios rely on the liquidity the
+    // earlier ones deposited. Re-run the whole matrix on the fresh chain, discarding the partial pass.
+    let matrixDone = false;
+    for (let matrixAttempt = 0; matrixAttempt < 2 && !matrixDone; matrixAttempt++) {
+      scenarios.length = 0;
+      let restartNeeded = false;
+      for (const scenario of [happy, ...matrix]) {
+        phase = `matrix:${scenario.name}`;
+        for (let attempt = 0; attempt < 3; attempt++) {
+          try {
+            const result = await runScenario(session, scenario);
+            scenarios.push(result);
+            console.log(`  ${result.passed ? "PASS" : "FAIL"} ${result.name}${result.failure ? `: ${result.failure}` : ""}`);
+            break;
+          } catch (error) {
+            if (error instanceof DevnetStallError && attempt < 2) {
+              await restart(error.message, `matrix:${scenario.name}`);
+              restartNeeded = true;
+              break;
+            }
+            throw error;
           }
-          throw error;
         }
+        if (restartNeeded) break;
       }
+      if (!restartNeeded) matrixDone = true;
     }
+    if (!matrixDone) throw new Error("matrix could not complete after devnet restarts");
 
     console.log(`fuzz: ${FUZZ_SEQUENCES} sequences`);
     phase = "fuzz";
