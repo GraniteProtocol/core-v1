@@ -19,7 +19,7 @@ import {
   resetProbeUsers,
 } from "./invariants.ts";
 import { resetToBaseline, setPrice } from "./prices.ts";
-import { positionOf } from "./reads.ts";
+import { positionOf, userCollateral } from "./reads.ts";
 
 const DEBT_OPS = new Set(["borrow", "repay", "liquidate"]);
 const MAX_RESTARTS = 20;
@@ -119,18 +119,24 @@ async function executeOp(chain: Chain, actors: Actors, op: Op): Promise<void> {
     case "liquidate": {
       const targets = [actors.safe, actors.max, actors.near, actors.under];
       // Pick a target that actually holds BTC collateral and is past the contract's liquidation
-      // block gap, then crash the price so the liquidation is exercisable rather than a no-op.
+      // block gap. Price the collateral at 1.2x its debt so the position is liquidatable but the
+      // seizure does not wipe it out: a socializing liquidation splits interest twice in one
+      // transaction and would move the accounting gate by more than its per-operation residue.
       const height = await chain.blockHeight();
       let target = targets[op.args.target % targets.length];
       for (const candidate of targets) {
         const position = await positionOf(chain, candidate.address);
         if (!position) continue;
         const hasBtc = position.collaterals.some((collateral) => collateral.endsWith(".mock-btc"));
-        if (!hasBtc || BigInt(height) < position.borrowedBlock + 6n) continue;
+        if (!hasBtc || position.borrowedAmount === 0n) continue;
+        if (BigInt(height) < position.borrowedBlock + 6n) continue;
+        const amount = await userCollateral(chain, candidate.address, BTC);
+        if (amount === 0n) continue;
         target = candidate;
+        const price = (position.borrowedAmount * 120n) / (amount * 100n);
+        setPrice(BTC, price > 0n ? price : 1n);
         break;
       }
-      setPrice(BTC, 1n);
       return void (await liquidate(chain, actors.liquidator, BTC, target.address, BigInt(op.args.amount) * USDC));
     }
     case "stake":
