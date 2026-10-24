@@ -12,13 +12,16 @@ import { matrix } from "./scenarios/matrix.ts";
 import { FUZZ_MAX_OPS, FUZZ_MIN_OPS, FUZZ_SEQUENCES, generate, type Op } from "./fuzz.ts";
 import {
   accountingStats,
+  capsSnapshot,
   checkInvariants,
   failed,
   resetAccounting,
   resetDriftBaseline,
   resetProbeUsers,
+  type CapsSnapshot,
 } from "./invariants.ts";
-import { convertedPrice, resetToBaseline, setPrice } from "./prices.ts";
+import { convertedPrice, resetToBaseline, setPrice, setPriceRaw } from "./prices.ts";
+import { asBool } from "./values.ts";
 import { healthOf, positionOf } from "./reads.ts";
 
 const DEBT_OPS = new Set(["borrow", "repay", "liquidate"]);
@@ -137,9 +140,9 @@ async function executeOp(chain: Chain, actors: Actors, op: Op): Promise<void> {
         const denominator = health.totalLiquidLtv * 100n;
         for (const collateral of position.collaterals) {
           const token = collateral.split(".").pop() ?? collateral;
-          const dollars = convertedPrice(token) / 100_000_000n;
-          const scaled = (dollars * numerator) / denominator;
-          setPrice(token, scaled > 0n ? scaled : 1n);
+          // Raw 1e8 resolution: converting to whole dollars would turn a $2 feed into $1.
+          const scaled = (convertedPrice(token) * numerator) / denominator;
+          setPriceRaw(token, scaled > 0n ? scaled : 1n);
         }
         break;
       }
@@ -194,17 +197,17 @@ type RestartEvent = {
 async function startSession(
   reportDir: string,
   deployer: Account,
-  index: number,
   bootAttempts: BootAttempt[],
-  onRetry?: (reason: string) => void,
   onHandle?: (handle: DevnetHandle) => void,
   attempts = 6,
 ): Promise<Session> {
   let lastError: unknown;
-  for (let attempt = 1; attempt <= attempts; attempt++) {
+  for (let cycle = 1; cycle <= attempts; cycle++) {
     let devnet: DevnetHandle | null = null;
     let booting = true;
-    const logName = index === 0 && attempt === 1 ? "devnet.log" : `devnet-${index + 1}-${attempt}.log`;
+    // Global numbering across the whole run, so a restart's boots join the same sequence.
+    const attempt = bootAttempts.length + 1;
+    const logName = attempt === 1 ? "devnet.log" : `devnet-${attempt}.log`;
     try {
       const bootStarted = Date.now();
       devnet = await startDevnet(
@@ -212,23 +215,22 @@ async function startSession(
         onHandle,
       );
       const bootMs = Date.now() - bootStarted;
-      bootAttempts.push({ attempt, logPath: devnet.logPath, ok: true });
       booting = false;
       const setupStarted = Date.now();
       const chain = new Chain(deployer.address);
       const actors = await bootstrapActors(chain, deployer);
       const baseline = await setup(chain, actors);
+      bootAttempts.push({ attempt, logPath: devnet.logPath, ok: true });
       return { devnet, chain, actors, baseline, timings: { bootMs, setupMs: Date.now() - setupStarted } };
     } catch (error) {
       lastError = error;
       const reason = error instanceof Error ? error.message : String(error);
       bootAttempts.push({ attempt, logPath: join(reportDir, logName), ok: false, reason });
       if (devnet) await stopDevnet(devnet);
-      // A boot can also lose the race to register the PoX signer set; a fresh boot is the fix.
+      // A boot can lose the race to register the PoX signer set; a fresh boot is the fix.
       const retryable = error instanceof DevnetStallError || booting;
       if (!retryable) throw error;
-      console.log(`devnet boot or setup failed; retrying the boot (${attempt}/${attempts}): ${reason}`);
-      onRetry?.(reason);
+      console.log(`devnet boot or setup failed; retrying the boot (${cycle}/${attempts}): ${reason}`);
     }
   }
   throw lastError;
@@ -282,18 +284,7 @@ async function main(): Promise<number> {
   let runError: string | undefined;
   let reportWritten = false;
   let shuttingDown = false;
-  const handleSignal = (signal: string): void => {
-    if (shuttingDown) return;
-    shuttingDown = true;
-    console.log(`\n${signal} received; tearing the devnet down`);
-    void (async () => {
-      const handle = liveHandle ?? session?.devnet;
-      if (handle) await stopDevnet(handle);
-      process.exit(1);
-    })();
-  };
-  process.on("SIGINT", () => handleSignal("SIGINT"));
-  process.on("SIGTERM", () => handleSignal("SIGTERM"));
+  let capsValues: CapsSnapshot | undefined;
   const restartLog: RestartEvent[] = [];
   const bootAttempts: BootAttempt[] = [];
   const scenarios: ScenarioResult[] = [];
@@ -305,6 +296,7 @@ async function main(): Promise<number> {
     aborted: 0,
     failures: 0,
     perOp: {} as Record<string, { attempts: number; succeeded: number; aborted: number }>,
+    stakingWipedOut: false,
     ms: 0,
     firstFailure: undefined as string | undefined,
   };
@@ -333,16 +325,9 @@ async function main(): Promise<number> {
     recordRestart(restartPhase, reason, extra);
     await stopDevnet(session.devnet);
     liveHandle = null;
-    session = await startSession(
-      reportDir,
-      deployer,
-      restarts,
-      bootAttempts,
-      (retryReason) => recordRestart("boot", retryReason),
-      (handle) => {
-        liveHandle = handle;
-      },
-    );
+    session = await startSession(reportDir, deployer, bootAttempts, (handle) => {
+      liveHandle = handle;
+    });
     liveHandle = session.devnet;
     resetDriftBaseline();
     resetProbeUsers(session.actors);
@@ -389,6 +374,7 @@ async function main(): Promise<number> {
           }
         : undefined,
       accounting,
+      caps: capsValues,
       summary: {
         scenariosPassed: passedScenarios,
         scenariosExpected: expectedScenarios.length,
@@ -410,19 +396,39 @@ async function main(): Promise<number> {
     }
   };
 
+  // Signals write the partial report first, then tear down; a second signal exits immediately so a
+  // stuck teardown cannot keep the process alive.
+  const handleSignal = (signal: string): void => {
+    if (shuttingDown) {
+      console.error(`${signal} received again; exiting immediately`);
+      process.exit(130);
+    }
+    shuttingDown = true;
+    console.log(`\n${signal} received; writing the partial report and tearing the devnet down`);
+    void (async () => {
+      try {
+        await writePartialReport(`signal ${signal}`);
+      } catch {
+        /* already logged */
+      }
+      try {
+        const handle = liveHandle ?? session?.devnet;
+        if (handle) await stopDevnet(handle);
+      } catch (error) {
+        console.error(`signal teardown failed: ${error instanceof Error ? error.message : error}`);
+      }
+      process.exit(130);
+    })();
+  };
+  process.on("SIGINT", () => handleSignal("SIGINT"));
+  process.on("SIGTERM", () => handleSignal("SIGTERM"));
+
   try {
     console.log(`report dir: ${reportDir}`);
     phase = "boot";
-    session = await startSession(
-      reportDir,
-      deployer,
-      0,
-      bootAttempts,
-      (retryReason) => recordRestart("boot", retryReason),
-      (handle) => {
-        liveHandle = handle;
-      },
-    );
+    session = await startSession(reportDir, deployer, bootAttempts, (handle) => {
+      liveHandle = handle;
+    });
     liveHandle = session.devnet;
     resetProbeUsers(session.actors);
     console.log(`devnet up: api=${session.devnet.apiUrl} pid=${session.devnet.pid}`);
@@ -526,7 +532,11 @@ async function main(): Promise<number> {
       fuzz.firstFailure ??= `fuzz success ratio ${summary.successRatio} below ${MIN_SUCCESS_RATIO} (${fuzz.succeeded}/${fuzz.ops})`;
       console.error(`fuzz failure: ${fuzz.firstFailure}`);
     }
+    // A wiped-out staking market refuses every stake/unstake by design; those ops cannot succeed.
+    const stakingWipedOut = asBool(await session.chain.read("staking-v1", "is-staking-wiped-out"));
+    fuzz.stakingWipedOut = stakingWipedOut;
     for (const [opName, stat] of Object.entries(fuzz.perOp)) {
+      if (stakingWipedOut && (opName === "stake" || opName === "unstake")) continue;
       if (stat.attempts >= MIN_OP_ATTEMPTS && stat.succeeded / stat.attempts < MIN_OP_RATIO) {
         fuzz.failures += 1;
         fuzz.firstFailure ??= `fuzz op ${opName} succeeded ${stat.succeeded}/${stat.attempts}, below ${MIN_OP_RATIO}`;
@@ -535,6 +545,11 @@ async function main(): Promise<number> {
     }
 
     phase = "final";
+    try {
+      capsValues = await capsSnapshot(session.chain);
+    } catch (error) {
+      console.error(`could not snapshot caps values: ${error instanceof Error ? error.message : error}`);
+    }
     try {
       const finalViolations = failed(await checkInvariants(session.chain));
       if (finalViolations.length > 0) {
@@ -610,10 +625,15 @@ async function main(): Promise<number> {
     console.error(`run failed in phase ${phase}: ${runError}`);
     return 1;
   } finally {
-    if (session && !keep) await stopDevnet(session.devnet);
+    // The partial report is written before teardown: a throwing teardown must not lose the evidence.
+    if (runError) await writePartialReport(runError);
+    try {
+      if (session && !keep) await stopDevnet(session.devnet);
+    } catch (error) {
+      console.error(`teardown failed: ${error instanceof Error ? error.message : error}`);
+    }
     liveHandle = null;
     if (session && keep) console.log(`devnet kept up (pid ${session.devnet.pid}); stop it with SIGTERM`);
-    if (runError) await writePartialReport(runError);
   }
 }
 

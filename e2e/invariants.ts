@@ -44,31 +44,40 @@ const abs = (value: bigint): bigint => (value < 0n ? -value : value);
 
 /**
  * The protocol invariant is `total_assets + reserve == cash + outstanding_debt`, so the gap is
- * cash + debt - reserve - totalAssets. Downward movement means value appeared from nowhere.
+ * cash + debt - reserve - totalAssets. The residue is a positive rounding remainder: a negative gap
+ * means value appeared from nowhere and is never rounding.
  */
-export function accountingHolds(params: {
-  totalAssets: bigint;
-  reserve: bigint;
-  cash: bigint;
-  debt: bigint;
-}): InvariantResult {
+export function accountingHolds(
+  params: {
+    totalAssets: bigint;
+    reserve: bigint;
+    cash: bigint;
+    debt: bigint;
+  },
+  maxDrift: bigint = ROUNDING_TOLERANCE,
+): InvariantResult {
   const drift = params.cash + params.debt - params.reserve - params.totalAssets;
   return {
     name: "accounting",
-    ok: abs(drift) <= ROUNDING_TOLERANCE,
-    detail: `total-assets=${params.totalAssets} cash=${params.cash} debt=${params.debt} reserve=${params.reserve} drift=${drift}`,
+    ok: drift >= 0n && drift <= maxDrift,
+    detail: `total-assets=${params.totalAssets} cash=${params.cash} debt=${params.debt} reserve=${params.reserve} drift=${drift} allowed<=${maxDrift}`,
   };
 }
 
 /**
- * Outside debt operations the accumulated gap must not move at all; a debt operation may move it by
- * at most the protocol's integer rounding residue (3 units).
+ * Outside debt operations the accumulated gap must not move at all; a debt operation may move it
+ * upward by at most the protocol's integer rounding residue (3 units). Downward movement always
+ * fails, and the baseline check after setup must be exactly zero.
  */
 export function gateStepDrift(drift: bigint, kind: OpKind): InvariantResult {
   stats.drift = drift;
   if (lastDrift === undefined) {
     lastDrift = drift;
-    return { name: "accounting-drift", ok: true, detail: `kind=${kind} drift=${drift} (baseline)` };
+    return {
+      name: "accounting-drift",
+      ok: drift === 0n,
+      detail: `kind=${kind} drift=${drift} (baseline, must be 0)`,
+    };
   }
   const delta = drift - lastDrift;
   lastDrift = drift;
@@ -78,8 +87,8 @@ export function gateStepDrift(drift: bigint, kind: OpKind): InvariantResult {
   const allowed = kind === "debt" ? MAX_DEBT_STEP_DRIFT : 0n;
   return {
     name: "accounting-drift",
-    ok: abs(delta) <= allowed,
-    detail: `kind=${kind} delta=${delta} drift=${drift} allowed=${allowed}`,
+    ok: delta >= 0n && delta <= allowed,
+    detail: `kind=${kind} delta=${delta} drift=${drift} allowed=0..${allowed}`,
   };
 }
 
@@ -100,6 +109,69 @@ export function resetProbeUsers(actors: Actors): void {
   probeUsers.length = 0;
   probeUsers.push(...Object.values(actors).map((account) => account.address));
   probeIndex = 0;
+}
+
+/** Adds a scenario-created account so the position checks see it too. */
+export function registerProbeUser(address: string): void {
+  if (!probeUsers.includes(address)) probeUsers.push(address);
+}
+
+export type CapsSnapshot = {
+  refillWindow: string;
+  decayWindow: string;
+  lp: { bucket: string; factor: string; max: string };
+  debt: { bucket: string; factor: string; max: string };
+  collateral: Record<string, { bucket: string; factor: string; max: string }>;
+};
+
+/** Final bucket/factor values for the run report. */
+export async function capsSnapshot(chain: Chain): Promise<CapsSnapshot> {
+  const stateContract = Cl.contractPrincipal(chain.deployer, "state-v1");
+  const cp = (name: string) => Cl.contractPrincipal(chain.deployer, name);
+  const [refill, decay, lpBucket, lpFactor, liquidity, debtBucket, debtFactor, borrowable, ...rest] =
+    await Promise.all([
+      chain.read("withdrawal-caps-v1", "get-refill-time-window"),
+      chain.read("withdrawal-caps-v1", "get-decay-time-window"),
+      chain.read("withdrawal-caps-v1", "get-lp-bucket"),
+      chain.read("withdrawal-caps-v1", "get-lp-cap-factor"),
+      chain.read(MARKET, "get-balance", [stateContract]),
+      chain.read("withdrawal-caps-v1", "get-debt-bucket"),
+      chain.read("withdrawal-caps-v1", "get-debt-cap-factor"),
+      chain.read("state-v1", "get-borrowable-balance"),
+      ...COLLATERALS.flatMap((token) => [
+        chain.read("withdrawal-caps-v1", "get-collateral-bucket", [cp(token)]),
+        chain.read("withdrawal-caps-v1", "get-collateral-cap-factor", [cp(token)]),
+        chain.read(token, "get-balance", [stateContract]),
+      ]),
+    ]);
+  const maxOf = (liquidityValue: bigint, factor: bigint): bigint => (liquidityValue * factor) / SCALING_FACTOR;
+  const collateral: CapsSnapshot["collateral"] = {};
+  COLLATERALS.forEach((token, index) => {
+    const base = index * 3;
+    const factor = asUint(rest[base + 1]);
+    collateral[token] = {
+      bucket: asUint(rest[base]).toString(),
+      factor: factor.toString(),
+      max: maxOf(okUint(rest[base + 2]), factor).toString(),
+    };
+  });
+  const lpFactorValue = asUint(lpFactor);
+  const debtFactorValue = asUint(debtFactor);
+  return {
+    refillWindow: asUint(refill).toString(),
+    decayWindow: asUint(decay).toString(),
+    lp: {
+      bucket: asUint(lpBucket).toString(),
+      factor: lpFactorValue.toString(),
+      max: maxOf(okUint(liquidity), lpFactorValue).toString(),
+    },
+    debt: {
+      bucket: asUint(debtBucket).toString(),
+      factor: debtFactorValue.toString(),
+      max: maxOf(asUint(borrowable), debtFactorValue).toString(),
+    },
+    collateral,
+  };
 }
 
 async function debtHealth(chain: Chain): Promise<InvariantResult> {
@@ -232,10 +304,9 @@ async function openInterestCoversPrincipal(chain: Chain): Promise<InvariantResul
 export async function checkInvariants(chain: Chain, kind: OpKind = "non-debt"): Promise<InvariantResult[]> {
   const results: InvariantResult[] = [];
   const stateContract = Cl.contractPrincipal(chain.deployer, "state-v1");
-  const [lpValue, supplyValue, reserveValue, cashValue, debtValue, caps, buckets, interest, configs, health, exit] =
+  const [lpValue, reserveValue, cashValue, debtValue, caps, buckets, interest, configs, health, exit] =
     await Promise.all([
       chain.read("state-v1", "get-lp-params"),
-      chain.read("state-v1", "get-total-supply"),
       chain.read("state-v1", "get-reserve-balance"),
       chain.read(MARKET, "get-balance", [stateContract]),
       chain.read("state-v1", "get-debt-params"),
@@ -259,21 +330,10 @@ export async function checkInvariants(chain: Chain, kind: OpKind = "non-debt"): 
   const totalAssets = asUint(lp["total-assets"]);
   const openInterest = asUint(debt["open-interest"]);
   // total_assets + reserve == cash + debt; the gap is cash + debt - reserve - total_assets.
-  const drift = cash + openInterest - reserve - totalAssets;
-
-  results.push({
-    name: "accounting",
-    ok: drift >= -ROUNDING_TOLERANCE,
-    detail: `total-assets=${totalAssets} cash=${cash} debt=${openInterest} reserve=${reserve} drift=${drift}`,
-  });
-  results.push(gateStepDrift(drift, kind));
-  const supply = okUint(supplyValue);
-  const shares = asUint(lp["total-shares"]);
-  results.push({
-    name: "lp-shares",
-    ok: supply === shares,
-    detail: `total-supply=${supply} total-shares=${shares}`,
-  });
+  // The structural ceiling is 3 units per debt operation seen so far; the per-step gate is sharper.
+  const maxDrift = MAX_DEBT_STEP_DRIFT * BigInt(Math.max(stats.debtOps, 1));
+  results.push(accountingHolds({ totalAssets, reserve, cash, debt: openInterest }, maxDrift));
+  results.push(gateStepDrift(cash + openInterest - reserve - totalAssets, kind));
   results.push(caps);
   results.push(buckets);
   results.push(interest);

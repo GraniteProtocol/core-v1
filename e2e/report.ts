@@ -18,7 +18,16 @@ export type FuzzStats = {
   aborted: number;
   failures: number;
   perOp: Record<string, { attempts: number; succeeded: number; aborted: number }>;
+  stakingWipedOut?: boolean;
   firstFailure?: string;
+};
+
+export type CapsReport = {
+  refillWindow: string;
+  decayWindow: string;
+  lp: { bucket: string; factor: string; max: string };
+  debt: { bucket: string; factor: string; max: string };
+  collateral: Record<string, { bucket: string; factor: string; max: string }>;
 };
 
 export type RunReport = {
@@ -65,6 +74,7 @@ export type RunReport = {
     exactZero: boolean;
     rebaselines?: Array<{ at: string; phase: string; drift: string }>;
   };
+  caps?: CapsReport;
 };
 
 export async function writeReport(
@@ -122,6 +132,15 @@ export async function writeReport(
     for (const event of report.restarts ?? []) {
       const where = event.sequence !== undefined ? ` sequence ${event.sequence}${event.op ? ` ${event.op}` : ""}` : "";
       lines.push(`  - ${event.at} [${event.phase}${where}] ${event.reason} (drift at restart: ${event.driftAtRestart})`);
+    }
+  }
+  if (report.caps) {
+    const c = report.caps;
+    lines.push(
+      `- caps: windows refill=${c.refillWindow} decay=${c.decayWindow}; lp bucket=${c.lp.bucket} factor=${c.lp.factor} max=${c.lp.max}; debt bucket=${c.debt.bucket} factor=${c.debt.factor} max=${c.debt.max}`,
+    );
+    for (const [token, value] of Object.entries(c.collateral)) {
+      lines.push(`  - ${token}: bucket=${value.bucket} factor=${value.factor} max=${value.max}`);
     }
   }
   if (report.accounting) {

@@ -167,9 +167,16 @@ async function assertNoForeignDevnet(apiUrl: string): Promise<void> {
   }
 }
 
+/** Absolute path of a clarinet devnet chainstate directory. */
+export function workDirPath(name: string): string {
+  return join(CACHE_DIR, name);
+}
+
 function stackDirs(): string[] {
   try {
-    return readdirSync(CACHE_DIR).filter((name) => name.startsWith("stacks-devnet-"));
+    return readdirSync(CACHE_DIR)
+      .filter((name) => name.startsWith("stacks-devnet-"))
+      .map((name) => workDirPath(name));
   } catch {
     return [];
   }
@@ -322,20 +329,27 @@ export async function stopDevnet(handle: DevnetHandle): Promise<void> {
   }
   const docker = dockerPath();
   for (const name of devnetContainerNames()) {
-    const res = spawnSync(docker, ["rm", "-f", name], { encoding: "utf8" });
+    const res = spawnSync(docker, ["rm", "-f", name], { encoding: "utf8", timeout: 15_000 });
     if (res.status !== 0) {
       console.warn(`teardown: docker rm -f ${name} failed (${res.status}): ${(res.stderr ?? "").trim()}`);
     }
   }
-  const network = spawnSync(docker, ["network", "rm", handle.network], { encoding: "utf8" });
+  const network = spawnSync(docker, ["network", "rm", handle.network], {
+    encoding: "utf8",
+    timeout: 15_000,
+  });
   if (network.status !== 0 && !/not found|no such network/i.test(network.stderr ?? "")) {
     console.warn(`teardown: docker network rm ${handle.network} failed: ${(network.stderr ?? "").trim()}`);
   }
   if (handle.workingDir) {
-    try {
-      rmSync(handle.workingDir, { recursive: true, force: true });
-    } catch (error) {
-      console.warn(`teardown: could not remove ${handle.workingDir}: ${error instanceof Error ? error.message : error}`);
+    if (!existsSync(handle.workingDir)) {
+      console.warn(`teardown: chainstate directory ${handle.workingDir} does not exist`);
+    } else {
+      try {
+        rmSync(handle.workingDir, { recursive: true });
+      } catch (error) {
+        console.warn(`teardown: could not remove ${handle.workingDir}: ${error instanceof Error ? error.message : error}`);
+      }
     }
   }
   try {

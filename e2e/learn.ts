@@ -1,6 +1,6 @@
 import { spawnSync } from "node:child_process";
-import { existsSync, readFileSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { dirname, join } from "node:path";
 import type { RunReport } from "./report.ts";
 
 const STATE_PATH = ".claude/skills/local-e2e/state.json";
@@ -14,22 +14,34 @@ export type LearningProposal = {
 };
 
 type State = {
-  scenarios: string[];
+  /** Scenarios the user has approved into the skill; proposals are diffed against this. */
+  appliedScenarios: string[];
+  /** What the last run saw, so drift is visible without treating it as applied. */
+  lastSeenScenarios: string[];
   failures: string[];
   lastSeed?: number;
   lastRunAt?: string;
 };
 
 function readState(): State {
-  if (!existsSync(STATE_PATH)) return { scenarios: [], failures: [] };
+  if (!existsSync(STATE_PATH)) return { appliedScenarios: [], lastSeenScenarios: [], failures: [] };
   try {
-    return JSON.parse(readFileSync(STATE_PATH, "utf8")) as State;
+    const raw = JSON.parse(readFileSync(STATE_PATH, "utf8")) as Partial<State> & { scenarios?: string[] };
+    return {
+      // Older state recorded only what a run saw; treat it as applied to keep proposals stable.
+      appliedScenarios: raw.appliedScenarios ?? raw.scenarios ?? [],
+      lastSeenScenarios: raw.lastSeenScenarios ?? raw.scenarios ?? [],
+      failures: raw.failures ?? [],
+      lastSeed: raw.lastSeed,
+      lastRunAt: raw.lastRunAt,
+    };
   } catch {
-    return { scenarios: [], failures: [] };
+    return { appliedScenarios: [], lastSeenScenarios: [], failures: [] };
   }
 }
 
 function writeState(state: State): void {
+  mkdirSync(dirname(STATE_PATH), { recursive: true });
   writeFileSync(STATE_PATH, `${JSON.stringify(state, null, 2)}\n`);
 }
 
@@ -51,32 +63,41 @@ function withNotes(current: string, notes: string[]): string {
  * the skill files change only when the user approves the diff.
  */
 export async function proposeLearnings(run: RunReport, reportDir: string): Promise<LearningProposal> {
+  const proposalPath = join(reportDir, "learn-proposal.diff");
+  if (!existsSync(SKILL_PATH)) {
+    const proposal = `Skill not present at ${SKILL_PATH}; no state recorded and no change proposed.`;
+    writeFileSync(proposalPath, `${proposal}\n`);
+    return { proposal, proposalPath, statePath: STATE_PATH };
+  }
+
   const previous = readState();
-  const seen = new Set(previous.scenarios);
+  const applied = new Set(previous.appliedScenarios);
   const names = run.scenarios.map((scenario) => scenario.name);
-  const newScenarios = names.filter((name) => !seen.has(name));
+  const newScenarios = names.filter((name) => !applied.has(name));
   const failures = run.scenarios
     .filter((scenario) => !scenario.passed)
     .map((scenario) => `${scenario.name}: ${scenario.failure}`);
   const fuzzFailure = run.fuzz.firstFailure ? [run.fuzz.firstFailure] : [];
 
   writeState({
-    scenarios: names,
+    appliedScenarios: previous.appliedScenarios,
+    lastSeenScenarios: names,
     failures,
     lastSeed: run.seed,
     lastRunAt: run.startedAt,
   });
 
   const notes: string[] = [];
-  if (newScenarios.length > 0) notes.push(`New scenarios this run: ${newScenarios.join(", ")}`);
+  if (newScenarios.length > 0) {
+    notes.push(`New scenarios this run (not yet applied to this skill): ${newScenarios.join(", ")}`);
+  }
   for (const failure of failures) notes.push(`Failure worth pinning: ${failure}`);
   for (const failure of fuzzFailure) notes.push(`Fuzz failure: ${failure}`);
 
-  const proposalPath = join(reportDir, "learn-proposal.diff");
   let proposal: string;
-  if (notes.length === 0 || !existsSync(SKILL_PATH)) {
+  if (notes.length === 0) {
     proposal =
-      "No new scenarios or failures since the last recorded run; no skill change proposed.";
+      "No new scenarios or failures since the last applied state; no skill change proposed.";
     writeFileSync(proposalPath, `${proposal}\n`);
     return { proposal, proposalPath, statePath: STATE_PATH };
   }
@@ -87,13 +108,12 @@ export async function proposeLearnings(run: RunReport, reportDir: string): Promi
   const proposedPath = join(reportDir, "skill-proposed.md");
   writeFileSync(currentPath, current);
   writeFileSync(proposedPath, proposed);
-  const diff = spawnSync("diff", ["-u", currentPath, proposedPath], { encoding: "utf8" });
+  const diff = spawnSync("diff", ["-u", currentPath, proposedPath], { encoding: "utf8", timeout: 10_000 });
   const text = diff.stdout?.trim() || "(no textual change)";
   writeFileSync(proposalPath, `${text}\n`);
-  proposal = [
-    "Proposed skill update (apply only on approval):",
-    "",
-    text,
-  ].join("\n");
+  proposal = ["Proposed skill update (apply only on approval):", "", text].join("\n");
+  if (newScenarios.length > 0) {
+    proposal += `\n\nApplying it also means adding these to appliedScenarios in ${STATE_PATH}.`;
+  }
   return { proposal, proposalPath, statePath: STATE_PATH };
 }
