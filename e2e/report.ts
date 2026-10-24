@@ -6,6 +6,7 @@ export type ScenarioResult = {
   passed: boolean;
   failure?: string;
   steps: number;
+  ms?: number;
   invariantFailures?: string[];
 };
 
@@ -17,6 +18,16 @@ export type RunReport = {
   fuzz: { sequences: number; ops: number; failures: number; firstFailure?: string };
   devnetLog?: string;
   devnetRestarts?: number;
+  timings?: {
+    bootMs: number;
+    setupMs: number;
+    scenarios: Array<{ name: string; ms: number }>;
+    matrixMs: number;
+    fuzzMs: number;
+    fuzzOps: number;
+    perOpMs: number;
+    totalMs: number;
+  };
   restarts?: Array<{
     at: string;
     phase: string;
@@ -54,6 +65,19 @@ export async function writeReport(
     `- scenarios: ${passed} passed, ${failed} failed`,
     `- fuzz: ${report.fuzz.sequences} sequences, ${report.fuzz.ops} ops, ${report.fuzz.failures} failures`,
   ];
+  if (report.timings) {
+    const t = report.timings;
+    lines.push(
+      `- timings: boot ${(t.bootMs / 1000).toFixed(1)}s, setup ${(t.setupMs / 1000).toFixed(1)}s, matrix ${(
+        t.matrixMs / 1000
+      ).toFixed(1)}s, fuzz ${(t.fuzzMs / 1000).toFixed(1)}s (${t.fuzzOps} ops, ${t.perOpMs}ms/op), total ${(
+        t.totalMs / 1000
+      ).toFixed(1)}s`,
+    );
+    lines.push("", "| scenario | ms |", "| --- | --- |");
+    for (const scenario of t.scenarios) lines.push(`| ${scenario.name} | ${scenario.ms} |`);
+    lines.push("");
+  }
   if (report.devnetLog) lines.push(`- devnet log: ${report.devnetLog}`);
   if (report.devnetRestarts) {
     lines.push(

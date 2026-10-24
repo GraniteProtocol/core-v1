@@ -128,7 +128,7 @@
 (define-constant THRESHOLD u60)
 
 ;; Time lock period before executing approved proposal
-(define-constant TIME_LOCKED_PERIOD u10)
+(define-constant TIME_LOCKED_PERIOD u2)
 
 ;; Time lock expiration period
 ;; approved time lock proposal expires after expiration block

@@ -32,13 +32,17 @@ export function accountingHolds(params: {
 
 async function capsFactors(chain: Chain): Promise<InvariantResult> {
   const cp = (name: string) => Cl.contractPrincipal(chain.deployer, name);
-  const entries: Array<[string, bigint]> = [
-    ["lp", asUint(await chain.read("withdrawal-caps-v1", "get-lp-cap-factor"))],
-    ["debt", asUint(await chain.read("withdrawal-caps-v1", "get-debt-cap-factor"))],
-  ];
-  for (const token of COLLATERALS) {
-    entries.push([token, asUint(await chain.read("withdrawal-caps-v1", "get-collateral-cap-factor", [cp(token)]))]);
-  }
+  const names = ["lp", "debt", ...COLLATERALS];
+  const values = await Promise.all(
+    names.map((name, index) =>
+      index === 0
+        ? chain.read("withdrawal-caps-v1", "get-lp-cap-factor")
+        : index === 1
+          ? chain.read("withdrawal-caps-v1", "get-debt-cap-factor")
+          : chain.read("withdrawal-caps-v1", "get-collateral-cap-factor", [cp(name)]),
+    ),
+  );
+  const entries: Array<[string, bigint]> = names.map((name, index) => [name, asUint(values[index])]);
   const bad = entries.filter(([, factor]) => factor < 0n || factor > SCALING_FACTOR);
   return {
     name: "caps-factors",
@@ -64,10 +68,21 @@ async function openInterestCoversPrincipal(chain: Chain): Promise<InvariantResul
 export async function checkInvariants(chain: Chain, kind: OpKind = "non-debt"): Promise<InvariantResult[]> {
   const results: InvariantResult[] = [];
 
-  const lp = asTuple(await chain.read("state-v1", "get-lp-params"));
-  const reserve = asUint(await chain.read("state-v1", "get-reserve-balance"));
-  const cash = okUint(await chain.read(MARKET, "get-balance", [Cl.contractPrincipal(chain.deployer, "state-v1")]));
-  const debt = asTuple(await chain.read("state-v1", "get-debt-params"));
+  // One parallel batch: the invariant set is unchanged, only the round-trips overlap.
+  const stateContract = Cl.contractPrincipal(chain.deployer, "state-v1");
+  const [lpValue, reserveValue, cashValue, debtValue, caps, interest, configs] = await Promise.all([
+    chain.read("state-v1", "get-lp-params"),
+    chain.read("state-v1", "get-reserve-balance"),
+    chain.read(MARKET, "get-balance", [stateContract]),
+    chain.read("state-v1", "get-debt-params"),
+    capsFactors(chain),
+    openInterestCoversPrincipal(chain),
+    collateralSettingsSane(chain),
+  ]);
+  const lp = asTuple(lpValue);
+  const reserve = asUint(reserveValue);
+  const cash = okUint(cashValue);
+  const debt = asTuple(debtValue);
   const totalAssets = asUint(lp["total-assets"]);
   const openInterest = asUint(debt["open-interest"]);
   const drift = cash + openInterest + reserve - totalAssets;
@@ -79,11 +94,8 @@ export async function checkInvariants(chain: Chain, kind: OpKind = "non-debt"): 
     detail: `total-assets=${totalAssets} cash=${cash} debt=${openInterest} reserve=${reserve} drift=${drift}`,
   });
   results.push(gateStepDrift(drift, kind));
-
-  results.push(await capsFactors(chain));
-  results.push(await openInterestCoversPrincipal(chain));
-
-  const configs = await collateralSettingsSane(chain);
+  results.push(caps);
+  results.push(interest);
   results.push({ name: "collateral-configs", ok: configs.ok, detail: configs.detail });
 
   return results;

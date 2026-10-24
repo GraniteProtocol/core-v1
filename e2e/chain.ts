@@ -217,7 +217,7 @@ export class Chain {
           throw new DevnetStallError(`stacks tip stuck at ${height} for ${stallMs}ms while ${txid} was pending`);
         }
       }
-      await sleep(250);
+      await sleep(120);
     }
     throw new Error(`transaction ${txid} not confirmed in ${timeoutMs}ms`);
   }

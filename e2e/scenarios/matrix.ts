@@ -73,7 +73,7 @@ scenario("lp-withdraw-cap", async (ctx) => {
   );
   const lp = await fund(ctx, "cap-lp", { usdc: 1_000_000n * USDC });
   await ctx.step("lp deposits 1,000,000", () => deposit(chain, lp, 1_000_000n * USDC));
-  await ctx.step("wait for the decay window", () => sleep(61_000));
+  await ctx.step("wait for the decay window", () => sleep(5_000));
   // The bucket only syncs inside a successful call; an aborted one rolls its sync back.
   await ctx.step("withdraw one unit to sync the bucket", () => withdraw(chain, lp, 1n));
   const bucket = asUint(await chain.read("withdrawal-caps-v1", "get-lp-bucket"));
@@ -84,7 +84,7 @@ scenario("lp-withdraw-cap", async (ctx) => {
     "u120002",
   );
   await ctx.step("withdraw within the bucket succeeds", () => withdraw(chain, lp, bucket / 2n));
-  await ctx.step("wait for the refill window", () => sleep(121_000));
+  await ctx.step("wait for the refill window", () => sleep(9_000));
   await ctx.step("withdraw one unit to sync the bucket", () => withdraw(chain, lp, 1n));
   const refilled = asUint(await chain.read("withdrawal-caps-v1", "get-lp-bucket"));
   await ctx.assert("the bucket refilled", refilled > 1n, `bucket ${refilled}`);
@@ -305,7 +305,7 @@ scenario("staking", async (ctx) => {
   await ctx.assert("staked balance is positive", staked > 0n, "no staked LP tokens");
   await ctx.step("initiate unstake", () => initiateUnstake(chain, actors.staker, staked / 2n));
   await ctx.attempt("finalizing early aborts", () => finalizeUnstake(chain, actors.staker, 0n), "u60004");
-  await ctx.step("wait the finalization period", () => chain.waitBlocks(11));
+  await ctx.step("wait the finalization period", () => chain.waitBlocks(3));
   await ctx.step("finalize after the period", () => finalizeUnstake(chain, actors.staker, 0n));
 });
 
@@ -349,7 +349,7 @@ scenario("caps", async (ctx) => {
     ]),
   );
   await ctx.step("add 10 BTC", () => addCollateral(chain, borrower, BTC, 10n * UNIT));
-  await ctx.step("wait for the decay window", () => sleep(61_000));
+  await ctx.step("wait for the decay window", () => sleep(5_000));
   // The bucket only syncs inside a successful call; an aborted one rolls its sync back.
   await ctx.step("remove one unit to sync the bucket", () => removeCollateral(chain, borrower, BTC, 1n));
   const bucket = asUint(
@@ -365,7 +365,7 @@ scenario("caps", async (ctx) => {
   // Remove half the bucket rather than the exact stored value: the bucket keeps refining between
   // the read and the call, so the exact boundary is racy.
   await ctx.step("removing within the bucket succeeds", () => removeCollateral(chain, borrower, BTC, bucket / 2n));
-  await ctx.step("wait for the refill window", () => sleep(121_000));
+  await ctx.step("wait for the refill window", () => sleep(9_000));
   await ctx.step("remove one unit to sync the bucket", () => removeCollateral(chain, borrower, BTC, 1n));
   const refilled = asUint(
     await chain.read("withdrawal-caps-v1", "get-collateral-bucket", [Cl.contractPrincipal(chain.deployer, BTC)]),
@@ -483,7 +483,7 @@ scenario("governance", async (ctx) => {
       proposalId = await propose();
     });
     if (!autoExecutes) {
-      await ctx.step(`wait the test timelock for ${label}`, () => chain.waitBlocks(11));
+      await ctx.step(`wait the test timelock for ${label}`, () => chain.waitBlocks(3));
       await ctx.step(`execute ${label}`, () =>
         chain.call(actors.deployer, "governance-test", "execute", [Cl.bufferFromHex(proposalId)]),
       );
@@ -626,5 +626,5 @@ scenario("governance", async (ctx) => {
     "ETH config moved unexpectedly",
   );
   await ctx.assert("STX still configured", (await collateralSettingsOf(chain, STX)).maxLtv === 50_000_000n, "STX missing");
-  await ctx.assert("caps read", (await asUint(await chain.read("withdrawal-caps-v1", "get-refill-time-window"))) === 120n, "refill window changed");
+  await ctx.assert("caps read", (await asUint(await chain.read("withdrawal-caps-v1", "get-refill-time-window"))) === 8n, "refill window changed");
 });

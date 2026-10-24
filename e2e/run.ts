@@ -144,6 +144,7 @@ type Session = {
   chain: Chain;
   actors: Actors;
   baseline: Awaited<ReturnType<typeof setup>>;
+  timings: { bootMs: number; setupMs: number };
 };
 
 type RestartEvent = {
@@ -167,16 +168,19 @@ async function startSession(
     let devnet: DevnetHandle | null = null;
     let booting = true;
     try {
+      const bootStarted = Date.now();
       devnet = await startDevnet({
         logDir: reportDir,
         logName: index === 0 && attempt === 1 ? "devnet.log" : `devnet-${index + 1}-${attempt}.log`,
         contractTimeoutMs: 180_000,
       });
+      const bootMs = Date.now() - bootStarted;
       booting = false;
+      const setupStarted = Date.now();
       const chain = new Chain(deployer.address);
       const actors = await bootstrapActors(chain, deployer);
       const baseline = await setup(chain, actors);
-      return { devnet, chain, actors, baseline };
+      return { devnet, chain, actors, baseline, timings: { bootMs, setupMs: Date.now() - setupStarted } };
     } catch (error) {
       lastError = error;
       if (devnet) await stopDevnet(devnet);
@@ -202,6 +206,7 @@ async function runScenario(session: Session, scenario: Scenario): Promise<Scenar
       name: scenario.name,
       passed: true,
       steps: context.steps.length,
+      ms: Date.now() - started,
       invariantFailures: context.invariantFailures,
     };
   } catch (error) {
@@ -213,6 +218,7 @@ async function runScenario(session: Session, scenario: Scenario): Promise<Scenar
       passed: false,
       failure,
       steps: context.steps.length,
+      ms: Date.now() - started,
       invariantFailures: context.invariantFailures,
     };
   } finally {
@@ -302,6 +308,7 @@ async function main(): Promise<number> {
     }
 
     console.log(`fuzz: ${FUZZ_SEQUENCES} sequences`);
+    const fuzzStarted = Date.now();
     let fuzzFailed = false;
     for (let index = 0; index < FUZZ_SEQUENCES && !fuzzFailed; index++) {
       const length = FUZZ_MIN_OPS + ((seed + index * 7919) % (FUZZ_MAX_OPS - FUZZ_MIN_OPS + 1));
@@ -350,6 +357,8 @@ async function main(): Promise<number> {
       fuzz.firstFailure = `final invariants: ${finalViolations.map((v) => `${v.name}: ${v.detail}`).join("; ")}`;
     }
 
+    const fuzzMs = Date.now() - fuzzStarted;
+    const matrixMs = scenarios.reduce((sum, scenario) => sum + (scenario.ms ?? 0), 0);
     const accounting = accountingStats();
     const report = {
       startedAt: startedAt.toISOString(),
@@ -360,6 +369,16 @@ async function main(): Promise<number> {
       devnetLog: session.devnet.logPath,
       devnetRestarts: restarts,
       restarts: restartLog,
+      timings: {
+        bootMs: session.timings.bootMs,
+        setupMs: session.timings.setupMs,
+        scenarios: scenarios.map((scenario) => ({ name: scenario.name, ms: scenario.ms ?? 0 })),
+        matrixMs,
+        fuzzMs,
+        fuzzOps: fuzz.ops,
+        perOpMs: fuzz.ops > 0 ? Math.round(fuzzMs / fuzz.ops) : 0,
+        totalMs: Date.now() - startedAt.getTime(),
+      },
       accounting: {
         drift: accounting.drift.toString(),
         debtOps: accounting.debtOps,
@@ -376,6 +395,16 @@ async function main(): Promise<number> {
         (report.durationMs / 1000).toFixed(1)
       }s, ${ok ? "PASS" : "FAIL"}`,
     );
+    console.log(
+      `timings: boot ${(report.timings.bootMs / 1000).toFixed(1)}s, setup ${(
+        report.timings.setupMs / 1000
+      ).toFixed(1)}s, matrix ${(matrixMs / 1000).toFixed(1)}s, fuzz ${(fuzzMs / 1000).toFixed(1)}s (${fuzz.ops} ops, ${
+        report.timings.perOpMs
+      }ms/op), total ${(report.timings.totalMs / 1000).toFixed(1)}s`,
+    );
+    for (const scenario of report.timings.scenarios) {
+      console.log(`  ${scenario.name}: ${(scenario.ms / 1000).toFixed(1)}s`);
+    }
     console.log(
       `accounting: gap=${accounting.drift} debt-ops=${accounting.debtOps} max-step=${accounting.maxStepDrift}`,
     );

@@ -49,9 +49,10 @@ export const expectedCollateralConfigs = (): Record<string, CollateralConfig> =>
   [STX]: { maxLtv: 50_000_000n, liquidationLtv: 70_000_000n, liquidationPremium: 10_000_000n, decimals: 6n },
 });
 
+// Short windows keep the caps scenarios inside the timed budget; the arithmetic is identical.
 export const expectedCaps = (): { refill: bigint; decay: bigint; collateral: Record<string, bigint> } => ({
-  refill: 120n,
-  decay: 60n,
+  refill: 8n,
+  decay: 4n,
   collateral: { [BTC]: 80_000_000n, [ETH]: 50_000_000n, [STX]: 50_000_000n },
 });
 
@@ -143,8 +144,8 @@ export async function setup(chain: Chain, actors: Actors): Promise<Snapshot> {
   ]);
   // A zero minimum stake skips the deployer dust stake, which would need LP tokens it does not hold.
   await call("staking-v1", "initialize", [Cl.some(Cl.uint(0))]);
-  // 10 blocks instead of 100 keeps the unstake scenario short on the devnet.
-  await call("staking-v1", "update-withdrawal-finalization-period", [Cl.uint(10)]);
+  // 2 blocks instead of 100 keeps the unstake scenario short on the devnet.
+  await call("staking-v1", "update-withdrawal-finalization-period", [Cl.uint(2)]);
 
   // 2. Allow the contracts that move assets through state-v1.
   for (const name of [
@@ -237,10 +238,14 @@ export function priceOf(token: string): bigint {
 /** Asserts the live collateral settings are internally valid; a de-listed collateral is skipped. */
 export async function collateralSettingsSane(chain: Chain): Promise<{ ok: boolean; detail: string }> {
   const problems: string[] = [];
-  for (const token of COLLATERALS) {
-    const stored = asOptional(
-      await chain.read("state-v1", "get-collateral", [Cl.contractPrincipal(chain.deployer, token)]),
-    );
+  const storedValues = await Promise.all(
+    COLLATERALS.map((token) =>
+      chain.read("state-v1", "get-collateral", [Cl.contractPrincipal(chain.deployer, token)]),
+    ),
+  );
+  for (const [index, value] of storedValues.entries()) {
+    const token = COLLATERALS[index];
+    const stored = asOptional(value);
     if (!stored) continue;
     const config = asTuple(stored);
     const maxLtv = asUint(config["max-ltv"]);
