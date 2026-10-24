@@ -90,7 +90,8 @@ scenario("lp-withdraw-cap", async (ctx) => {
   );
   const lp = await fund(ctx, "cap-lp", { usdc: 1_000_000n * USDC });
   await ctx.step("lp deposits 1,000,000", () => deposit(chain, lp, 1_000_000n * USDC));
-  await ctx.step("wait for the decay window", () => sleep(5_000));
+  // The windows are block-time seconds and blocks arrive every ~5s, so wait well past the window.
+  await ctx.step("wait for the decay window", () => sleep(12_000));
   // The bucket only syncs inside a successful call; an aborted one rolls its sync back.
   await ctx.step("withdraw one unit to sync the bucket", () => withdraw(chain, lp, 1n));
   const bucket = asUint(await chain.read("withdrawal-caps-v1", "get-lp-bucket"));
@@ -107,7 +108,7 @@ scenario("lp-withdraw-cap", async (ctx) => {
   );
   await ctx.step("withdraw within the bucket succeeds", () => withdraw(chain, lp, bucket / 2n));
   const bucketBeforeRefill = asUint(await chain.read("withdrawal-caps-v1", "get-lp-bucket"));
-  await ctx.step("wait for the refill window", () => sleep(9_000));
+  await ctx.step("wait for the refill window", () => sleep(16_000));
   await ctx.step("withdraw one unit to sync the bucket", () => withdraw(chain, lp, 1n));
   const refilled = asUint(await chain.read("withdrawal-caps-v1", "get-lp-bucket"));
   const refilledMax = await lpCapMax(chain, factor);
@@ -398,7 +399,7 @@ scenario("caps", async (ctx) => {
       .read("withdrawal-caps-v1", "get-collateral-bucket", [Cl.contractPrincipal(chain.deployer, BTC)])
       .then(asUint);
   await ctx.step("add 10 BTC", () => addCollateral(chain, borrower, BTC, 10n * UNIT));
-  await ctx.step("wait for the decay window", () => sleep(5_000));
+  await ctx.step("wait for the decay window", () => sleep(12_000));
   // The bucket only syncs inside a successful call; an aborted one rolls its sync back.
   await ctx.step("remove one unit to sync the bucket", () => removeCollateral(chain, borrower, BTC, 1n));
   const bucket = await readBucket();
@@ -416,7 +417,7 @@ scenario("caps", async (ctx) => {
   );
   await ctx.step("removing within the bucket succeeds", () => removeCollateral(chain, borrower, BTC, bucket / 2n));
   const bucketBeforeRefill = await readBucket();
-  await ctx.step("wait for the refill window", () => sleep(9_000));
+  await ctx.step("wait for the refill window", () => sleep(16_000));
   await ctx.step("remove one unit to sync the bucket", () => removeCollateral(chain, borrower, BTC, 1n));
   const refilled = await readBucket();
   const refilledMax = await collateralCapMax(chain, BTC, factor);
