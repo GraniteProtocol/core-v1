@@ -20,7 +20,8 @@ import {
 import { BTC, ETH, MARKET, STX, collateralSettingsOf, lpParams, mint } from "../setup.ts";
 import { priceUpdate, resetToBaseline, setPrice, setPriceRaw } from "../prices.ts";
 import { healthOf, lpBalance, positionOf, stakedBalance, tokenBalance, totalStakedLpTokens, userCollateral } from "../reads.ts";
-import { asBool, asPrincipal, asTuple, asUint } from "../values.ts";
+import { registerProbeUser, suspendExitability } from "../invariants.ts";
+import { asBool, asOptional, asPrincipal, asTuple, asUint, okUint } from "../values.ts";
 
 const USDC = 100_000_000n;
 const UNIT = 100_000_000n;
@@ -35,6 +36,7 @@ async function fund(
   funds: { usdc?: bigint; btc?: bigint; eth?: bigint },
 ): Promise<Account> {
   const account = newAccount(name);
+  registerProbeUser(account.address);
   await ctx.step(`fund ${name}`, () => fundAccount(ctx.chain, ctx.actors.deployer, account));
   if (funds.usdc) {
     await ctx.step(`mint usdc ${name}`, () =>
@@ -66,28 +68,81 @@ export const matrix: Scenario[] = [];
 
 const scenario = (name: string, run: Scenario["run"]) => matrix.push({ name, run });
 
+const absDiff = (a: bigint, b: bigint): bigint => (a > b ? a - b : b - a);
+// A cap-relative tolerance: a 25% refill/decay bug must fail, while one raw unit plus the factor
+// step caused by the syncing withdrawal stays inside it.
+const capTolerance = (cap: bigint): bigint => {
+  const relative = cap / 1000n;
+  return relative > 0n ? relative : 1n;
+};
+const stateContract = (chain: Chain) => `${chain.deployer}.state-v1`;
+
+/** The bucket's cap: liquidity held by state-v1 times the factor. */
+async function lpCapMax(chain: Chain, factor: bigint): Promise<bigint> {
+  const liquidity = await tokenBalance(chain, MARKET, stateContract(chain));
+  return (liquidity * factor) / HUNDRED_PCT;
+}
+
+async function collateralCapMax(chain: Chain, token: string, factor: bigint): Promise<bigint> {
+  const liquidity = await tokenBalance(chain, token, stateContract(chain));
+  return (liquidity * factor) / HUNDRED_PCT;
+}
+
 scenario("lp-withdraw-cap", async (ctx) => {
   const { chain, actors } = ctx;
+  const factor = HUNDRED_PCT / 10n;
   await ctx.step("set lp cap 10%", () =>
-    callAsDeployer(chain, actors.deployer, "withdrawal-caps-v1", "set-lp-cap", [Cl.uint(HUNDRED_PCT / 10n)]),
+    callAsDeployer(chain, actors.deployer, "withdrawal-caps-v1", "set-lp-cap", [Cl.uint(factor)]),
   );
   const lp = await fund(ctx, "cap-lp", { usdc: 1_000_000n * USDC });
   await ctx.step("lp deposits 1,000,000", () => deposit(chain, lp, 1_000_000n * USDC));
-  await ctx.step("wait for the decay window", () => sleep(5_000));
+  // The windows are block-time seconds and blocks arrive every ~5s. Sample mid-window (partial
+  // movement) and at the endpoint (fully decayed/refilled) so a 2x-3x rate error cannot hide.
+  const bucketAfterDeposit = asUint(await chain.read("withdrawal-caps-v1", "get-lp-bucket"));
+  await ctx.step("wait half the decay window", () => sleep(7_000));
   // The bucket only syncs inside a successful call; an aborted one rolls its sync back.
   await ctx.step("withdraw one unit to sync the bucket", () => withdraw(chain, lp, 1n));
+  const bucketMidDecay = asUint(await chain.read("withdrawal-caps-v1", "get-lp-bucket"));
+  const midDecayMax = await lpCapMax(chain, factor);
+  await ctx.assert(
+    "the bucket decayed only partially mid-window",
+    bucketMidDecay > midDecayMax && bucketMidDecay < bucketAfterDeposit - 1n,
+    `after ${bucketAfterDeposit} mid ${bucketMidDecay} cap ${midDecayMax}`,
+  );
+  await ctx.step("wait past the decay window", () => sleep(25_000));
+  await ctx.step("withdraw one unit to sync the bucket", () => withdraw(chain, lp, 1n));
   const bucket = asUint(await chain.read("withdrawal-caps-v1", "get-lp-bucket"));
-  await ctx.assert("bucket is positive after decay", bucket > 1n, `bucket ${bucket}`);
+  const decayedMax = await lpCapMax(chain, factor);
+  await ctx.assert(
+    "bucket decayed to the cap",
+    absDiff(bucket, decayedMax) <= capTolerance(decayedMax),
+    `bucket ${bucket} cap ${decayedMax}`,
+  );
   await ctx.attempt(
     "withdrawal above the bucket aborts",
     () => withdraw(chain, lp, bucket * 2n),
     "u120002",
   );
   await ctx.step("withdraw within the bucket succeeds", () => withdraw(chain, lp, bucket / 2n));
-  await ctx.step("wait for the refill window", () => sleep(9_000));
+  const bucketBeforeRefill = asUint(await chain.read("withdrawal-caps-v1", "get-lp-bucket"));
+  await ctx.step("wait half the refill window", () => sleep(7_000));
+  await ctx.step("withdraw one unit to sync the bucket", () => withdraw(chain, lp, 1n));
+  const bucketMidRefill = asUint(await chain.read("withdrawal-caps-v1", "get-lp-bucket"));
+  const midRefillMax = await lpCapMax(chain, factor);
+  await ctx.assert(
+    "the bucket refilled only partially mid-window",
+    bucketMidRefill > bucketBeforeRefill && bucketMidRefill < midRefillMax,
+    `before ${bucketBeforeRefill} mid ${bucketMidRefill} cap ${midRefillMax}`,
+  );
+  await ctx.step("wait past the refill window", () => sleep(45_000));
   await ctx.step("withdraw one unit to sync the bucket", () => withdraw(chain, lp, 1n));
   const refilled = asUint(await chain.read("withdrawal-caps-v1", "get-lp-bucket"));
-  await ctx.assert("the bucket refilled", refilled > 1n, `bucket ${refilled}`);
+  const refilledMax = await lpCapMax(chain, factor);
+  await ctx.assert(
+    "the bucket refilled to the cap",
+    refilled > bucketBeforeRefill && absDiff(refilled, refilledMax) <= capTolerance(refilledMax),
+    `before ${bucketBeforeRefill} after ${refilled} cap ${refilledMax}`,
+  );
   await ctx.step("withdraw after refill succeeds", () => withdraw(chain, lp, refilled / 2n));
   await ctx.step("reset lp cap", () =>
     callAsDeployer(chain, actors.deployer, "withdrawal-caps-v1", "set-lp-cap", [Cl.uint(0)]),
@@ -104,12 +159,16 @@ scenario("ltv-boundary", async (ctx) => {
   const afterFull = await positionOf(chain, borrower.address);
   await ctx.assert("full repay clears debt", afterFull !== null && afterFull.debtShares === 0n, "debt shares remain");
   await ctx.step("borrow 10,000", () => borrow(chain, borrower, 10_000n * USDC), "debt");
+  const beforePartial = await positionOf(chain, borrower.address);
   await ctx.step("partial repay 4,000", () => repay(chain, borrower, 4_000n * USDC), "debt");
   const afterPartial = await positionOf(chain, borrower.address);
   await ctx.assert(
-    "partial repay leaves debt between 0 and 10,000",
-    afterPartial !== null && afterPartial.debtShares > 0n && afterPartial.borrowedAmount <= 10_000n * USDC,
-    `unexpected borrowed amount ${afterPartial?.borrowedAmount}`,
+    "partial repay strictly reduces debt without clearing it",
+    beforePartial !== null &&
+      afterPartial !== null &&
+      afterPartial.debtShares > 0n &&
+      afterPartial.borrowedAmount < beforePartial.borrowedAmount,
+    `borrowed ${beforePartial?.borrowedAmount} -> ${afterPartial?.borrowedAmount}`,
   );
 });
 
@@ -303,10 +362,41 @@ scenario("staking", async (ctx) => {
   await ctx.step("stake half the LP tokens", () => stake(chain, actors.staker, half));
   const staked = await stakedBalance(chain, actors.staker.address);
   await ctx.assert("staked balance is positive", staked > 0n, "no staked LP tokens");
+  const supply = okUint(await chain.read("state-v1", "get-total-supply"));
+  const reward = okUint(
+    await chain.read("staking-reward-v1", "get-staking-reward-percentage", [Cl.uint(staked), Cl.uint(supply)]),
+  );
+  await ctx.assert("staking reward percentage is positive", reward > 0n, `reward percentage ${reward}`);
+  // Interest a borrower pays must land in the staked bucket, not only in lp-open-interest.
+  const borrower = await fund(ctx, "staking-borrower", { btc: 2n * UNIT, usdc: 1_000n * USDC });
+  await ctx.step(
+    "staking borrower opens a position",
+    async () => {
+      await addCollateral(chain, borrower, BTC, UNIT);
+      await borrow(chain, borrower, 40_000n * USDC);
+    },
+    "debt",
+  );
+  await ctx.step("wait for interest to accrue", () => chain.waitBlocks(LIQUIDATION_BLOCK_GAP));
+  const stakedBucketBefore = asUint(await chain.read("staking-v1", "get-active-staked-lp-tokens"));
+  await ctx.step("staking borrower repays", () => repay(chain, borrower, 10n ** 30n), "debt");
+  const stakedBucketAfter = asUint(await chain.read("staking-v1", "get-active-staked-lp-tokens"));
+  await ctx.assert(
+    "repaid interest grows the staked bucket",
+    stakedBucketAfter > stakedBucketBefore,
+    `${stakedBucketBefore} -> ${stakedBucketAfter}`,
+  );
   await ctx.step("initiate unstake", () => initiateUnstake(chain, actors.staker, staked / 2n));
   await ctx.attempt("finalizing early aborts", () => finalizeUnstake(chain, actors.staker, 0n), "u60004");
-  await ctx.step("wait the finalization period", () => chain.waitBlocks(3));
+  const lpBeforeFinalize = await lpBalance(chain, actors.staker.address);
+  await ctx.step("wait the finalization period", () => chain.waitBlocks(6));
   await ctx.step("finalize after the period", () => finalizeUnstake(chain, actors.staker, 0n));
+  const lpAfterFinalize = await lpBalance(chain, actors.staker.address);
+  await ctx.assert(
+    "finalize returned the LP tokens",
+    lpAfterFinalize > lpBeforeFinalize,
+    `lp balance ${lpBeforeFinalize} -> ${lpAfterFinalize}`,
+  );
 });
 
 scenario("flash-loan", async (ctx) => {
@@ -348,29 +438,59 @@ scenario("caps", async (ctx) => {
       Cl.uint(HUNDRED_PCT / 10n),
     ]),
   );
+  const factor = HUNDRED_PCT / 10n;
+  const readBucket = () =>
+    chain
+      .read("withdrawal-caps-v1", "get-collateral-bucket", [Cl.contractPrincipal(chain.deployer, BTC)])
+      .then(asUint);
   await ctx.step("add 10 BTC", () => addCollateral(chain, borrower, BTC, 10n * UNIT));
-  await ctx.step("wait for the decay window", () => sleep(5_000));
+  // Sample mid-window (partial movement) and at the endpoint, so a rate error cannot hide.
+  const bucketAfterDeposit = await readBucket();
+  await ctx.step("wait half the decay window", () => sleep(7_000));
   // The bucket only syncs inside a successful call; an aborted one rolls its sync back.
   await ctx.step("remove one unit to sync the bucket", () => removeCollateral(chain, borrower, BTC, 1n));
-  const bucket = asUint(
-    await chain.read("withdrawal-caps-v1", "get-collateral-bucket", [Cl.contractPrincipal(chain.deployer, BTC)]),
+  const bucketMidDecay = await readBucket();
+  const midDecayMax = await collateralCapMax(chain, BTC, factor);
+  await ctx.assert(
+    "the collateral bucket decayed only partially mid-window",
+    bucketMidDecay > midDecayMax && bucketMidDecay < bucketAfterDeposit - 1n,
+    `after ${bucketAfterDeposit} mid ${bucketMidDecay} cap ${midDecayMax}`,
   );
-  await ctx.assert("collateral bucket is positive after decay", bucket > 1n, `bucket ${bucket}`);
+  await ctx.step("wait past the decay window", () => sleep(25_000));
+  await ctx.step("remove one unit to sync the bucket", () => removeCollateral(chain, borrower, BTC, 1n));
+  const bucket = await readBucket();
+  const decayedMax = await collateralCapMax(chain, BTC, factor);
+  await ctx.assert(
+    "collateral bucket decayed to the cap",
+    absDiff(bucket, decayedMax) <= capTolerance(decayedMax),
+    `bucket ${bucket} cap ${decayedMax}`,
+  );
   const collateral = await userCollateral(chain, borrower.address, BTC);
   await ctx.attempt(
     "removing more than the bucket aborts",
     () => removeCollateral(chain, borrower, BTC, collateral),
     "u120004",
   );
-  // Remove half the bucket rather than the exact stored value: the bucket keeps refining between
-  // the read and the call, so the exact boundary is racy.
   await ctx.step("removing within the bucket succeeds", () => removeCollateral(chain, borrower, BTC, bucket / 2n));
-  await ctx.step("wait for the refill window", () => sleep(9_000));
+  const bucketBeforeRefill = await readBucket();
+  await ctx.step("wait half the refill window", () => sleep(7_000));
   await ctx.step("remove one unit to sync the bucket", () => removeCollateral(chain, borrower, BTC, 1n));
-  const refilled = asUint(
-    await chain.read("withdrawal-caps-v1", "get-collateral-bucket", [Cl.contractPrincipal(chain.deployer, BTC)]),
+  const bucketMidRefill = await readBucket();
+  const midRefillMax = await collateralCapMax(chain, BTC, factor);
+  await ctx.assert(
+    "the collateral bucket refilled only partially mid-window",
+    bucketMidRefill > bucketBeforeRefill && bucketMidRefill < midRefillMax,
+    `before ${bucketBeforeRefill} mid ${bucketMidRefill} cap ${midRefillMax}`,
   );
-  await ctx.assert("collateral bucket refilled", refilled > 1n, `bucket ${refilled}`);
+  await ctx.step("wait past the refill window", () => sleep(45_000));
+  await ctx.step("remove one unit to sync the bucket", () => removeCollateral(chain, borrower, BTC, 1n));
+  const refilled = await readBucket();
+  const refilledMax = await collateralCapMax(chain, BTC, factor);
+  await ctx.assert(
+    "collateral bucket refilled to the cap",
+    refilled > bucketBeforeRefill && absDiff(refilled, refilledMax) <= capTolerance(refilledMax),
+    `before ${bucketBeforeRefill} after ${refilled} cap ${refilledMax}`,
+  );
   await ctx.step("removing the refilled amount succeeds", () =>
     removeCollateral(chain, borrower, BTC, refilled / 2n),
   );
@@ -380,12 +500,47 @@ scenario("caps", async (ctx) => {
       Cl.uint(0),
     ]),
   );
+  const beforeUncapped = await userCollateral(chain, borrower.address, BTC);
   await ctx.step("a zero factor removes the cap", () => removeCollateral(chain, borrower, BTC, 40_000_000n));
+  const afterUncapped = await userCollateral(chain, borrower.address, BTC);
+  await ctx.assert(
+    "the uncapped removal left the borrower",
+    afterUncapped === beforeUncapped - 40_000_000n,
+    `collateral ${beforeUncapped} -> ${afterUncapped}`,
+  );
   await ctx.step("restore the collateral cap", () =>
     callAsDeployer(chain, actors.deployer, "withdrawal-caps-v1", "set-collateral-cap", [
       Cl.contractPrincipal(chain.deployer, BTC),
       Cl.uint(80_000_000n),
     ]),
+  );
+
+  // Debt cap: a 10% factor makes the debt bucket finite; a borrow above it must be refused.
+  await ctx.step("set the debt cap to 10%", () =>
+    callAsDeployer(chain, actors.deployer, "withdrawal-caps-v1", "set-debt-cap", [Cl.uint(HUNDRED_PCT / 10n)]),
+  );
+  const debtBorrower = await fund(ctx, "debt-cap-borrower", { btc: 10n * UNIT });
+  await ctx.step("add 10 BTC for the debt-cap probe", () => addCollateral(chain, debtBorrower, BTC, 10n * UNIT));
+  await ctx.step("borrow one dollar to sync the debt bucket", () => borrow(chain, debtBorrower, 1n * USDC), "debt");
+  const debtBucket = asUint(await chain.read("withdrawal-caps-v1", "get-debt-bucket"));
+  // The debt bucket is a fraction of the borrowable balance, so assert the magnitude rather than
+  // just using whatever value the contract reports.
+  const borrowable = asUint(await chain.read("state-v1", "get-borrowable-balance"));
+  const expectedDebtMax = (borrowable * (HUNDRED_PCT / 10n)) / HUNDRED_PCT;
+  await ctx.assert(
+    "debt bucket synced to 10% of the borrowable balance",
+    absDiff(debtBucket, expectedDebtMax) <= capTolerance(expectedDebtMax),
+    `bucket ${debtBucket} expected ${expectedDebtMax}`,
+  );
+  await ctx.attempt(
+    "borrowing above the debt bucket aborts",
+    () => borrow(chain, debtBorrower, debtBucket * 2n),
+    "u120003",
+    "debt",
+  );
+  await ctx.step("borrowing up to the debt bucket succeeds", () => borrow(chain, debtBorrower, debtBucket), "debt");
+  await ctx.step("reset the debt cap", () =>
+    callAsDeployer(chain, actors.deployer, "withdrawal-caps-v1", "set-debt-cap", [Cl.uint(0)]),
   );
 });
 
@@ -397,6 +552,26 @@ scenario("bad-debt-socialization", async (ctx) => {
     const balance = await lpBalance(chain, actors.staker.address);
     await stake(chain, actors.staker, balance / 10n);
   });
+  // Leave a pending withdrawal so the slash's spill-over onto unfinalized withdrawals is observed.
+  let withdrawalIndex: bigint | undefined;
+  await ctx.step("initiate an unstake before the bad debt", async () => {
+    const staked = await stakedBalance(chain, actors.staker.address);
+    const result = await initiateUnstake(chain, actors.staker, staked / 2n);
+    const match = /\(ok u(\d+)\)/.exec(result.result ?? "");
+    if (!match) throw new Error(`no withdrawal index in ${result.result}`);
+    withdrawalIndex = BigInt(match[1]);
+  });
+  const withdrawalSharesBefore = await (async () => {
+    if (withdrawalIndex === undefined) throw new Error("withdrawal index not recorded");
+    const stored = asOptional(
+      await chain.read("staking-v1", "get-withdrawal", [Cl.principal(actors.staker.address), Cl.uint(withdrawalIndex)]),
+    );
+    if (!stored) throw new Error("withdrawal missing before the liquidation");
+    return asUint(asTuple(stored)["withdrawal-shares"]);
+  })();
+  const withdrawalLpBefore = asUint(
+    await chain.read("staking-v1", "convert-to-withdrawal-lp-tokens", [Cl.uint(withdrawalSharesBefore)]),
+  );
   await ctx.step("add 1 BTC", () => addCollateral(chain, borrower, BTC, UNIT));
   await ctx.step("borrow 42,000", () => borrow(chain, borrower, 42_000n * USDC), "debt");
   await ctx.step(`wait ${LIQUIDATION_BLOCK_GAP} blocks`, () => chain.waitBlocks(LIQUIDATION_BLOCK_GAP));
@@ -409,16 +584,32 @@ scenario("bad-debt-socialization", async (ctx) => {
   const position = await positionOf(chain, borrower.address);
   const stakedAfter = await totalStakedLpTokens(chain);
   const assetsAfter = (await lpParams(chain)).totalAssets;
+  const withdrawalLpAfter = asUint(
+    await chain.read("staking-v1", "convert-to-withdrawal-lp-tokens", [Cl.uint(withdrawalSharesBefore)]),
+  );
   await ctx.assert("position emptied", await userCollateral(chain, borrower.address, BTC) === 0n, "collateral remains");
   await ctx.assert("debt written off", position === null || position.debtShares === 0n, "debt remains");
   await ctx.assert("LP assets written down", assetsAfter < assetsBefore, `${assetsBefore} -> ${assetsAfter}`);
-  await ctx.assert("staked LP absorbed a slash", stakedAfter <= stakedBefore, `${stakedBefore} -> ${stakedAfter}`);
+  await ctx.assert(
+    "staked LP absorbed a slash",
+    stakedAfter < stakedBefore,
+    `${stakedBefore} -> ${stakedAfter}`,
+  );
+  await ctx.assert(
+    "the slash spilled onto the pending withdrawal",
+    withdrawalLpAfter < withdrawalLpBefore,
+    `${withdrawalLpBefore} -> ${withdrawalLpAfter}`,
+  );
   resetToBaseline();
 });
 
 scenario("remove-collateral-stuck", async (ctx) => {
   const { chain, actors } = ctx;
-  const borrower = await fund(ctx, "stuck-borrower", { btc: 2n * UNIT, eth: 2n * UNIT });
+  // This scenario deliberately builds the documented stuck state, so the exitability invariant is
+  // suspended here and restored in the finally.
+  suspendExitability(true);
+  try {
+    const borrower = await fund(ctx, "stuck-borrower", { btc: 2n * UNIT, eth: 2n * UNIT });
   await ctx.step("add 1 BTC and 1 ETH", async () => {
     await addCollateral(chain, borrower, BTC, UNIT);
     await addCollateral(chain, borrower, ETH, UNIT);
@@ -451,7 +642,10 @@ scenario("remove-collateral-stuck", async (ctx) => {
       Cl.uint(8),
     ]),
   );
-  resetToBaseline();
+    resetToBaseline();
+  } finally {
+    suspendExitability(false);
+  }
 });
 
 scenario("governance", async (ctx) => {
@@ -516,17 +710,21 @@ scenario("governance", async (ctx) => {
     "interest params",
     async () => {
       const result = await chain.call(actors.deployer, "governance-test", "initiate-proposal-to-update-interest-params", [
+        Cl.uint(800_000_000_000n),
+        Cl.uint(1_600_000_000_000n),
         Cl.uint(750_000_000_000n),
-        Cl.uint(1_500_000_000_000n),
-        Cl.uint(700_000_000_000n),
-        Cl.uint(300_000_000_000n),
+        Cl.uint(350_000_000_000n),
         Cl.uint(1000),
       ]);
       return proposalIdFrom(result.result);
     },
     async () => {
       const params = asTuple(await chain.read("linear-kinked-ir-v1", "get-ir-params"));
-      return asUint(params["base-ir"]) === 300_000_000_000n;
+      // Values distinct from setup, so a no-op execution cannot pass this check.
+      return (
+        asUint(params["base-ir"]) === 350_000_000_000n &&
+        asUint(params["utilization-kink"]) === 750_000_000_000n
+      );
     },
   );
 
@@ -626,5 +824,5 @@ scenario("governance", async (ctx) => {
     "ETH config moved unexpectedly",
   );
   await ctx.assert("STX still configured", (await collateralSettingsOf(chain, STX)).maxLtv === 50_000_000n, "STX missing");
-  await ctx.assert("caps read", (await asUint(await chain.read("withdrawal-caps-v1", "get-refill-time-window"))) === 8n, "refill window changed");
+  await ctx.assert("caps read", (await asUint(await chain.read("withdrawal-caps-v1", "get-refill-time-window"))) === 40n, "refill window changed");
 });

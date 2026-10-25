@@ -1,7 +1,7 @@
 import { Cl } from "@stacks/transactions";
 import type { Chain } from "./chain.ts";
 import { convertedPrice } from "./prices.ts";
-import { collateralSettingsOf } from "./setup.ts";
+import { collateralSettingsIfConfigured } from "./setup.ts";
 import { asList, asOptional, asPrincipal, asTuple, asUint, okUint } from "./values.ts";
 
 export type Position = {
@@ -73,12 +73,11 @@ export async function healthOf(chain: Chain, user: string): Promise<Health | nul
     const price = convertedPrice(name);
     let liquidationLtv = 0n;
     let decimals = 8n;
-    try {
-      const config = await collateralSettingsOf(chain, name);
+    // Only a collateral that is genuinely not configured is de-listed; read/parse errors propagate.
+    const config = await collateralSettingsIfConfigured(chain, name);
+    if (config) {
       liquidationLtv = config.liquidationLtv;
       decimals = config.decimals;
-    } catch {
-      // A de-listed collateral contributes no liquidation value, exactly as the contract defaults it.
     }
     const rawValue = (amount * price) / SCALING;
     const fixedValue = decimals > 8n ? rawValue / 10n ** (decimals - 8n) : rawValue * 10n ** (8n - decimals);

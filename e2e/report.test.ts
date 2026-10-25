@@ -15,7 +15,15 @@ describe("report", () => {
         { name: "happy", passed: true, steps: 3 },
         { name: "caps", passed: false, failure: "expected err u120002", steps: 5 },
       ],
-      fuzz: { sequences: 200, ops: 6000, failures: 0 },
+      fuzz: {
+        sequences: 10,
+        sequencesCompleted: 10,
+        ops: 30,
+        succeeded: 24,
+        aborted: 6,
+        failures: 0,
+        perOp: { deposit: { attempts: 5, succeeded: 5, aborted: 0 } },
+      },
       accounting: { drift: "1", debtOps: 12, maxStepDrift: "1", exactZero: false },
     });
     const md = readFileSync(paths.mdPath, "utf8");

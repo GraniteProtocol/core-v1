@@ -1,4 +1,5 @@
 import { checkInvariants, failed, type OpKind } from "./invariants.ts";
+import { DevnetStallError } from "./chain.ts";
 import type { Chain } from "./chain.ts";
 import type { Actors, Snapshot } from "./setup.ts";
 
@@ -55,6 +56,8 @@ export function createContext(chain: Chain, actors: Actors, baseline: Snapshot):
       try {
         await action();
       } catch (error) {
+        // A frozen devnet is not an expected abort: let the runner restart and retry the scenario.
+        if (error instanceof DevnetStallError) throw error;
         const message = error instanceof Error ? error.message : String(error);
         if (!message.includes(code)) {
           const failure = `expected abort ${code}, got: ${message}`;
