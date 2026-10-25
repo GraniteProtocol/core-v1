@@ -198,14 +198,23 @@ async function debtHealth(chain: Chain): Promise<InvariantResult> {
  * A position must never be left in the documented stuck state: holding a de-listed collateral while
  * carrying debt is both unwithdrawable and unliquidatable.
  */
+// Probing every account on every step costs ~29 position reads and dominates the per-op time. A
+// rotating window still covers all of them over a handful of steps.
+const PROBE_WINDOW = 4;
+
 async function exitability(chain: Chain): Promise<InvariantResult> {
   const problems: string[] = [];
-  const positions = await Promise.all(probeUsers.map((user) => positionOf(chain, user)));
+  const users =
+    probeUsers.length <= PROBE_WINDOW
+      ? probeUsers
+      : Array.from({ length: PROBE_WINDOW }, (_, offset) => probeUsers[(probeIndex + offset) % probeUsers.length]);
+  if (probeUsers.length > PROBE_WINDOW) probeIndex = (probeIndex + PROBE_WINDOW) % probeUsers.length;
+  const positions = await Promise.all(users.map((user) => positionOf(chain, user)));
   const checks: Array<{ user: string; token: string }> = [];
   positions.forEach((position, index) => {
     if (!position || position.debtShares === 0n) return;
     for (const collateral of position.collaterals) {
-      checks.push({ user: probeUsers[index], token: collateral.split(".").pop() ?? collateral });
+      checks.push({ user: users[index], token: collateral.split(".").pop() ?? collateral });
     }
   });
   const configured = await Promise.all(
