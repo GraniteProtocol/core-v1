@@ -6,8 +6,10 @@
   "private": true,
   "scripts": {
     "test": "vitest run",
+    "test:e2e": "vitest run -c vitest.e2e.config.js",
     "test:report": "vitest run -- --coverage --costs",
-    "test:watch": "chokidar \"tests/**/*.ts\" \"contracts/**/*.clar\" -c \"npm run test:report\""
+    "test:watch": "chokidar \"tests/**/*.ts\" \"contracts/**/*.clar\" -c \"npm run test:report\"",
+    "typecheck:e2e": "tsc -p tsconfig.e2e.json --noEmit"
   },
   "author": "",
   "license": "ISC",
@@ -17,6 +19,7 @@
     "@noble/secp256k1": "^2.1.0",
     "@stacks/clarinet-sdk": "^3.22.0",
     "@stacks/transactions": "7.4.0",
+    "@types/node": "^22.7.0",
     "chokidar-cli": "^3.0.0",
     "fast-check": "^3.22.0",
     "typescript": "^5.6.2",
