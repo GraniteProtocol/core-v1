@@ -1205,9 +1205,9 @@ describe("borrower tests", () => {
 // underflowing and reverting the entire repay/liquidate transaction.
 //
 // Post-fix, staked-part is computed proportionally via safe-div, which returns
-// 0 cleanly when staked-open-interest = 0. The trade-off is up to ~2 dust
-// units of interest per tx going unassigned to any bucket — economically
-// negligible, dramatically preferable to a DoS on every repay/liquidate.
+// 0 cleanly when staked-open-interest = 0. The upgradable callers then assign
+// the flooring remainder to a bucket with interest room for it, so none of the
+// interest is left unclaimed.
 describe("M-01 interest-dust no-stakers regression", () => {
   beforeEach(async () => {
     init_pyth(deployer);

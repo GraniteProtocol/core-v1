@@ -62,29 +62,35 @@ const totalBorrowedAmount = () =>
 const positionOf = () =>
   ro("state-v1", "get-user-position", [Cl.principal(borrower)]).value.value as any;
 
-const currentDebt = () => {
+const currentDebt = () => readSplitState().debt;
+
+const readSplitState = () => {
   const position = positionOf();
-  return ro("math-v1", "convert-to-debt-assets", [
-    ro("state-v1", "get-debt-params"),
-    Cl.uint(position["debt-shares"].value),
-    Cl.bool(true),
-  ]).value as bigint;
+  return {
+    buckets: buckets(),
+    borrowedAmount: position["borrowed-amount"].value as bigint,
+    debt: ro("math-v1", "convert-to-debt-assets", [
+      ro("state-v1", "get-debt-params"),
+      Cl.uint(position["debt-shares"].value),
+      Cl.bool(true),
+    ]).value as bigint,
+    totalBorrowed: totalBorrowedAmount(),
+  };
 };
 
 // Mirrors borrower-v1 / liquidator-v1's three floor divisions and the remainder
 // they leave behind, so a test can prove it exercises the case it claims to.
-const expectedSplit = (repayAmount: bigint) => {
-  const b = buckets();
-  const position = positionOf();
-  const debt = currentDebt();
-  const borrowed = position["borrowed-amount"].value as bigint;
-  const effectiveBorrowed = debt < borrowed ? debt : borrowed;
-  const interestAccrued = debt - effectiveBorrowed;
-  const interestPart = (interestAccrued * repayAmount + debt - 1n) / debt;
+const splitAt = (state: ReturnType<typeof readSplitState>, repayAmount: bigint) => {
+  const b = state.buckets;
+  const effectiveBorrowed =
+    state.debt < state.borrowedAmount ? state.debt : state.borrowedAmount;
+  const interestAccrued = state.debt - effectiveBorrowed;
+  const interestPart = (interestAccrued * repayAmount + state.debt - 1n) / state.debt;
   const principalPart = repayAmount - interestPart;
-  const totalBorrowed = totalBorrowedAmount();
-  const lpInterest = b.lp > totalBorrowed ? b.lp - totalBorrowed : 0n;
-  const denominator = totalOpenInterest() > totalBorrowed ? totalOpenInterest() - totalBorrowed : 0n;
+  const lpInterest = b.lp > state.totalBorrowed ? b.lp - state.totalBorrowed : 0n;
+  const totalOpenInterest = b.lp + b.staked + b.protocol;
+  const denominator =
+    totalOpenInterest > state.totalBorrowed ? totalOpenInterest - state.totalBorrowed : 0n;
   const divide = (numerator: bigint) =>
     denominator === 0n ? 0n : numerator / denominator;
   const lpPart = divide(interestPart * lpInterest);
@@ -93,13 +99,17 @@ const expectedSplit = (repayAmount: bigint) => {
   return {
     interestPart,
     principalPart,
+    lpInterest,
+    stakedInterest: b.staked,
+    protocolInterest: b.protocol,
     lpPart,
     stakedPart,
     protocolPart,
     remainder: interestPart - (lpPart + stakedPart + protocolPart),
-    lpBucket: b.lp,
   };
 };
+
+const expectedSplit = (repayAmount: bigint) => splitAt(readSplitState(), repayAmount);
 
 // Mining empty blocks does not run accrual; an empty batch liquidation accrues
 // without touching a position.
@@ -113,16 +123,21 @@ const accrueInterest = () => {
   expect(accrual.result).toBeOk(Cl.bool(true));
 };
 
-// The borrower's spread is already in the book; zeroing the curve lets a test
-// read state and then transact without the transaction's own accrual moving it.
-const freezeInterestAccrual = () => {
-  const handOverGovernance = simnet.callPublicFn(
+const handOverGovernance = () => {
+  if (ro("state-v1", "get-governance").value === governor) return;
+  const handOver = simnet.callPublicFn(
     "state-v1",
     "update-governance",
     [Cl.principal(governor)],
     deployer
   );
-  expect(handOverGovernance.result).toBeOk(Cl.bool(true));
+  expect(handOver.result).toBeOk(Cl.bool(true));
+};
+
+// The borrower's spread is already in the book; zeroing the curve lets a test
+// read state and then transact without the transaction's own accrual moving it.
+const freezeInterestAccrual = () => {
+  handOverGovernance();
   const freeze = simnet.callPublicFn(
     "linear-kinked-ir-v1",
     "update-ir-params",
@@ -130,6 +145,23 @@ const freezeInterestAccrual = () => {
     governor
   );
   expect(freeze.result).toBeOk(Cl.bool(true));
+};
+
+const openStakedMarket = () => {
+  mint_token("mock-usdc", 100_000_000_000, depositor);
+  deposit(100_000_000_000, depositor);
+  initialize_staking(deployer);
+  const stake = simnet.callPublicFn(
+    "staking-v1",
+    "stake",
+    [Cl.uint(5_000_000_000)],
+    depositor
+  );
+  expect(stake.result).toBeOk(Cl.bool(true));
+  update_supported_collateral("mock-btc", 90_000_000, 95_000_000, 5_000_000, 8, deployer);
+  mint_token("mock-btc", 20_000_000_000, borrower);
+  add_collateral("mock-btc", 20_000_000_000, deployer, borrower);
+  borrow(18_000_000_000, borrower);
 };
 
 describe("interest split residue", () => {
@@ -189,20 +221,7 @@ describe("interest split residue", () => {
   });
 
   it("assigns a two-unit remainder when all three interest buckets are funded", async () => {
-    mint_token("mock-usdc", 100_000_000_000, depositor);
-    deposit(100_000_000_000, depositor);
-    initialize_staking(deployer);
-    const stake = simnet.callPublicFn(
-      "staking-v1",
-      "stake",
-      [Cl.uint(5_000_000_000)],
-      depositor
-    );
-    expect(stake.result).toBeOk(Cl.bool(true));
-    update_supported_collateral("mock-btc", 90_000_000, 95_000_000, 5_000_000, 8, deployer);
-    mint_token("mock-btc", 20_000_000_000, borrower);
-    add_collateral("mock-btc", 20_000_000_000, deployer, borrower);
-    borrow(18_000_000_000, borrower);
+    openStakedMarket();
     simnet.mineEmptyBlocks(5_000);
     accrueInterest();
     freezeInterestAccrual();
@@ -218,8 +237,8 @@ describe("interest split residue", () => {
     expect(split.stakedPart).toBe(0n);
     expect(split.protocolPart).toBe(0n);
     expect(
-      split.lpBucket >= split.principalPart + split.lpPart + split.remainder,
-      "the LP bucket must have room for the remainder, or the test proves nothing"
+      split.lpInterest >= split.lpPart + split.remainder,
+      "the LP interest must have room for the remainder, or the test proves nothing"
     ).toBe(true);
 
     const before = buckets();
@@ -245,20 +264,7 @@ describe("interest split residue", () => {
   });
 
   it("does not let a remainder consume LP principal backing", async () => {
-    mint_token("mock-usdc", 100_000_000_000, depositor);
-    deposit(100_000_000_000, depositor);
-    initialize_staking(deployer);
-    const stake = simnet.callPublicFn(
-      "staking-v1",
-      "stake",
-      [Cl.uint(5_000_000_000)],
-      depositor
-    );
-    expect(stake.result).toBeOk(Cl.bool(true));
-    update_supported_collateral("mock-btc", 90_000_000, 95_000_000, 5_000_000, 8, deployer);
-    mint_token("mock-btc", 20_000_000_000, borrower);
-    add_collateral("mock-btc", 20_000_000_000, deployer, borrower);
-    borrow(18_000_000_000, borrower);
+    openStakedMarket();
     simnet.mineEmptyBlocks(5_000);
     accrueInterest();
     freezeInterestAccrual();
@@ -273,7 +279,7 @@ describe("interest split residue", () => {
     expect(split.interestPart, "the repay must leave one interest unit").toBe(totalInterest - 1n);
     expect(split.remainder, "the scenario must exercise a two-unit remainder").toBe(2n);
     expect(
-      split.lpBucket - totalBorrowed - split.lpPart,
+      split.lpInterest - split.lpPart,
       "LP interest slack must be 1, or the case does not discriminate"
     ).toBe(1n);
 
@@ -288,36 +294,56 @@ describe("interest split residue", () => {
     expect(totalOpenInterest()).toBe(0n);
   });
 
-  it("keeps the empty staked bucket at zero across a sweep of partial repays", async () => {
-    mint_token("mock-usdc", 100_000_000_000, depositor);
-    deposit(100_000_000_000, depositor);
-    update_supported_collateral("mock-btc", 90_000_000, 95_000_000, 5_000_000, 8, deployer);
-    mint_token("mock-btc", 20_000_000_000, borrower);
-    add_collateral("mock-btc", 20_000_000_000, deployer, borrower);
-    borrow(18_000_000_000, borrower);
+  it("falls through to the staked bucket when LP interest cannot absorb the remainder", async () => {
+    openStakedMarket();
+    const reserve = simnet.callPublicFn(
+      "state-v1",
+      "set-protocol-reserve-percentage",
+      [Cl.uint(30_000_000)],
+      deployer
+    );
+    expect(reserve.result).toBeOk(Cl.bool(true));
+    handOverGovernance();
+    // A flat 85% of LP-side interest to stakers keeps LP interest small enough
+    // that the remainder cannot land there.
+    const rewards = simnet.callPublicFn(
+      "staking-reward-v1",
+      "update-reward-params",
+      [Cl.int(0), Cl.int(-1), Cl.uint(99_000_000), Cl.uint(85_000_000)],
+      governor
+    );
+    expect(rewards.result).toBeOk(Cl.bool(true));
     simnet.mineEmptyBlocks(5_000);
     accrueInterest();
     freezeInterestAccrual();
 
-    expect(ro("staking-v1", "get-total-staked-lp-tokens").value).toBe(0n);
-
-    // Repays of 1 and 2 units always leave a flooring remainder here; routing
-    // it to the empty staked bucket is the pre-#54 underflow that reverted them.
-    for (const amount of [1n, 2n, 1n]) {
-      const split = expectedSplit(amount);
-      expect(split.remainder, "each repay must carry a remainder").toBeGreaterThan(0n);
-      const before = buckets();
-      repay(Number(amount), borrower);
-      const after = buckets();
-      expect(after.staked).toBe(before.staked);
-      expect(after.lp + after.staked + after.protocol).toBe(
-        before.lp + before.staked + before.protocol - amount
-      );
-    }
+    const totalBorrowed = totalBorrowedAmount();
+    const totalInterest = totalOpenInterest() - totalBorrowed;
+    const debt = totalBorrowed + totalInterest;
+    const repayAmount = ((totalInterest - 2n) * debt) / totalInterest;
+    const split = expectedSplit(repayAmount);
+    expect(split.interestPart).toBe(totalInterest - 2n);
+    expect(split.remainder, "the scenario must exercise a two-unit remainder").toBe(2n);
     expect(
-      buckets().lp >= totalBorrowedAmount(),
-      "LP open interest must still cover total borrowed after the split"
+      split.lpInterest < split.lpPart + split.remainder,
+      "LP interest must be short of the remainder, or the LP gate is never exercised"
     ).toBe(true);
+    expect(
+      split.stakedInterest >= split.stakedPart + split.remainder,
+      "the staked bucket must have room for the remainder"
+    ).toBe(true);
+
+    const before = buckets();
+    mint_token("mock-usdc", Number(debt + 1_000_000_000n), borrower);
+    repay(Number(repayAmount), borrower);
+
+    const after = buckets();
+    expect(after.lp).toBe(before.lp - (split.principalPart + split.lpPart));
+    expect(after.staked).toBe(before.staked - (split.stakedPart + split.remainder));
+    expect(after.protocol).toBe(before.protocol - split.protocolPart);
+    expect(after.lp + after.staked + after.protocol).toBe(
+      before.lp + before.staked + before.protocol - repayAmount
+    );
   });
 
   it("keeps the split conserving on a partial liquidation", async () => {
@@ -336,10 +362,7 @@ describe("interest split residue", () => {
     accrueInterest();
     freezeInterestAccrual();
 
-    const split = expectedSplit(18_181_818_181n);
-    expect(split.remainder, "the scenario must exercise a flooring remainder").toBeGreaterThan(0n);
-
-    const before = buckets();
+    const snapshot = readSplitState();
     const beforeBorrowable = borrowableBalance();
     const beforeReserve = reserveBalance();
 
@@ -362,11 +385,20 @@ describe("interest split residue", () => {
     expect(event, "the liquidation print event carries the repaid amount").toBeDefined();
     const repaidAmount = (event as any).data.value.value["repaid-amount"].value as bigint;
 
+    const split = splitAt(snapshot, repaidAmount);
+    expect(
+      split.remainder,
+      "the repaid amount must exercise a flooring remainder, or this test proves nothing"
+    ).toBe(1n);
+
     const after = buckets();
     expect(
       after.lp + after.staked + after.protocol,
       "the three buckets must fall by exactly the amount the liquidator paid"
-    ).toBe(before.lp + before.staked + before.protocol - repaidAmount);
+    ).toBe(snapshot.buckets.lp + snapshot.buckets.staked + snapshot.buckets.protocol - repaidAmount);
+    expect(after.lp).toBe(snapshot.buckets.lp - (split.principalPart + split.lpPart + split.remainder));
+    expect(after.staked).toBe(snapshot.buckets.staked - split.stakedPart);
+    expect(after.protocol).toBe(snapshot.buckets.protocol - split.protocolPart);
     expect(borrowableBalance() + reserveBalance()).toBe(
       beforeBorrowable + beforeReserve + repaidAmount
     );
