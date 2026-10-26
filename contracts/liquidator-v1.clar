@@ -276,9 +276,13 @@
         (open-interest-without-principal (contract-call? .math-v1 safe-sub open-interest total-borrowed-amount))
         (lp-open-interest-without-principal (contract-call? .math-v1 safe-sub (get lp-open-interest open-interest-info) total-borrowed-amount))
         ;; calculate liquidity provider and protocol debt repaid
-        (lp-part (contract-call? .math-v1 safe-div (* interest-part lp-open-interest-without-principal) open-interest-without-principal))
-        (protocol-part (contract-call? .math-v1 safe-div (* interest-part (get protocol-open-interest open-interest-info)) open-interest-without-principal))
-        (staked-part (contract-call? .math-v1 safe-div (* interest-part (get staked-open-interest open-interest-info)) open-interest-without-principal))
+        (lp-part-raw (contract-call? .math-v1 safe-div (* interest-part lp-open-interest-without-principal) open-interest-without-principal))
+        (protocol-part-raw (contract-call? .math-v1 safe-div (* interest-part (get protocol-open-interest open-interest-info)) open-interest-without-principal))
+        (staked-part-raw (contract-call? .math-v1 safe-div (* interest-part (get staked-open-interest open-interest-info)) open-interest-without-principal))
+        (split (conserve-interest-split interest-part lp-part-raw staked-part-raw protocol-part-raw lp-open-interest-without-principal (get staked-open-interest open-interest-info) (get protocol-open-interest open-interest-info)))
+        (lp-part (get lp-part split))
+        (staked-part (get staked-part split))
+        (protocol-part (get protocol-part split))
         (asset-params (contract-call? .state-v1 get-lp-params))
         (staked-lp-tokens (contract-call? .math-v1 convert-to-shares asset-params staked-part false))
         (is-wiped (contract-call? .staking-v1 is-staking-wiped-out))
@@ -409,6 +413,37 @@
     (asserts! (> y u0) ERR-DIVIDE-BY-ZERO)
     (ok (/ x y))
 ))
+
+;; Give the split's flooring remainder to the first bucket with interest room for
+;; it, so a remainder cannot consume LP principal backing.
+(define-private (conserve-interest-split
+    (interest-part uint)
+    (lp-part uint)
+    (staked-part uint)
+    (protocol-part uint)
+    (lp-interest uint)
+    (staked-interest uint)
+    (protocol-interest uint)
+  )
+  (let (
+      (assigned (+ lp-part staked-part protocol-part))
+      (remainder (if (>= interest-part assigned) (- interest-part assigned) u0))
+    )
+    (if (is-eq remainder u0)
+      {lp-part: lp-part, staked-part: staked-part, protocol-part: protocol-part}
+      (if (>= lp-interest (+ lp-part remainder))
+        {lp-part: (+ lp-part remainder), staked-part: staked-part, protocol-part: protocol-part}
+        (if (>= staked-interest (+ staked-part remainder))
+          {lp-part: lp-part, staked-part: (+ staked-part remainder), protocol-part: protocol-part}
+          (if (>= protocol-interest (+ protocol-part remainder))
+            {lp-part: lp-part, staked-part: staked-part, protocol-part: (+ protocol-part remainder)}
+            {lp-part: lp-part, staked-part: staked-part, protocol-part: protocol-part}
+          )
+        )
+      )
+    )
+  )
+)
 
 (define-private (accrue-interest)
   (let (
@@ -573,9 +608,13 @@
             (interest-part (get interest-part interest-portion))
             (open-interest-without-principal (contract-call? .math-v1 safe-sub total-open-interest total-borrowed-amount))
             (lp-open-interest-without-principal (contract-call? .math-v1 safe-sub lp-open-interest-val total-borrowed-amount))
-            (lp-interest-part (contract-call? .math-v1 safe-div (* interest-part lp-open-interest-without-principal) open-interest-without-principal))
-            (protocol-part (contract-call? .math-v1 safe-div (* interest-part protocol-open-interest-val) open-interest-without-principal))
-            (staked-part (contract-call? .math-v1 safe-div (* interest-part staked-open-interest-val) open-interest-without-principal))
+            (lp-interest-part-raw (contract-call? .math-v1 safe-div (* interest-part lp-open-interest-without-principal) open-interest-without-principal))
+            (protocol-part-raw (contract-call? .math-v1 safe-div (* interest-part protocol-open-interest-val) open-interest-without-principal))
+            (staked-part-raw (contract-call? .math-v1 safe-div (* interest-part staked-open-interest-val) open-interest-without-principal))
+            (split (conserve-interest-split interest-part lp-interest-part-raw staked-part-raw protocol-part-raw lp-open-interest-without-principal staked-open-interest-val protocol-open-interest-val))
+            (lp-interest-part (get lp-part split))
+            (staked-part (get staked-part split))
+            (protocol-part (get protocol-part split))
             (lp-part (+ principal-part lp-interest-part))
             (updated-total-borrowed-amount (contract-call? .math-v1 safe-sub total-borrowed-amount user-borrowed-amount))
             (staked-lp-tokens (contract-call? .staking-v1 get-total-staked-lp-tokens))

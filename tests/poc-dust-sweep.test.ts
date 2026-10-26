@@ -162,6 +162,7 @@ const socializedParts = (liq: any) => {
     lp: value["lp-part"].value as bigint,
     staked: value["staked-part"].value as bigint,
     protocol: value["protocol-part"].value as bigint,
+    amount: value["amount"].value as bigint,
   };
 };
 
@@ -422,6 +423,10 @@ describe("a swept write-off against a shared book", () => {
     expect(firstParts.lp, "lp-part must be a real operand, not zero").toBeGreaterThan(0n);
     expect(firstParts.staked, "staked-part must be a real operand, not zero").toBeGreaterThan(0n);
     expect(firstParts.protocol, "protocol-part must be a real operand, not zero").toBeGreaterThan(0n);
+    expect(
+      firstParts.lp + firstParts.staked + firstParts.protocol,
+      "the three parts must sum to the socialized amount",
+    ).toBe(firstParts.amount);
 
     const between = openInterest();
     expect(between.lp, "the first write-off must have drawn the lp bucket down").toBeLessThan(
