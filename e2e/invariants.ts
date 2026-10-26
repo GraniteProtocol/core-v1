@@ -20,15 +20,31 @@ export type AccountingStats = {
   debtOps: number;
   maxStepDrift: bigint;
   exactZero: boolean;
+  protocolOpenInterest: bigint;
+  rawGap: bigint;
 };
 
 let lastDrift: bigint | undefined;
-let stats: AccountingStats = { drift: 0n, debtOps: 0, maxStepDrift: 0n, exactZero: true };
+let stats: AccountingStats = {
+  drift: 0n,
+  debtOps: 0,
+  maxStepDrift: 0n,
+  exactZero: true,
+  protocolOpenInterest: 0n,
+  rawGap: 0n,
+};
 
 /** Resets the per-run accounting statistics; called once before a run. */
 export function resetAccounting(): void {
   lastDrift = undefined;
-  stats = { drift: 0n, debtOps: 0, maxStepDrift: 0n, exactZero: true };
+  stats = {
+    drift: 0n,
+    debtOps: 0,
+    maxStepDrift: 0n,
+    exactZero: true,
+    protocolOpenInterest: 0n,
+    rawGap: 0n,
+  };
 }
 
 export function accountingStats(): AccountingStats {
@@ -43,44 +59,61 @@ export function resetDriftBaseline(): void {
 const abs = (value: bigint): bigint => (value < 0n ? -value : value);
 
 /**
- * The protocol invariant is `total_assets + reserve == cash + outstanding_debt`, so the gap is
- * cash + debt - reserve - totalAssets. The residue is a positive rounding remainder: a negative gap
- * means value appeared from nowhere and is never rounding.
+ * The protocol invariant is `total_assets + reserve == cash + outstanding_debt`, but protocol
+ * interest accrues into protocol-open-interest and only becomes reserve-balance when a repay
+ * collects it. Until then it backs no claim, so the checked surplus is
+ * cash + (debt - protocol-open-interest) - reserve - totalAssets. With a 25% reserve a repay's raw
+ * gap moves by the floor residue minus the protocol part (negative); the surplus moves only by the
+ * non-negative floor residue. A negative surplus means value appeared from nowhere.
  */
+export function accountingSurplus(params: {
+  totalAssets: bigint;
+  reserve: bigint;
+  cash: bigint;
+  debt: bigint;
+  protocolOpenInterest: bigint;
+}): bigint {
+  return params.cash + params.debt - params.protocolOpenInterest - params.reserve - params.totalAssets;
+}
+
 export function accountingHolds(
   params: {
     totalAssets: bigint;
     reserve: bigint;
     cash: bigint;
     debt: bigint;
+    protocolOpenInterest: bigint;
   },
   maxDrift: bigint = ROUNDING_TOLERANCE,
 ): InvariantResult {
-  const drift = params.cash + params.debt - params.reserve - params.totalAssets;
+  const surplus = accountingSurplus(params);
+  const rawGap = params.cash + params.debt - params.reserve - params.totalAssets;
+  stats.protocolOpenInterest = params.protocolOpenInterest;
+  stats.rawGap = rawGap;
   return {
     name: "accounting",
-    ok: drift >= 0n && drift <= maxDrift,
-    detail: `total-assets=${params.totalAssets} cash=${params.cash} debt=${params.debt} reserve=${params.reserve} drift=${drift} allowed<=${maxDrift}`,
+    ok: surplus >= 0n && surplus <= maxDrift,
+    detail: `total-assets=${params.totalAssets} cash=${params.cash} debt=${params.debt} reserve=${params.reserve} protocol-open-interest=${params.protocolOpenInterest} surplus=${surplus} raw=${rawGap} allowed<=${maxDrift}`,
   };
 }
 
 /**
- * Outside debt operations the accumulated gap must not move at all; a debt operation may move it
- * upward by at most the protocol's integer rounding residue (3 units). Downward movement always
+ * Outside debt operations the accumulated surplus must not move at all; a debt operation may move
+ * it upward by at most the protocol's integer rounding residue (3 units). Downward movement always
  * fails, and the baseline check after setup must be exactly zero.
  */
-export function gateStepDrift(drift: bigint, kind: OpKind): InvariantResult {
-  stats.drift = drift;
+export function gateStepDrift(surplus: bigint, kind: OpKind): InvariantResult {
+  stats.drift = surplus;
   if (lastDrift === undefined) {
-    lastDrift = drift;
+    lastDrift = surplus;
     return {
       name: "accounting-drift",
-      ok: drift === 0n,
-      detail: `kind=${kind} drift=${drift} (baseline, must be 0)`,
+      ok: surplus === 0n,
+      detail: `kind=${kind} surplus=${surplus} (baseline, must be 0)`,
     };
   }
-  const delta = drift - lastDrift;
-  lastDrift = drift;
+  const delta = surplus - lastDrift;
+  lastDrift = surplus;
   if (kind === "debt") stats.debtOps += 1;
   if (abs(delta) > stats.maxStepDrift) stats.maxStepDrift = abs(delta);
   if (delta !== 0n) stats.exactZero = false;
@@ -88,7 +121,7 @@ export function gateStepDrift(drift: bigint, kind: OpKind): InvariantResult {
   return {
     name: "accounting-drift",
     ok: delta >= 0n && delta <= allowed,
-    detail: `kind=${kind} delta=${delta} drift=${drift} allowed=0..${allowed}`,
+    detail: `kind=${kind} delta=${delta} surplus=${surplus} allowed=0..${allowed}`,
   };
 }
 
@@ -314,12 +347,13 @@ async function openInterestCoversPrincipal(chain: Chain): Promise<InvariantResul
 export async function checkInvariants(chain: Chain, kind: OpKind = "non-debt"): Promise<InvariantResult[]> {
   const results: InvariantResult[] = [];
   const stateContract = Cl.contractPrincipal(chain.deployer, "state-v1");
-  const [lpValue, reserveValue, cashValue, debtValue, caps, buckets, interest, configs, health, exit] =
+  const [lpValue, reserveValue, cashValue, debtValue, interestValue, caps, buckets, interest, configs, health, exit] =
     await Promise.all([
       chain.read("state-v1", "get-lp-params"),
       chain.read("state-v1", "get-reserve-balance"),
       chain.read(MARKET, "get-balance", [stateContract]),
       chain.read("state-v1", "get-debt-params"),
+      chain.read("state-v1", "get-open-interest"),
       capsFactors(chain),
       capsBuckets(chain),
       openInterestCoversPrincipal(chain),
@@ -339,11 +373,17 @@ export async function checkInvariants(chain: Chain, kind: OpKind = "non-debt"): 
   const debt = asTuple(debtValue);
   const totalAssets = asUint(lp["total-assets"]);
   const openInterest = asUint(debt["open-interest"]);
-  // total_assets + reserve == cash + debt; the gap is cash + debt - reserve - total_assets.
-  // The structural ceiling is 3 units per debt operation seen so far; the per-step gate is sharper.
+  const protocolOpenInterest = asUint(asTuple(interestValue)["protocol-open-interest"]);
+  // Cash + (debt - uncollected protocol interest) == total_assets + reserve, up to the floor
+  // residue. The structural ceiling is 3 units per debt operation seen so far; the per-step gate
+  // is sharper.
   const maxDrift = MAX_DEBT_STEP_DRIFT * BigInt(Math.max(stats.debtOps, 1));
-  results.push(accountingHolds({ totalAssets, reserve, cash, debt: openInterest }, maxDrift));
-  results.push(gateStepDrift(cash + openInterest - reserve - totalAssets, kind));
+  results.push(
+    accountingHolds({ totalAssets, reserve, cash, debt: openInterest, protocolOpenInterest }, maxDrift),
+  );
+  results.push(
+    gateStepDrift(cash + openInterest - protocolOpenInterest - reserve - totalAssets, kind),
+  );
   results.push(caps);
   results.push(buckets);
   results.push(interest);

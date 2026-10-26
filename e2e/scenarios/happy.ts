@@ -13,6 +13,7 @@ export const happy: Scenario = {
     const lp = actors.lp;
 
     const lpBefore = await tokenBalance(chain, MARKET, lp.address);
+    const assetsBefore = (await lpParams(chain)).totalAssets;
     await ctx.step("lp deposits 1,000,000", () => deposit(chain, lp, 1_000_000n * USDC));
     await ctx.assert(
       "lp balance debited",
@@ -49,10 +50,11 @@ export const happy: Scenario = {
 
     await ctx.step("lp withdraws 100,000", () => withdraw(chain, lp, 100_000n * USDC));
     const lpAfter = await lpParams(chain);
+    const assetsDelta = lpAfter.totalAssets - assetsBefore;
     await ctx.assert(
-      "market assets read",
-      lpAfter.totalAssets > 800_000n * USDC && lpAfter.totalAssets < 1_000_000n * USDC,
-      `unexpected total-assets ${lpAfter.totalAssets}`,
+      "market assets move by the deposit minus the withdrawal",
+      assetsDelta > 899_000n * USDC && assetsDelta < 901_000n * USDC,
+      `unexpected total-assets delta ${assetsDelta}`,
     );
   },
 };

@@ -4,6 +4,20 @@ import type { Account } from "./keys.ts";
 import { convertedPrice, FEED_IDS, MIN_CONFIDENCE_RATIOS, setPrice } from "./prices.ts";
 import { asOptional, asTuple, asUint, okUint } from "./values.ts";
 import { TEST_PUBKEY } from "../tests/lazer.ts";
+import {
+  BTC,
+  COLLATERALS,
+  ETH,
+  LIVE,
+  MARKET,
+  STX,
+  TEST_ONLY,
+  type CapWindows,
+  type CollateralConfig,
+} from "./profile.ts";
+
+export { BTC, COLLATERALS, ETH, LIVE, MARKET, STX, TEST_ONLY };
+export type { CapWindows, CollateralConfig };
 
 export type Actors = {
   deployer: Account;
@@ -17,23 +31,9 @@ export type Actors = {
   flash: Account;
 };
 
-export const MARKET = "mock-usdc";
-export const BTC = "mock-btc";
-export const ETH = "mock-eth";
-export const STX = "stx-sip010";
-export const COLLATERALS = [BTC, ETH, STX];
-
 export const MINIMUM_INITIAL_DEPOSIT = 1000n;
-const MAX_UINT = (1n << 128n) - 1n;
 const FAR_FUTURE = 100_000_000_000n;
 const WIDE_STALENESS = 100_000_000_000_000n;
-
-export type CollateralConfig = {
-  maxLtv: bigint;
-  liquidationLtv: bigint;
-  liquidationPremium: bigint;
-  decimals: bigint;
-};
 
 export type Snapshot = {
   balances: Record<string, Record<string, bigint>>;
@@ -44,18 +44,34 @@ export type Snapshot = {
 };
 
 export const expectedCollateralConfigs = (): Record<string, CollateralConfig> => ({
-  [BTC]: { maxLtv: 70_000_000n, liquidationLtv: 80_000_000n, liquidationPremium: 10_000_000n, decimals: 8n },
-  [ETH]: { maxLtv: 50_000_000n, liquidationLtv: 70_000_000n, liquidationPremium: 10_000_000n, decimals: 8n },
-  [STX]: { maxLtv: 50_000_000n, liquidationLtv: 70_000_000n, liquidationPremium: 10_000_000n, decimals: 6n },
+  ...LIVE.collateral,
+  ...TEST_ONLY.collateral,
 });
 
-// Windows long enough that a mid-window sample (one or two 5s blocks) is partial rather than
-// saturated; the arithmetic is identical to the production values.
-export const expectedCaps = (): { refill: bigint; decay: bigint; collateral: Record<string, bigint> } => ({
-  refill: 40n,
-  decay: 20n,
-  collateral: { [BTC]: 80_000_000n, [ETH]: 50_000_000n, [STX]: 50_000_000n },
+// The caps scenarios lower the windows to sample partial refill/decay; every other step expects the
+// live windows. The expectation moves with the override so the invariant never reads a stale value.
+let expectedWindows: CapWindows = { ...LIVE.caps.windows };
+
+export const expectedCaps = (): {
+  refill: bigint;
+  decay: bigint;
+  lp: bigint;
+  debt: bigint;
+  collateral: Record<string, bigint>;
+} => ({
+  refill: expectedWindows.refill,
+  decay: expectedWindows.decay,
+  lp: LIVE.caps.lp,
+  debt: LIVE.caps.debt,
+  collateral: { ...LIVE.caps.collateral, ...TEST_ONLY.collateralCaps },
 });
+
+/** Sets the withdrawal-cap windows on chain and moves the invariant's expectation with them. */
+export async function setCapWindows(chain: Chain, deployer: Account, windows: CapWindows): Promise<void> {
+  await chain.call(deployer, "withdrawal-caps-v1", "set-refill-time-window", [Cl.uint(windows.refill)]);
+  await chain.call(deployer, "withdrawal-caps-v1", "set-decay-time-window", [Cl.uint(windows.decay)]);
+  expectedWindows = { ...windows };
+}
 
 const principal = (address: string) => Cl.principal(address);
 const contractPrincipal = (address: string, name: string) => Cl.contractPrincipal(address, name);
@@ -138,25 +154,32 @@ export async function setup(chain: Chain, actors: Actors): Promise<Snapshot> {
   const call = (contract: string, fn: string, args: ClarityValue[], from: Account = actors.deployer) =>
     chain.call(from, contract, fn, args);
 
-  // 1. Interest and reward modules first: initialize mints dust through a deposit, and every
-  // deposit accrues interest through both modules.
+  // 1. Live market economics first: every later deposit accrues interest through these modules.
+  await call("state-v1", "set-protocol-reserve-percentage", [Cl.uint(LIVE.protocolReservePercentage)]);
   await call("linear-kinked-ir-v1", "update-ir-params", [
-    Cl.uint(750_000_000_000),
-    Cl.uint(1_500_000_000_000),
-    Cl.uint(700_000_000_000),
-    Cl.uint(300_000_000_000),
+    Cl.uint(LIVE.ir.slope1),
+    Cl.uint(LIVE.ir.slope2),
+    Cl.uint(LIVE.ir.kink),
+    Cl.uint(LIVE.ir.base),
   ]);
   await call("staking-reward-v1", "update-reward-params", [
-    Cl.int(-50_000_000),
-    Cl.int(-70_000_000),
-    Cl.uint(70_000_000),
-    Cl.uint(30_000_000),
+    Cl.int(LIVE.reward.slope1),
+    Cl.int(LIVE.reward.slope2),
+    Cl.uint(LIVE.reward.kink),
+    Cl.uint(LIVE.reward.base),
   ]);
   // A zero minimum stake skips the deployer dust stake, which would need LP tokens it does not hold.
   await call("staking-v1", "initialize", [Cl.some(Cl.uint(0))]);
-  // 4 blocks instead of 100 keeps the unstake scenario short while leaving room for the
-  // early-finalize assertion (transactions between initiate and finalize cost a block or two).
-  await call("staking-v1", "update-withdrawal-finalization-period", [Cl.uint(4)]);
+  // Live is 100 blocks; a short period keeps the unstake scenario inside a run while leaving room
+  // for the early-finalize assertion (transactions between initiate and finalize cost a block or two).
+  await call("staking-v1", "update-withdrawal-finalization-period", [Cl.uint(TEST_ONLY.withdrawalFinalizationPeriod)]);
+  // The test governance is initialized here because the staking scenario uses it to apply and
+  // restore test reward params; the governance scenario drives the proposal lifecycle against it.
+  // Governance-test resolves proposal membership through meta-governance, so that must be
+  // initialized too.
+  const testGovernance = Cl.list([Cl.some(Cl.principal(deployer)), Cl.none(), Cl.none(), Cl.none(), Cl.none()]);
+  await call("meta-governance-v1", "initialize-governance", [testGovernance]);
+  await call("governance-test", "initialize-governance", [testGovernance]);
 
   // 2. Allow the contracts that move assets through state-v1.
   for (const name of [
@@ -173,7 +196,7 @@ export async function setup(chain: Chain, actors: Actors): Promise<Snapshot> {
   await call("flash-loan-v1", "set-allowed-contract", [cp("mock-liquidator-with-flash-loan")]);
 
   // 3. Seed and initialize the LP.
-  await call("state-v1", "update-asset-cap", [Cl.uint(MAX_UINT)]);
+  await call("state-v1", "update-asset-cap", [Cl.uint(TEST_ONLY.assetCap)]);
   await mint(chain, actors.deployer, MARKET, MINIMUM_INITIAL_DEPOSIT, deployer);
   await call("liquidity-provider-v1", "initialize", []);
 
@@ -188,8 +211,10 @@ export async function setup(chain: Chain, actors: Actors): Promise<Snapshot> {
     ]);
   }
 
-  // 5. Withdrawal caps and their timing windows.
+  // 5. Withdrawal caps and their timing windows, at the live factors.
   const caps = expectedCaps();
+  await call("withdrawal-caps-v1", "set-lp-cap", [Cl.uint(caps.lp)]);
+  await call("withdrawal-caps-v1", "set-debt-cap", [Cl.uint(caps.debt)]);
   for (const [token, factor] of Object.entries(caps.collateral)) {
     await call("withdrawal-caps-v1", "set-collateral-cap", [cp(token), Cl.uint(factor)]);
   }
@@ -198,7 +223,7 @@ export async function setup(chain: Chain, actors: Actors): Promise<Snapshot> {
 
   // 6. Fund the actors from the mock tokens (the market token and both mock collaterals use 8 decimals).
   const usdc = 100_000_000n;
-  await mint(chain, actors.deployer, MARKET, 2_000_000n * usdc, actors.lp.address);
+  await mint(chain, actors.deployer, MARKET, 4_000_000n * usdc, actors.lp.address);
   await mint(chain, actors.deployer, MARKET, 2_000_000n * usdc, actors.staker.address);
   await mint(chain, actors.deployer, MARKET, 1_000_000n * usdc, actors.liquidator.address);
   await mint(chain, actors.deployer, MARKET, 1_000_000n * usdc, deployer);
@@ -208,6 +233,12 @@ export async function setup(chain: Chain, actors: Actors): Promise<Snapshot> {
     await mint(chain, actors.deployer, BTC, 100n * 100_000_000n, borrower.address);
     await mint(chain, actors.deployer, ETH, 1000n * 100_000_000n, borrower.address);
   }
+  // The live cap factors are enabled, so the pool needs enough depth that a 20% debt bucket does
+  // not throttle the matrix's borrows.
+  await chain.call(actors.lp, "liquidity-provider-v1", "deposit", [
+    Cl.uint(1_500_000n * usdc),
+    Cl.principal(actors.lp.address),
+  ]);
   // Seed the staker with LP tokens so stake/unstake fuzz ops can actually succeed.
   await chain.call(actors.staker, "liquidity-provider-v1", "deposit", [
     Cl.uint(10_000n * usdc),
@@ -249,6 +280,31 @@ function feedConfig(token: string): { feedId: number; minConfidenceRatio: number
 
 export function priceOf(token: string): bigint {
   return convertedPrice(token);
+}
+
+/** The configuration a run used, for the report: live values plus every named test-only override. */
+export function profileSummary(): Record<string, string | string[]> {
+  const collateral = Object.entries(expectedCollateralConfigs())
+    .map(([token, config]) => {
+      const source = token in LIVE.collateral ? "live" : "test";
+      return `${token}=${config.maxLtv}/${config.liquidationLtv}/${config.liquidationPremium}/${config.decimals} (${source})`;
+    })
+    .join(" ");
+  return {
+    market: "USDCx (live parameters)",
+    protocolReservePercentage: LIVE.protocolReservePercentage.toString(),
+    irParams: `slope1=${LIVE.ir.slope1} slope2=${LIVE.ir.slope2} kink=${LIVE.ir.kink} base=${LIVE.ir.base}`,
+    rewardParams: `slope1=${LIVE.reward.slope1} slope2=${LIVE.reward.slope2} kink=${LIVE.reward.kink} base=${LIVE.reward.base}`,
+    collateral: `max-ltv/liquidation-ltv/premium/decimals: ${collateral}`,
+    caps: `lp=${LIVE.caps.lp} debt=${LIVE.caps.debt} collateral=${JSON.stringify(expectedCaps().collateral)} windows=${LIVE.caps.windows.refill}/${LIVE.caps.windows.decay}`,
+    testOverrides: [
+      `asset cap ${TEST_ONLY.assetCap} (live ${LIVE.assetCap})`,
+      `withdrawal finalization ${TEST_ONLY.withdrawalFinalizationPeriod} blocks, from setup (live ${LIVE.withdrawalFinalizationPeriod})`,
+      `cap windows ${TEST_ONLY.capWindows.refill}/${TEST_ONLY.capWindows.decay}s while the caps scenarios sample them (live ${LIVE.caps.windows.refill}/${LIVE.caps.windows.decay}s)`,
+      `staking reward params slope1=${TEST_ONLY.rewardParams.slope1} slope2=${TEST_ONLY.rewardParams.slope2} kink=${TEST_ONLY.rewardParams.kink} base=${TEST_ONLY.rewardParams.base} inside the staking scenario only, restored after (live rewards are zero)`,
+      `mock-eth and stx-sip010 are devnet-only collaterals with no live USDCx counterpart; their settings and 50% collateral caps are test fixtures`,
+    ],
+  };
 }
 
 /** Asserts the live collateral settings are internally valid; a de-listed collateral is skipped. */

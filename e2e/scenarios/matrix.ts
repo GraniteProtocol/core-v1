@@ -17,7 +17,19 @@ import {
   stake,
   withdraw,
 } from "../actors.ts";
-import { BTC, ETH, MARKET, STX, collateralSettingsOf, lpParams, mint } from "../setup.ts";
+import {
+  BTC,
+  ETH,
+  LIVE,
+  MARKET,
+  STX,
+  TEST_ONLY,
+  collateralSettingsOf,
+  expectedCollateralConfigs,
+  lpParams,
+  mint,
+  setCapWindows,
+} from "../setup.ts";
 import { priceUpdate, resetToBaseline, setPrice, setPriceRaw } from "../prices.ts";
 import { healthOf, lpBalance, positionOf, stakedBalance, tokenBalance, totalStakedLpTokens, userCollateral } from "../reads.ts";
 import { registerProbeUser, suspendExitability } from "../invariants.ts";
@@ -77,6 +89,33 @@ const capTolerance = (cap: bigint): bigint => {
 };
 const stateContract = (chain: Chain) => `${chain.deployer}.state-v1`;
 
+const proposalIdFrom = (repr: string | undefined): string => {
+  const match = repr?.match(/0x([0-9a-f]{64})/);
+  if (!match) throw new Error(`no proposal id in ${repr}`);
+  return match[1];
+};
+
+/** Proposes through the test governance, waits its timelock and executes, then verifies. */
+async function proposeAndExecute(
+  ctx: ScenarioContext,
+  label: string,
+  propose: () => Promise<string>,
+  verify: () => Promise<boolean>,
+  autoExecutes = false,
+): Promise<void> {
+  let proposalId = "";
+  await ctx.step(`propose ${label}`, async () => {
+    proposalId = await propose();
+  });
+  if (!autoExecutes) {
+    await ctx.step(`wait the test timelock for ${label}`, () => ctx.chain.waitBlocks(3));
+    await ctx.step(`execute ${label}`, () =>
+      ctx.chain.call(ctx.actors.deployer, "governance-test", "execute", [Cl.bufferFromHex(proposalId)]),
+    );
+  }
+  await ctx.assert(`${label} took effect`, await verify(), `${label} did not change state`);
+}
+
 /** The bucket's cap: liquidity held by state-v1 times the factor. */
 async function lpCapMax(chain: Chain, factor: bigint): Promise<bigint> {
   const liquidity = await tokenBalance(chain, MARKET, stateContract(chain));
@@ -91,6 +130,7 @@ async function collateralCapMax(chain: Chain, token: string, factor: bigint): Pr
 scenario("lp-withdraw-cap", async (ctx) => {
   const { chain, actors } = ctx;
   const factor = HUNDRED_PCT / 10n;
+  await ctx.step("use test cap windows", () => setCapWindows(chain, actors.deployer, TEST_ONLY.capWindows));
   await ctx.step("set lp cap 10%", () =>
     callAsDeployer(chain, actors.deployer, "withdrawal-caps-v1", "set-lp-cap", [Cl.uint(factor)]),
   );
@@ -144,17 +184,18 @@ scenario("lp-withdraw-cap", async (ctx) => {
     `before ${bucketBeforeRefill} after ${refilled} cap ${refilledMax}`,
   );
   await ctx.step("withdraw after refill succeeds", () => withdraw(chain, lp, refilled / 2n));
-  await ctx.step("reset lp cap", () =>
-    callAsDeployer(chain, actors.deployer, "withdrawal-caps-v1", "set-lp-cap", [Cl.uint(0)]),
+  await ctx.step("restore the live lp cap", () =>
+    callAsDeployer(chain, actors.deployer, "withdrawal-caps-v1", "set-lp-cap", [Cl.uint(LIVE.caps.lp)]),
   );
+  await ctx.step("restore live cap windows", () => setCapWindows(chain, actors.deployer, LIVE.caps.windows));
 });
 
 scenario("ltv-boundary", async (ctx) => {
   const { chain } = ctx;
   const borrower = await fund(ctx, "ltv-borrower", { btc: 2n * UNIT, usdc: 1_000n * USDC });
   await ctx.step("add 1 BTC", () => addCollateral(chain, borrower, BTC, UNIT));
-  await ctx.step("borrow at the 70% limit", () => borrow(chain, borrower, 42_000n * USDC), "debt");
-  await ctx.attempt("one unit over the limit aborts", () => borrow(chain, borrower, 1n * USDC), "u20002", "debt");
+  await ctx.step("borrow at the live 50% limit", () => borrow(chain, borrower, 30_000n * USDC), "debt");
+  await ctx.attempt("one dollar over the limit aborts", () => borrow(chain, borrower, 1n * USDC), "u20002", "debt");
   await ctx.step("full repay", () => repay(chain, borrower, 10n ** 30n), "debt");
   const afterFull = await positionOf(chain, borrower.address);
   await ctx.assert("full repay clears debt", afterFull !== null && afterFull.debtShares === 0n, "debt shares remain");
@@ -179,7 +220,7 @@ scenario("mixed-collateral", async (ctx) => {
     await addCollateral(chain, borrower, BTC, UNIT);
     await addCollateral(chain, borrower, ETH, 10n * UNIT);
   });
-  await ctx.step("borrow 50,000", () => borrow(chain, borrower, 50_000n * USDC), "debt");
+  await ctx.step("borrow 40,000", () => borrow(chain, borrower, 40_000n * USDC), "debt");
   await ctx.step("repay 20,000", () => repay(chain, borrower, 20_000n * USDC), "debt");
   await ctx.assert(
     "both collaterals stay posted",
@@ -196,7 +237,7 @@ scenario("health-across-collaterals", async (ctx) => {
     await addCollateral(chain, borrower, BTC, UNIT);
     await addCollateral(chain, borrower, ETH, 10n * UNIT);
   });
-  await ctx.step("borrow 57,000", () => borrow(chain, borrower, 57_000n * USDC), "debt");
+  await ctx.step("borrow 44,000", () => borrow(chain, borrower, 44_000n * USDC), "debt");
   const healthy = await healthOf(chain, borrower.address);
   await ctx.assert(
     "position starts healthy",
@@ -210,7 +251,7 @@ scenario("health-across-collaterals", async (ctx) => {
     afterGradualDrop !== null && afterGradualDrop.positionHealth > HUNDRED_PCT,
     `health ${afterGradualDrop?.positionHealth}`,
   );
-  setPrice(ETH, 1_000n);
+  setPrice(ETH, 500n);
   const unhealthy = await healthOf(chain, borrower.address);
   await ctx.assert(
     "a sudden ETH drop turns the position unhealthy",
@@ -233,9 +274,9 @@ scenario("direct-liquidation", async (ctx) => {
   const borrower = await fund(ctx, "liq-borrower", { btc: 2n * UNIT });
   const liquidator = await fund(ctx, "liq-liquidator", { usdc: 100_000n * USDC });
   await ctx.step("add 1 BTC", () => addCollateral(chain, borrower, BTC, UNIT));
-  await ctx.step("borrow 42,000", () => borrow(chain, borrower, 42_000n * USDC), "debt");
+  await ctx.step("borrow 25,000", () => borrow(chain, borrower, 25_000n * USDC), "debt");
   await ctx.step(`wait ${LIQUIDATION_BLOCK_GAP} blocks`, () => chain.waitBlocks(LIQUIDATION_BLOCK_GAP));
-  setPrice(BTC, 50_000n);
+  setPrice(BTC, 35_000n);
   const collateralBefore = await userCollateral(chain, borrower.address, BTC);
   const seizedBefore = await tokenBalance(chain, BTC, liquidator.address);
   await ctx.step("liquidate", () => liquidate(chain, liquidator, BTC, borrower.address, 100_000n * USDC), "debt");
@@ -288,11 +329,11 @@ scenario("batch-liquidation", async (ctx) => {
   for (const borrower of [first, second]) {
     await ctx.step(`open ${borrower.name}`, async () => {
       await addCollateral(chain, borrower, BTC, UNIT);
-      await borrow(chain, borrower, 42_000n * USDC);
+      await borrow(chain, borrower, 25_000n * USDC);
     }, "debt");
   }
   await ctx.step(`wait ${LIQUIDATION_BLOCK_GAP} blocks`, () => chain.waitBlocks(LIQUIDATION_BLOCK_GAP));
-  setPrice(BTC, 50_000n);
+  setPrice(BTC, 35_000n);
   const before = await Promise.all([first, second].map((b) => userCollateral(chain, b.address, BTC)));
   await ctx.step("batch liquidate both", () =>
     batchLiquidate(chain, liquidator, BTC, [
@@ -313,9 +354,9 @@ scenario("flash-loan-liquidation", async (ctx) => {
   const { chain, actors } = ctx;
   const borrower = await fund(ctx, "flash-liq-borrower", { btc: 2n * UNIT });
   await ctx.step("add 1 BTC", () => addCollateral(chain, borrower, BTC, UNIT));
-  await ctx.step("borrow 42,000", () => borrow(chain, borrower, 42_000n * USDC), "debt");
+  await ctx.step("borrow 25,000", () => borrow(chain, borrower, 25_000n * USDC), "debt");
   await ctx.step(`wait ${LIQUIDATION_BLOCK_GAP} blocks`, () => chain.waitBlocks(LIQUIDATION_BLOCK_GAP));
-  setPrice(BTC, 50_000n);
+  setPrice(BTC, 35_000n);
   const before = await userCollateral(chain, borrower.address, BTC);
   await ctx.step("liquidate through the flash-loan callback", async () =>
     callAsDeployer(chain, actors.liquidator, "mock-liquidator-with-flash-loan", "liquidate-collateral", [
@@ -336,7 +377,7 @@ scenario("dust-sweep", async (ctx) => {
   const borrower = await fund(ctx, "dust-borrower", { btc: 2n * UNIT });
   const liquidator = await fund(ctx, "dust-liquidator", { usdc: 100_000n * USDC });
   await ctx.step("add 1 BTC plus dust", () => addCollateral(chain, borrower, BTC, UNIT + 101n));
-  await ctx.step("borrow 42,000", () => borrow(chain, borrower, 42_000n * USDC), "debt");
+  await ctx.step("borrow 25,000", () => borrow(chain, borrower, 25_000n * USDC), "debt");
   await ctx.step(`wait ${LIQUIDATION_BLOCK_GAP} blocks`, () => chain.waitBlocks(LIQUIDATION_BLOCK_GAP));
   setPriceRaw(BTC, 2_013_742_000_000n); // $20,137.42, a price with cents
   await ctx.step("liquidate a deep bad-debt position", () =>
@@ -356,6 +397,29 @@ scenario("dust-sweep", async (ctx) => {
 
 scenario("staking", async (ctx) => {
   const { chain, actors } = ctx;
+  const deployer = actors.deployer.address;
+  // Live rewards are zero, so the staked-interest split would never execute. Route governance to the
+  // test contract, apply the named test reward params for this scenario, and put both back after.
+  const governance = Cl.contractPrincipal(chain.deployer, "governance-test");
+  const rewardParamsMatch = async (kink: bigint) =>
+    asUint(asTuple(await chain.read("staking-reward-v1", "get-reward-params"))["staked-kink"]) === kink;
+  await ctx.step("route governance to the test contract", () =>
+    chain.call(actors.deployer, "state-v1", "update-governance", [governance]),
+  );
+  await proposeAndExecute(ctx,
+    "test reward params",
+    async () => {
+      const result = await chain.call(actors.deployer, "governance-test", "initiate-proposal-to-update-reward-params", [
+        Cl.int(TEST_ONLY.rewardParams.slope1),
+        Cl.int(TEST_ONLY.rewardParams.slope2),
+        Cl.uint(TEST_ONLY.rewardParams.kink),
+        Cl.uint(TEST_ONLY.rewardParams.base),
+        Cl.uint(1000),
+      ]);
+      return proposalIdFrom(result.result);
+    },
+    () => rewardParamsMatch(TEST_ONLY.rewardParams.kink),
+  );
   await ctx.step("deposit for staking", () => deposit(chain, actors.staker, 100_000n * USDC));
   const lpTokens = await lpBalance(chain, actors.staker.address);
   const half = lpTokens / 2n;
@@ -373,11 +437,11 @@ scenario("staking", async (ctx) => {
     "staking borrower opens a position",
     async () => {
       await addCollateral(chain, borrower, BTC, UNIT);
-      await borrow(chain, borrower, 40_000n * USDC);
+      await borrow(chain, borrower, 25_000n * USDC);
     },
     "debt",
   );
-  await ctx.step("wait for interest to accrue", () => chain.waitBlocks(LIQUIDATION_BLOCK_GAP));
+  await ctx.step("wait for interest to accrue", () => chain.waitBlocks(12));
   const stakedBucketBefore = asUint(await chain.read("staking-v1", "get-active-staked-lp-tokens"));
   await ctx.step("staking borrower repays", () => repay(chain, borrower, 10n ** 30n), "debt");
   const stakedBucketAfter = asUint(await chain.read("staking-v1", "get-active-staked-lp-tokens"));
@@ -396,6 +460,31 @@ scenario("staking", async (ctx) => {
     "finalize returned the LP tokens",
     lpAfterFinalize > lpBeforeFinalize,
     `lp balance ${lpBeforeFinalize} -> ${lpAfterFinalize}`,
+  );
+  await proposeAndExecute(ctx,
+    "restore live reward params",
+    async () => {
+      const result = await chain.call(actors.deployer, "governance-test", "initiate-proposal-to-update-reward-params", [
+        Cl.int(LIVE.reward.slope1),
+        Cl.int(LIVE.reward.slope2),
+        Cl.uint(LIVE.reward.kink),
+        Cl.uint(LIVE.reward.base),
+        Cl.uint(1000),
+      ]);
+      return proposalIdFrom(result.result);
+    },
+    () => rewardParamsMatch(LIVE.reward.kink),
+  );
+  await proposeAndExecute(ctx,
+    "governance handover back to the deployer",
+    async () => {
+      const result = await chain.call(actors.deployer, "governance-test", "initiate-proposal-to-update-governance", [
+        Cl.principal(deployer),
+        Cl.uint(1000),
+      ]);
+      return proposalIdFrom(result.result);
+    },
+    async () => asPrincipal(await chain.read("state-v1", "get-governance")) === deployer,
   );
 });
 
@@ -432,6 +521,7 @@ scenario("flash-loan", async (ctx) => {
 scenario("caps", async (ctx) => {
   const { chain, actors } = ctx;
   const borrower = await fund(ctx, "caps-borrower", { btc: 12n * UNIT });
+  await ctx.step("use test cap windows", () => setCapWindows(chain, actors.deployer, TEST_ONLY.capWindows));
   await ctx.step("set the BTC collateral cap to 10%", () =>
     callAsDeployer(chain, actors.deployer, "withdrawal-caps-v1", "set-collateral-cap", [
       Cl.contractPrincipal(chain.deployer, BTC),
@@ -508,19 +598,22 @@ scenario("caps", async (ctx) => {
     afterUncapped === beforeUncapped - 40_000_000n,
     `collateral ${beforeUncapped} -> ${afterUncapped}`,
   );
-  await ctx.step("restore the collateral cap", () =>
+  await ctx.step("restore the live collateral cap", () =>
     callAsDeployer(chain, actors.deployer, "withdrawal-caps-v1", "set-collateral-cap", [
       Cl.contractPrincipal(chain.deployer, BTC),
-      Cl.uint(80_000_000n),
+      Cl.uint(LIVE.caps.collateral[BTC]),
     ]),
   );
 
-  // Debt cap: a 10% factor makes the debt bucket finite; a borrow above it must be refused.
+  // Debt cap: a 10% factor makes the debt bucket finite; a borrow above it must be refused. The
+  // bucket carries history from the live factor seeded at setup, so let it decay to the new cap
+  // before sampling it.
   await ctx.step("set the debt cap to 10%", () =>
     callAsDeployer(chain, actors.deployer, "withdrawal-caps-v1", "set-debt-cap", [Cl.uint(HUNDRED_PCT / 10n)]),
   );
-  const debtBorrower = await fund(ctx, "debt-cap-borrower", { btc: 10n * UNIT });
+  const debtBorrower = await fund(ctx, "debt-cap-borrower", { btc: 10n * UNIT, usdc: 1_000n * USDC });
   await ctx.step("add 10 BTC for the debt-cap probe", () => addCollateral(chain, debtBorrower, BTC, 10n * UNIT));
+  await ctx.step("wait past the decay window for the debt bucket", () => sleep(25_000));
   await ctx.step("borrow one dollar to sync the debt bucket", () => borrow(chain, debtBorrower, 1n * USDC), "debt");
   const debtBucket = asUint(await chain.read("withdrawal-caps-v1", "get-debt-bucket"));
   // The debt bucket is a fraction of the borrowable balance, so assert the magnitude rather than
@@ -539,9 +632,12 @@ scenario("caps", async (ctx) => {
     "debt",
   );
   await ctx.step("borrowing up to the debt bucket succeeds", () => borrow(chain, debtBorrower, debtBucket), "debt");
-  await ctx.step("reset the debt cap", () =>
-    callAsDeployer(chain, actors.deployer, "withdrawal-caps-v1", "set-debt-cap", [Cl.uint(0)]),
+  // Repaying credits the bucket back, so later scenarios are not throttled by this probe.
+  await ctx.step("repay the debt-cap probe", () => repay(chain, debtBorrower, 10n ** 30n), "debt");
+  await ctx.step("restore the live debt cap", () =>
+    callAsDeployer(chain, actors.deployer, "withdrawal-caps-v1", "set-debt-cap", [Cl.uint(LIVE.caps.debt)]),
   );
+  await ctx.step("restore live cap windows", () => setCapWindows(chain, actors.deployer, LIVE.caps.windows));
 });
 
 scenario("bad-debt-socialization", async (ctx) => {
@@ -573,7 +669,7 @@ scenario("bad-debt-socialization", async (ctx) => {
     await chain.read("staking-v1", "convert-to-withdrawal-lp-tokens", [Cl.uint(withdrawalSharesBefore)]),
   );
   await ctx.step("add 1 BTC", () => addCollateral(chain, borrower, BTC, UNIT));
-  await ctx.step("borrow 42,000", () => borrow(chain, borrower, 42_000n * USDC), "debt");
+  await ctx.step("borrow 25,000", () => borrow(chain, borrower, 25_000n * USDC), "debt");
   await ctx.step(`wait ${LIQUIDATION_BLOCK_GAP} blocks`, () => chain.waitBlocks(LIQUIDATION_BLOCK_GAP));
   setPrice(BTC, 10_000n);
   const stakedBefore = await totalStakedLpTokens(chain);
@@ -620,9 +716,11 @@ scenario("remove-collateral-stuck", async (ctx) => {
       Cl.contractPrincipal(chain.deployer, ETH),
     ]),
   );
+  // Half the posted ETH stays inside the live collateral cap even after a partial decay, so the
+  // call reaches the de-listing check rather than failing on the cap first.
   await ctx.attempt(
     "withdrawing a de-listed collateral aborts",
-    () => removeCollateral(chain, borrower, ETH, UNIT),
+    () => removeCollateral(chain, borrower, ETH, UNIT / 2n),
     "u108",
   );
   await ctx.step(`wait ${LIQUIDATION_BLOCK_GAP} blocks`, () => chain.waitBlocks(LIQUIDATION_BLOCK_GAP));
@@ -633,15 +731,16 @@ scenario("remove-collateral-stuck", async (ctx) => {
     "u30005",
     "debt",
   );
-  await ctx.step("restore ETH settings", () =>
-    callAsDeployer(chain, actors.deployer, "state-v1", "update-collateral-settings", [
+  await ctx.step("restore ETH settings", () => {
+    const eth = expectedCollateralConfigs()[ETH];
+    return callAsDeployer(chain, actors.deployer, "state-v1", "update-collateral-settings", [
       Cl.contractPrincipal(chain.deployer, ETH),
-      Cl.uint(50_000_000n),
-      Cl.uint(70_000_000n),
-      Cl.uint(10_000_000n),
-      Cl.uint(8),
-    ]),
-  );
+      Cl.uint(eth.maxLtv),
+      Cl.uint(eth.liquidationLtv),
+      Cl.uint(eth.liquidationPremium),
+      Cl.uint(eth.decimals),
+    ]);
+  });
     resetToBaseline();
   } finally {
     suspendExitability(false);
@@ -652,46 +751,13 @@ scenario("governance", async (ctx) => {
   const { chain, actors } = ctx;
   const deployer = actors.deployer.address;
   const governance = Cl.contractPrincipal(chain.deployer, "governance-test");
-  await ctx.step("initialize meta-governance", () =>
-    chain.call(actors.deployer, "meta-governance-v1", "initialize-governance", [
-      Cl.list([Cl.some(Cl.principal(deployer)), Cl.none(), Cl.none(), Cl.none(), Cl.none()]),
-    ]),
-  );
-  await ctx.step("initialize test governance", () =>
-    chain.call(actors.deployer, "governance-test", "initialize-governance", [
-      Cl.list([Cl.some(Cl.principal(deployer)), Cl.none(), Cl.none(), Cl.none(), Cl.none()]),
-    ]),
-  );
+  // The test governance and meta-governance are initialized in setup because the staking scenario
+  // uses them too.
   await ctx.step("point state at the test governance", () =>
     chain.call(actors.deployer, "state-v1", "update-governance", [governance]),
   );
 
-  const proposeAndExecute = async (
-    label: string,
-    propose: () => Promise<string>,
-    verify: () => Promise<boolean>,
-    autoExecutes = false,
-  ) => {
-    let proposalId = "";
-    await ctx.step(`propose ${label}`, async () => {
-      proposalId = await propose();
-    });
-    if (!autoExecutes) {
-      await ctx.step(`wait the test timelock for ${label}`, () => chain.waitBlocks(3));
-      await ctx.step(`execute ${label}`, () =>
-        chain.call(actors.deployer, "governance-test", "execute", [Cl.bufferFromHex(proposalId)]),
-      );
-    }
-    await ctx.assert(`${label} took effect`, await verify(), `${label} did not change state`);
-  };
-
-  const proposalIdFrom = (repr: string | undefined): string => {
-    const match = repr?.match(/0x([0-9a-f]{64})/);
-    if (!match) throw new Error(`no proposal id in ${repr}`);
-    return match[1];
-  };
-
-  await proposeAndExecute(
+  await proposeAndExecute(ctx,
     "collateral settings",
     async () => {
       const result = await chain.call(actors.deployer, "governance-test", "initiate-proposal-to-update-collateral-settings", [
@@ -706,7 +772,7 @@ scenario("governance", async (ctx) => {
     async () => (await collateralSettingsOf(chain, ETH)).maxLtv === 60_000_000n,
   );
 
-  await proposeAndExecute(
+  await proposeAndExecute(ctx,
     "interest params",
     async () => {
       const result = await chain.call(actors.deployer, "governance-test", "initiate-proposal-to-update-interest-params", [
@@ -728,7 +794,7 @@ scenario("governance", async (ctx) => {
     },
   );
 
-  await proposeAndExecute(
+  await proposeAndExecute(ctx,
     "collateral cap",
     async () => {
       const result = await chain.call(actors.deployer, "governance-test", "initiate-proposal-to-update-withdrawal-caps-param", [
@@ -746,7 +812,7 @@ scenario("governance", async (ctx) => {
       ) === 70_000_000n,
   );
 
-  await proposeAndExecute(
+  await proposeAndExecute(ctx,
     "market pause",
     async () => {
       const result = await chain.call(actors.deployer, "governance-test", "initiate-proposal-to-set-market-state", [
@@ -759,7 +825,7 @@ scenario("governance", async (ctx) => {
     async () => asBool(await chain.read("state-v1", "is-borrow-enabled")) === false,
   );
 
-  await proposeAndExecute(
+  await proposeAndExecute(ctx,
     "market unpause",
     async () => {
       const result = await chain.call(actors.deployer, "governance-test", "initiate-proposal-to-set-market-state", [
@@ -773,27 +839,28 @@ scenario("governance", async (ctx) => {
     true, // unpausing is not time-locked, so it executes when the proposal is created
   );
 
-  await proposeAndExecute(
+  await proposeAndExecute(ctx,
     "restore ETH settings",
     async () => {
+      const eth = expectedCollateralConfigs()[ETH];
       const result = await chain.call(actors.deployer, "governance-test", "initiate-proposal-to-update-collateral-settings", [
         Cl.contractPrincipal(chain.deployer, ETH),
-        Cl.uint(50_000_000n),
-        Cl.uint(70_000_000n),
-        Cl.uint(10_000_000n),
-        Cl.uint(1000),
+        Cl.uint(eth.maxLtv),
+        Cl.uint(eth.liquidationLtv),
+        Cl.uint(eth.liquidationPremium),
+        Cl.uint(eth.decimals),
       ]);
       return proposalIdFrom(result.result);
     },
-    async () => (await collateralSettingsOf(chain, ETH)).maxLtv === 50_000_000n,
+    async () => (await collateralSettingsOf(chain, ETH)).maxLtv === expectedCollateralConfigs()[ETH].maxLtv,
   );
 
-  await proposeAndExecute(
+  await proposeAndExecute(ctx,
     "restore the BTC collateral cap",
     async () => {
       const result = await chain.call(actors.deployer, "governance-test", "initiate-proposal-to-update-withdrawal-caps-param", [
         Cl.uint(32),
-        Cl.tuple({ collateral: Cl.some(Cl.contractPrincipal(chain.deployer, BTC)), factor: Cl.uint(80_000_000n) }),
+        Cl.tuple({ collateral: Cl.some(Cl.contractPrincipal(chain.deployer, BTC)), factor: Cl.uint(LIVE.caps.collateral[BTC]) }),
         Cl.uint(1000),
       ]);
       return proposalIdFrom(result.result);
@@ -803,10 +870,28 @@ scenario("governance", async (ctx) => {
         await chain.read("withdrawal-caps-v1", "get-collateral-cap-factor", [
           Cl.contractPrincipal(chain.deployer, BTC),
         ]),
-      ) === 80_000_000n,
+      ) === LIVE.caps.collateral[BTC],
   );
 
-  await proposeAndExecute(
+  await proposeAndExecute(ctx,
+    "restore the live interest params",
+    async () => {
+      const result = await chain.call(actors.deployer, "governance-test", "initiate-proposal-to-update-interest-params", [
+        Cl.uint(LIVE.ir.slope1),
+        Cl.uint(LIVE.ir.slope2),
+        Cl.uint(LIVE.ir.kink),
+        Cl.uint(LIVE.ir.base),
+        Cl.uint(1000),
+      ]);
+      return proposalIdFrom(result.result);
+    },
+    async () => {
+      const params = asTuple(await chain.read("linear-kinked-ir-v1", "get-ir-params"));
+      return asUint(params["base-ir"]) === LIVE.ir.base && asUint(params["utilization-kink"]) === LIVE.ir.kink;
+    },
+  );
+
+  await proposeAndExecute(ctx,
     "governance handover back to the deployer",
     async () => {
       const result = await chain.call(actors.deployer, "governance-test", "initiate-proposal-to-update-governance", [
@@ -820,9 +905,13 @@ scenario("governance", async (ctx) => {
 
   await ctx.assert(
     "collateral configs restored",
-    (await collateralSettingsOf(chain, ETH)).maxLtv === 50_000_000n,
+    (await collateralSettingsOf(chain, ETH)).maxLtv === expectedCollateralConfigs()[ETH].maxLtv,
     "ETH config moved unexpectedly",
   );
-  await ctx.assert("STX still configured", (await collateralSettingsOf(chain, STX)).maxLtv === 50_000_000n, "STX missing");
-  await ctx.assert("caps read", (await asUint(await chain.read("withdrawal-caps-v1", "get-refill-time-window"))) === 40n, "refill window changed");
+  await ctx.assert("STX still configured", (await collateralSettingsOf(chain, STX)).maxLtv === expectedCollateralConfigs()[STX].maxLtv, "STX missing");
+  await ctx.assert(
+    "caps read",
+    (await asUint(await chain.read("withdrawal-caps-v1", "get-refill-time-window"))) === LIVE.caps.windows.refill,
+    "refill window changed",
+  );
 });

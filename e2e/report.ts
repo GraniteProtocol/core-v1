@@ -73,9 +73,12 @@ export type RunReport = {
     debtOps: number;
     maxStepDrift: string;
     exactZero: boolean;
+    protocolOpenInterest?: string;
+    rawGap?: string;
     rebaselines?: Array<{ at: string; phase: string; drift: string }>;
   };
   caps?: CapsReport;
+  profile?: Record<string, string | string[]>;
 };
 
 export async function writeReport(
@@ -103,6 +106,18 @@ export async function writeReport(
       report.summary?.successRatioExcludes?.length ? ` excluding ${report.summary.successRatioExcludes.join("/")} (wiped staking)` : ""
     }), ${report.fuzz.failures} failures`,
   ];
+  if (report.profile) {
+    lines.push(`- market profile: ${report.profile.market}`);
+    for (const [key, value] of Object.entries(report.profile)) {
+      if (key === "market") continue;
+      if (Array.isArray(value)) {
+        lines.push(`  - ${key}:`);
+        for (const entry of value) lines.push(`    - ${entry}`);
+      } else {
+        lines.push(`  - ${key}: ${value}`);
+      }
+    }
+  }
   if (report.error) lines.push(`- error: ${report.error}`);
   if (report.timings) {
     const t = report.timings;
@@ -147,8 +162,10 @@ export async function writeReport(
     }
   }
   if (report.accounting) {
+    const protocol = report.accounting.protocolOpenInterest ?? "0";
+    const raw = report.accounting.rawGap ?? "n/a";
     lines.push(
-      `- accounting: gap=${report.accounting.drift}, debt-ops=${report.accounting.debtOps}, max-step=${report.accounting.maxStepDrift}`,
+      `- accounting: gap=${report.accounting.drift}, debt-ops=${report.accounting.debtOps}, max-step=${report.accounting.maxStepDrift}, uncollected-protocol-interest=${protocol}, raw-gap=${raw}`,
     );
     if (!report.accounting.exactZero) {
       lines.push(

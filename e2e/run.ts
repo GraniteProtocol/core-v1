@@ -5,7 +5,7 @@ import { startDevnet, stopDevnet, type BootAttempt, type DevnetHandle } from "./
 import { loadAccounts } from "./keys.ts";
 import type { Account } from "./keys.ts";
 import { fundAccount, newAccount } from "./accounts.ts";
-import { setup, BTC, ETH, STX, type Actors } from "./setup.ts";
+import { profileSummary, setup, BTC, ETH, STX, type Actors } from "./setup.ts";
 import { createContext, type Scenario } from "./scenario.ts";
 import { happy } from "./scenarios/happy.ts";
 import { matrix } from "./scenarios/matrix.ts";
@@ -341,6 +341,8 @@ async function main(): Promise<number> {
       debtOps: accounting.debtOps,
       maxStepDrift: accounting.maxStepDrift.toString(),
       exactZero: accounting.exactZero,
+      protocolOpenInterest: accounting.protocolOpenInterest.toString(),
+      rawGap: accounting.rawGap.toString(),
       rebaselines: restartLog.map((event) => ({ at: event.at, phase: event.phase, drift: event.driftAtRestart })),
     };
   };
@@ -379,6 +381,7 @@ async function main(): Promise<number> {
         : undefined,
       accounting,
       caps: capsValues,
+      profile: profileSummary(),
       summary: {
         scenariosPassed: passedScenarios,
         scenariosExpected: expectedScenarios.length,
