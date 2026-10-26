@@ -19,12 +19,15 @@ import {
   init_pyth,
   set_initial_price,
   set_price,
+  set_price_without_scaling,
   set_pyth_time_delta,
 } from "./pyth";
 
 const accounts = simnet.getAccounts();
 const deployer = accounts.get("deployer")!;
 const borrower = accounts.get("wallet_1")!;
+const borrower2 = accounts.get("wallet_2")!;
+const liquidator = accounts.get("wallet_3")!;
 const depositor = accounts.get("wallet_4")!;
 const governor = accounts.get("wallet_5")!;
 const btc = contractPrincipalCV(deployer, "mock-btc");
@@ -179,6 +182,10 @@ describe("interest split residue", () => {
     expect(after.protocol).toBe(before.protocol);
     expect(borrowableBalance()).toBe(beforeBorrowable + 1n);
     expect(reserveBalance()).toBe(beforeReserve);
+    expect(
+      after.lp >= totalBorrowedAmount(),
+      "LP open interest must still cover total borrowed after the split"
+    ).toBe(true);
   });
 
   it("assigns a two-unit remainder when all three interest buckets are funded", async () => {
@@ -231,6 +238,54 @@ describe("interest split residue", () => {
     expect(after.protocol).toBe(before.protocol);
     expect(borrowableBalance()).toBe(beforeBorrowable + split.principalPart + split.lpPart + 2n);
     expect(reserveBalance()).toBe(beforeReserve);
+    expect(
+      after.lp >= totalBorrowedAmount(),
+      "LP open interest must still cover total borrowed after the split"
+    ).toBe(true);
+  });
+
+  it("does not let a remainder consume LP principal backing", async () => {
+    mint_token("mock-usdc", 100_000_000_000, depositor);
+    deposit(100_000_000_000, depositor);
+    initialize_staking(deployer);
+    const stake = simnet.callPublicFn(
+      "staking-v1",
+      "stake",
+      [Cl.uint(5_000_000_000)],
+      depositor
+    );
+    expect(stake.result).toBeOk(Cl.bool(true));
+    update_supported_collateral("mock-btc", 90_000_000, 95_000_000, 5_000_000, 8, deployer);
+    mint_token("mock-btc", 20_000_000_000, borrower);
+    add_collateral("mock-btc", 20_000_000_000, deployer, borrower);
+    borrow(18_000_000_000, borrower);
+    simnet.mineEmptyBlocks(5_000);
+    accrueInterest();
+    freezeInterestAccrual();
+
+    const totalBorrowed = totalBorrowedAmount();
+    const totalInterest = totalOpenInterest() - totalBorrowed;
+    const debt = totalBorrowed + totalInterest;
+    // Leaves each raw floor one unit short: interest 3, remainder 2, LP interest
+    // slack 1. Counting principal as LP room would spend that unit of backing.
+    const repayAmount = ((totalInterest - 1n) * debt) / totalInterest;
+    const split = expectedSplit(repayAmount);
+    expect(split.interestPart, "the repay must leave one interest unit").toBe(totalInterest - 1n);
+    expect(split.remainder, "the scenario must exercise a two-unit remainder").toBe(2n);
+    expect(
+      split.lpBucket - totalBorrowed - split.lpPart,
+      "LP interest slack must be 1, or the case does not discriminate"
+    ).toBe(1n);
+
+    mint_token("mock-usdc", Number(debt + 1_000_000_000n), borrower);
+    repay(Number(repayAmount), borrower);
+    expect(
+      buckets().lp >= totalBorrowedAmount(),
+      "LP open interest must still cover total borrowed after the split"
+    ).toBe(true);
+
+    repay(Number(currentDebt()), borrower);
+    expect(totalOpenInterest()).toBe(0n);
   });
 
   it("keeps the empty staked bucket at zero across a sweep of partial repays", async () => {
@@ -259,6 +314,10 @@ describe("interest split residue", () => {
         before.lp + before.staked + before.protocol - amount
       );
     }
+    expect(
+      buckets().lp >= totalBorrowedAmount(),
+      "LP open interest must still cover total borrowed after the split"
+    ).toBe(true);
   });
 
   it("keeps the split conserving on a partial liquidation", async () => {
@@ -311,6 +370,62 @@ describe("interest split residue", () => {
     expect(borrowableBalance() + reserveBalance()).toBe(
       beforeBorrowable + beforeReserve + repaidAmount
     );
+    expect(
+      after.lp >= totalBorrowedAmount(),
+      "LP open interest must still cover total borrowed after the split"
+    ).toBe(true);
+  });
+
+  it("keeps the split conserving when bad debt is socialized", async () => {
+    mint_token("mock-usdc", 10_000_000_000_000, depositor);
+    deposit(10_000_000_000_000, depositor);
+    update_supported_collateral("mock-btc", 50_000_000, 65_000_000, 10_000_000, 8, deployer);
+    for (const user of [borrower, borrower2]) {
+      mint_token("mock-btc", 10_000_000_000_000, user);
+      add_collateral("mock-btc", 10_000_000_000_000, deployer, user);
+      borrow(5_000_000_000_000, user);
+    }
+    simnet.mineEmptyBlocks(3_000);
+    accrueInterest();
+    freezeInterestAccrual();
+
+    await set_price_without_scaling("mock-btc", 50_000_000n, deployer);
+    mint_token("mock-usdc", 20_000_000_000_000, liquidator);
+
+    const before = buckets();
+    const liquidation = simnet.callPublicFn(
+      "liquidator-v1",
+      "liquidate-collateral",
+      [
+        Cl.buffer(build_price_update()),
+        btc,
+        Cl.principal(borrower),
+        Cl.uint(20_000_000_000_000),
+        Cl.uint(0),
+      ],
+      liquidator
+    );
+    expect(liquidation.result).toBeOk(Cl.bool(true));
+    const events = liquidation.events.map((e: any) => e.data?.value?.value);
+    const liquidateEvent = events.find(
+      (e: any) => e?.["action"]?.value === "liquidate-collateral"
+    );
+    const socializedEvent = events.find(
+      (e: any) => e?.["action"]?.value === "socialized-bad-debt"
+    );
+    expect(socializedEvent, "the position must reach socialization").toBeDefined();
+    const repaidAmount = liquidateEvent["repaid-amount"].value as bigint;
+    const socializedAmount = socializedEvent["amount"].value as bigint;
+
+    const after = buckets();
+    expect(
+      after.lp + after.staked + after.protocol,
+      "both splits must reduce the buckets by exactly what was repaid and socialized"
+    ).toBe(before.lp + before.staked + before.protocol - repaidAmount - socializedAmount);
+    expect(
+      after.lp >= totalBorrowedAmount(),
+      "LP open interest must still cover total borrowed after both splits"
+    ).toBe(true);
   });
 
   it("leaves no residue when the last position closes", async () => {

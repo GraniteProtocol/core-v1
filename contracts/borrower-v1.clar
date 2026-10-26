@@ -100,7 +100,7 @@
         (lp-part-raw (contract-call? .math-v1 safe-div (* interest-part lp-open-interest-without-principal) open-interest-without-principal))
         (protocol-part-raw (contract-call? .math-v1 safe-div (* interest-part (get protocol-open-interest interest-params)) open-interest-without-principal))
         (staked-part-raw (contract-call? .math-v1 safe-div (* interest-part (get staked-open-interest interest-params)) open-interest-without-principal))
-        (split (conserve-interest-split interest-part lp-part-raw staked-part-raw protocol-part-raw principal-part (get lp-open-interest interest-params) (get staked-open-interest interest-params) (get protocol-open-interest interest-params)))
+        (split (conserve-interest-split interest-part lp-part-raw staked-part-raw protocol-part-raw lp-open-interest-without-principal (get staked-open-interest interest-params) (get protocol-open-interest interest-params)))
         (lp-part (get lp-part split))
         (staked-part (get staked-part split))
         (protocol-part (get protocol-part split))
@@ -235,17 +235,16 @@
 
 ;; PRIVATE FUNCTIONS
 
-;; Give the split's flooring remainder to the first bucket that can absorb it;
-;; state-v1 subtracts these parts without a capacity check of its own.
+;; Give the split's flooring remainder to the first bucket with interest room for
+;; it, so a remainder cannot consume LP principal backing.
 (define-private (conserve-interest-split
     (interest-part uint)
     (lp-part uint)
     (staked-part uint)
     (protocol-part uint)
-    (principal-part uint)
-    (lp-bucket uint)
-    (staked-bucket uint)
-    (protocol-bucket uint)
+    (lp-interest uint)
+    (staked-interest uint)
+    (protocol-interest uint)
   )
   (let (
       (assigned (+ lp-part staked-part protocol-part))
@@ -253,11 +252,11 @@
     )
     (if (is-eq remainder u0)
       {lp-part: lp-part, staked-part: staked-part, protocol-part: protocol-part}
-      (if (>= lp-bucket (+ principal-part lp-part remainder))
+      (if (>= lp-interest (+ lp-part remainder))
         {lp-part: (+ lp-part remainder), staked-part: staked-part, protocol-part: protocol-part}
-        (if (>= staked-bucket (+ staked-part remainder))
+        (if (>= staked-interest (+ staked-part remainder))
           {lp-part: lp-part, staked-part: (+ staked-part remainder), protocol-part: protocol-part}
-          (if (>= protocol-bucket (+ protocol-part remainder))
+          (if (>= protocol-interest (+ protocol-part remainder))
             {lp-part: lp-part, staked-part: staked-part, protocol-part: (+ protocol-part remainder)}
             {lp-part: lp-part, staked-part: staked-part, protocol-part: protocol-part}
           )
