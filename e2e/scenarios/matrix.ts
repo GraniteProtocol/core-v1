@@ -20,10 +20,9 @@ import {
 import {
   BTC,
   ETH,
-  LIVE,
   MARKET,
+  PROFILE,
   STX,
-  TEST_ONLY,
   collateralSettingsOf,
   expectedCollateralConfigs,
   lpParams,
@@ -130,7 +129,7 @@ async function collateralCapMax(chain: Chain, token: string, factor: bigint): Pr
 scenario("lp-withdraw-cap", async (ctx) => {
   const { chain, actors } = ctx;
   const factor = HUNDRED_PCT / 10n;
-  await ctx.step("use test cap windows", () => setCapWindows(chain, actors.deployer, TEST_ONLY.capWindows));
+  await ctx.step("use test cap windows", () => setCapWindows(chain, actors.deployer, PROFILE.test.capWindows));
   await ctx.step("set lp cap 10%", () =>
     callAsDeployer(chain, actors.deployer, "withdrawal-caps-v1", "set-lp-cap", [Cl.uint(factor)]),
   );
@@ -185,9 +184,9 @@ scenario("lp-withdraw-cap", async (ctx) => {
   );
   await ctx.step("withdraw after refill succeeds", () => withdraw(chain, lp, refilled / 2n));
   await ctx.step("restore the live lp cap", () =>
-    callAsDeployer(chain, actors.deployer, "withdrawal-caps-v1", "set-lp-cap", [Cl.uint(LIVE.caps.lp)]),
+    callAsDeployer(chain, actors.deployer, "withdrawal-caps-v1", "set-lp-cap", [Cl.uint(PROFILE.caps.lp)]),
   );
-  await ctx.step("restore live cap windows", () => setCapWindows(chain, actors.deployer, LIVE.caps.windows));
+  await ctx.step("restore live cap windows", () => setCapWindows(chain, actors.deployer, PROFILE.caps.windows));
 });
 
 scenario("ltv-boundary", async (ctx) => {
@@ -410,15 +409,15 @@ scenario("staking", async (ctx) => {
     "test reward params",
     async () => {
       const result = await chain.call(actors.deployer, "governance-test", "initiate-proposal-to-update-reward-params", [
-        Cl.int(TEST_ONLY.rewardParams.slope1),
-        Cl.int(TEST_ONLY.rewardParams.slope2),
-        Cl.uint(TEST_ONLY.rewardParams.kink),
-        Cl.uint(TEST_ONLY.rewardParams.base),
+        Cl.int(PROFILE.test.rewardParams.slope1),
+        Cl.int(PROFILE.test.rewardParams.slope2),
+        Cl.uint(PROFILE.test.rewardParams.kink),
+        Cl.uint(PROFILE.test.rewardParams.base),
         Cl.uint(1000),
       ]);
       return proposalIdFrom(result.result);
     },
-    () => rewardParamsMatch(TEST_ONLY.rewardParams.kink),
+    () => rewardParamsMatch(PROFILE.test.rewardParams.kink),
   );
   await ctx.step("deposit for staking", () => deposit(chain, actors.staker, 100_000n * USDC));
   const lpTokens = await lpBalance(chain, actors.staker.address);
@@ -465,15 +464,15 @@ scenario("staking", async (ctx) => {
     "restore live reward params",
     async () => {
       const result = await chain.call(actors.deployer, "governance-test", "initiate-proposal-to-update-reward-params", [
-        Cl.int(LIVE.reward.slope1),
-        Cl.int(LIVE.reward.slope2),
-        Cl.uint(LIVE.reward.kink),
-        Cl.uint(LIVE.reward.base),
+        Cl.int(PROFILE.reward.slope1),
+        Cl.int(PROFILE.reward.slope2),
+        Cl.uint(PROFILE.reward.kink),
+        Cl.uint(PROFILE.reward.base),
         Cl.uint(1000),
       ]);
       return proposalIdFrom(result.result);
     },
-    () => rewardParamsMatch(LIVE.reward.kink),
+    () => rewardParamsMatch(PROFILE.reward.kink),
   );
   await proposeAndExecute(ctx,
     "governance handover back to the deployer",
@@ -521,7 +520,7 @@ scenario("flash-loan", async (ctx) => {
 scenario("caps", async (ctx) => {
   const { chain, actors } = ctx;
   const borrower = await fund(ctx, "caps-borrower", { btc: 12n * UNIT });
-  await ctx.step("use test cap windows", () => setCapWindows(chain, actors.deployer, TEST_ONLY.capWindows));
+  await ctx.step("use test cap windows", () => setCapWindows(chain, actors.deployer, PROFILE.test.capWindows));
   await ctx.step("set the BTC collateral cap to 10%", () =>
     callAsDeployer(chain, actors.deployer, "withdrawal-caps-v1", "set-collateral-cap", [
       Cl.contractPrincipal(chain.deployer, BTC),
@@ -601,7 +600,7 @@ scenario("caps", async (ctx) => {
   await ctx.step("restore the live collateral cap", () =>
     callAsDeployer(chain, actors.deployer, "withdrawal-caps-v1", "set-collateral-cap", [
       Cl.contractPrincipal(chain.deployer, BTC),
-      Cl.uint(LIVE.caps.collateral[BTC]),
+      Cl.uint(PROFILE.caps.collateral[BTC]),
     ]),
   );
 
@@ -635,9 +634,9 @@ scenario("caps", async (ctx) => {
   // Repaying credits the bucket back, so later scenarios are not throttled by this probe.
   await ctx.step("repay the debt-cap probe", () => repay(chain, debtBorrower, 10n ** 30n), "debt");
   await ctx.step("restore the live debt cap", () =>
-    callAsDeployer(chain, actors.deployer, "withdrawal-caps-v1", "set-debt-cap", [Cl.uint(LIVE.caps.debt)]),
+    callAsDeployer(chain, actors.deployer, "withdrawal-caps-v1", "set-debt-cap", [Cl.uint(PROFILE.caps.debt)]),
   );
-  await ctx.step("restore live cap windows", () => setCapWindows(chain, actors.deployer, LIVE.caps.windows));
+  await ctx.step("restore live cap windows", () => setCapWindows(chain, actors.deployer, PROFILE.caps.windows));
 });
 
 scenario("bad-debt-socialization", async (ctx) => {
@@ -860,7 +859,7 @@ scenario("governance", async (ctx) => {
     async () => {
       const result = await chain.call(actors.deployer, "governance-test", "initiate-proposal-to-update-withdrawal-caps-param", [
         Cl.uint(32),
-        Cl.tuple({ collateral: Cl.some(Cl.contractPrincipal(chain.deployer, BTC)), factor: Cl.uint(LIVE.caps.collateral[BTC]) }),
+        Cl.tuple({ collateral: Cl.some(Cl.contractPrincipal(chain.deployer, BTC)), factor: Cl.uint(PROFILE.caps.collateral[BTC]) }),
         Cl.uint(1000),
       ]);
       return proposalIdFrom(result.result);
@@ -870,24 +869,24 @@ scenario("governance", async (ctx) => {
         await chain.read("withdrawal-caps-v1", "get-collateral-cap-factor", [
           Cl.contractPrincipal(chain.deployer, BTC),
         ]),
-      ) === LIVE.caps.collateral[BTC],
+      ) === PROFILE.caps.collateral[BTC],
   );
 
   await proposeAndExecute(ctx,
     "restore the live interest params",
     async () => {
       const result = await chain.call(actors.deployer, "governance-test", "initiate-proposal-to-update-interest-params", [
-        Cl.uint(LIVE.ir.slope1),
-        Cl.uint(LIVE.ir.slope2),
-        Cl.uint(LIVE.ir.kink),
-        Cl.uint(LIVE.ir.base),
+        Cl.uint(PROFILE.ir.slope1),
+        Cl.uint(PROFILE.ir.slope2),
+        Cl.uint(PROFILE.ir.kink),
+        Cl.uint(PROFILE.ir.base),
         Cl.uint(1000),
       ]);
       return proposalIdFrom(result.result);
     },
     async () => {
       const params = asTuple(await chain.read("linear-kinked-ir-v1", "get-ir-params"));
-      return asUint(params["base-ir"]) === LIVE.ir.base && asUint(params["utilization-kink"]) === LIVE.ir.kink;
+      return asUint(params["base-ir"]) === PROFILE.ir.base && asUint(params["utilization-kink"]) === PROFILE.ir.kink;
     },
   );
 
@@ -911,7 +910,7 @@ scenario("governance", async (ctx) => {
   await ctx.assert("STX still configured", (await collateralSettingsOf(chain, STX)).maxLtv === expectedCollateralConfigs()[STX].maxLtv, "STX missing");
   await ctx.assert(
     "caps read",
-    (await asUint(await chain.read("withdrawal-caps-v1", "get-refill-time-window"))) === LIVE.caps.windows.refill,
+    (await asUint(await chain.read("withdrawal-caps-v1", "get-refill-time-window"))) === PROFILE.caps.windows.refill,
     "refill window changed",
   );
 });

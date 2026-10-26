@@ -8,15 +8,14 @@ import {
   BTC,
   COLLATERALS,
   ETH,
-  LIVE,
   MARKET,
+  PROFILE,
   STX,
-  TEST_ONLY,
   type CapWindows,
   type CollateralConfig,
 } from "./profile.ts";
 
-export { BTC, COLLATERALS, ETH, LIVE, MARKET, STX, TEST_ONLY };
+export { BTC, COLLATERALS, ETH, MARKET, PROFILE, STX };
 export type { CapWindows, CollateralConfig };
 
 export type Actors = {
@@ -44,13 +43,13 @@ export type Snapshot = {
 };
 
 export const expectedCollateralConfigs = (): Record<string, CollateralConfig> => ({
-  ...LIVE.collateral,
-  ...TEST_ONLY.collateral,
+  ...PROFILE.collateral,
+  ...PROFILE.test.collateral,
 });
 
 // The caps scenarios lower the windows to sample partial refill/decay; every other step expects the
 // live windows. The expectation moves with the override so the invariant never reads a stale value.
-let expectedWindows: CapWindows = { ...LIVE.caps.windows };
+let expectedWindows: CapWindows = { ...PROFILE.caps.windows };
 
 export const expectedCaps = (): {
   refill: bigint;
@@ -61,9 +60,9 @@ export const expectedCaps = (): {
 } => ({
   refill: expectedWindows.refill,
   decay: expectedWindows.decay,
-  lp: LIVE.caps.lp,
-  debt: LIVE.caps.debt,
-  collateral: { ...LIVE.caps.collateral, ...TEST_ONLY.collateralCaps },
+  lp: PROFILE.caps.lp,
+  debt: PROFILE.caps.debt,
+  collateral: { ...PROFILE.caps.collateral, ...PROFILE.test.collateralCaps },
 });
 
 /** Sets the withdrawal-cap windows on chain and moves the invariant's expectation with them. */
@@ -155,24 +154,24 @@ export async function setup(chain: Chain, actors: Actors): Promise<Snapshot> {
     chain.call(from, contract, fn, args);
 
   // 1. Live market economics first: every later deposit accrues interest through these modules.
-  await call("state-v1", "set-protocol-reserve-percentage", [Cl.uint(LIVE.protocolReservePercentage)]);
+  await call("state-v1", "set-protocol-reserve-percentage", [Cl.uint(PROFILE.protocolReservePercentage)]);
   await call("linear-kinked-ir-v1", "update-ir-params", [
-    Cl.uint(LIVE.ir.slope1),
-    Cl.uint(LIVE.ir.slope2),
-    Cl.uint(LIVE.ir.kink),
-    Cl.uint(LIVE.ir.base),
+    Cl.uint(PROFILE.ir.slope1),
+    Cl.uint(PROFILE.ir.slope2),
+    Cl.uint(PROFILE.ir.kink),
+    Cl.uint(PROFILE.ir.base),
   ]);
   await call("staking-reward-v1", "update-reward-params", [
-    Cl.int(LIVE.reward.slope1),
-    Cl.int(LIVE.reward.slope2),
-    Cl.uint(LIVE.reward.kink),
-    Cl.uint(LIVE.reward.base),
+    Cl.int(PROFILE.reward.slope1),
+    Cl.int(PROFILE.reward.slope2),
+    Cl.uint(PROFILE.reward.kink),
+    Cl.uint(PROFILE.reward.base),
   ]);
   // A zero minimum stake skips the deployer dust stake, which would need LP tokens it does not hold.
   await call("staking-v1", "initialize", [Cl.some(Cl.uint(0))]);
   // Live is 100 blocks; a short period keeps the unstake scenario inside a run while leaving room
   // for the early-finalize assertion (transactions between initiate and finalize cost a block or two).
-  await call("staking-v1", "update-withdrawal-finalization-period", [Cl.uint(TEST_ONLY.withdrawalFinalizationPeriod)]);
+  await call("staking-v1", "update-withdrawal-finalization-period", [Cl.uint(PROFILE.test.withdrawalFinalizationPeriod)]);
   // The test governance is initialized here because the staking scenario uses it to apply and
   // restore test reward params; the governance scenario drives the proposal lifecycle against it.
   // Governance-test resolves proposal membership through meta-governance, so that must be
@@ -196,7 +195,7 @@ export async function setup(chain: Chain, actors: Actors): Promise<Snapshot> {
   await call("flash-loan-v1", "set-allowed-contract", [cp("mock-liquidator-with-flash-loan")]);
 
   // 3. Seed and initialize the LP.
-  await call("state-v1", "update-asset-cap", [Cl.uint(TEST_ONLY.assetCap)]);
+  await call("state-v1", "update-asset-cap", [Cl.uint(PROFILE.test.assetCap)]);
   await mint(chain, actors.deployer, MARKET, MINIMUM_INITIAL_DEPOSIT, deployer);
   await call("liquidity-provider-v1", "initialize", []);
 
@@ -286,22 +285,22 @@ export function priceOf(token: string): bigint {
 export function profileSummary(): Record<string, string | string[]> {
   const collateral = Object.entries(expectedCollateralConfigs())
     .map(([token, config]) => {
-      const source = token in LIVE.collateral ? "live" : "test";
+      const source = token in PROFILE.collateral ? "live" : "test";
       return `${token}=${config.maxLtv}/${config.liquidationLtv}/${config.liquidationPremium}/${config.decimals} (${source})`;
     })
     .join(" ");
   return {
     market: "USDCx (live parameters)",
-    protocolReservePercentage: LIVE.protocolReservePercentage.toString(),
-    irParams: `slope1=${LIVE.ir.slope1} slope2=${LIVE.ir.slope2} kink=${LIVE.ir.kink} base=${LIVE.ir.base}`,
-    rewardParams: `slope1=${LIVE.reward.slope1} slope2=${LIVE.reward.slope2} kink=${LIVE.reward.kink} base=${LIVE.reward.base}`,
+    protocolReservePercentage: PROFILE.protocolReservePercentage.toString(),
+    irParams: `slope1=${PROFILE.ir.slope1} slope2=${PROFILE.ir.slope2} kink=${PROFILE.ir.kink} base=${PROFILE.ir.base}`,
+    rewardParams: `slope1=${PROFILE.reward.slope1} slope2=${PROFILE.reward.slope2} kink=${PROFILE.reward.kink} base=${PROFILE.reward.base}`,
     collateral: `max-ltv/liquidation-ltv/premium/decimals: ${collateral}`,
-    caps: `lp=${LIVE.caps.lp} debt=${LIVE.caps.debt} collateral=${JSON.stringify(expectedCaps().collateral)} windows=${LIVE.caps.windows.refill}/${LIVE.caps.windows.decay}`,
+    caps: `lp=${PROFILE.caps.lp} debt=${PROFILE.caps.debt} collateral=${JSON.stringify(expectedCaps().collateral)} windows=${PROFILE.caps.windows.refill}/${PROFILE.caps.windows.decay}`,
     testOverrides: [
-      `asset cap ${TEST_ONLY.assetCap} (live ${LIVE.assetCap})`,
-      `withdrawal finalization ${TEST_ONLY.withdrawalFinalizationPeriod} blocks, from setup (live ${LIVE.withdrawalFinalizationPeriod})`,
-      `cap windows ${TEST_ONLY.capWindows.refill}/${TEST_ONLY.capWindows.decay}s while the caps scenarios sample them (live ${LIVE.caps.windows.refill}/${LIVE.caps.windows.decay}s)`,
-      `staking reward params slope1=${TEST_ONLY.rewardParams.slope1} slope2=${TEST_ONLY.rewardParams.slope2} kink=${TEST_ONLY.rewardParams.kink} base=${TEST_ONLY.rewardParams.base} inside the staking scenario only, restored after (live rewards are zero)`,
+      `asset cap ${PROFILE.test.assetCap} (live ${PROFILE.assetCap})`,
+      `withdrawal finalization ${PROFILE.test.withdrawalFinalizationPeriod} blocks, from setup (live ${PROFILE.withdrawalFinalizationPeriod})`,
+      `cap windows ${PROFILE.test.capWindows.refill}/${PROFILE.test.capWindows.decay}s while the caps scenarios sample them (live ${PROFILE.caps.windows.refill}/${PROFILE.caps.windows.decay}s)`,
+      `staking reward params slope1=${PROFILE.test.rewardParams.slope1} slope2=${PROFILE.test.rewardParams.slope2} kink=${PROFILE.test.rewardParams.kink} base=${PROFILE.test.rewardParams.base} inside the staking scenario only, restored after (live rewards are zero)`,
       `mock-eth and stx-sip010 are devnet-only collaterals with no live USDCx counterpart; their settings and 50% collateral caps are test fixtures`,
     ],
   };
