@@ -1,0 +1,18 @@
+---
+id: 0
+name: Utility staging v1
+network: mainnet
+stacks-node: "https://api.hiro.so"
+bitcoin-node: "http://blockstack:blockstacksystem@bitcoin.blockstack.com:8332"
+plan:
+  batches:
+    - id: 0
+      transactions:
+        - contract-publish:
+            contract-name: utility
+            expected-sender: SP1GNQ01EXDJZGXGY8PYNXHM86SA943NBXJQRBGAN
+            cost: 100000
+            path: deployments/utility/staging.clar
+            anchor-block-only: true
+            clarity-version: 3
+      epoch: "4.0"
