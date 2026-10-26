@@ -1205,9 +1205,9 @@ describe("borrower tests", () => {
 // underflowing and reverting the entire repay/liquidate transaction.
 //
 // Post-fix, staked-part is computed proportionally via safe-div, which returns
-// 0 cleanly when staked-open-interest = 0. The upgradable callers then assign
-// the flooring remainder to a bucket with interest room for it, so none of the
-// interest is left unclaimed.
+// 0 cleanly when staked-open-interest = 0. The upgradable callers assign the
+// flooring remainder to a bucket when one has interest room for it; otherwise
+// it stays unassigned, as before.
 describe("M-01 interest-dust no-stakers regression", () => {
   beforeEach(async () => {
     init_pyth(deployer);

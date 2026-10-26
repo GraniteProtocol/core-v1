@@ -16,6 +16,7 @@ import {
 } from "./utils";
 import {
   build_price_update,
+  converted_price,
   init_pyth,
   set_initial_price,
   set_price,
@@ -110,6 +111,57 @@ const splitAt = (state: ReturnType<typeof readSplitState>, repayAmount: bigint) 
 };
 
 const expectedSplit = (repayAmount: bigint) => splitAt(readSplitState(), repayAmount);
+
+const ONE = 100_000_000n;
+const ceilDiv = (a: bigint, b: bigint) => (a + b - 1n) / b;
+
+// Mirrors the helper's assignment order so a test can predict the final parts.
+const applyRemainder = (split: ReturnType<typeof splitAt>) => {
+  const { lpPart, stakedPart, protocolPart, remainder } = split;
+  if (remainder === 0n) return { lpPart, stakedPart, protocolPart };
+  if (split.lpInterest >= lpPart + remainder) {
+    return { lpPart: lpPart + remainder, stakedPart, protocolPart };
+  }
+  if (split.stakedInterest >= stakedPart + remainder) {
+    return { lpPart, stakedPart: stakedPart + remainder, protocolPart };
+  }
+  if (split.protocolInterest >= protocolPart + remainder) {
+    return { lpPart, stakedPart, protocolPart: protocolPart + remainder };
+  }
+  return { lpPart, stakedPart, protocolPart };
+};
+
+const COLLATERAL_SATS = 20_000_000_000n;
+const LIQUIDATION_LTV = 99_000_000n;
+const LIQUIDATION_PREMIUM = 1n;
+
+// Mirrors liquidator-v1's repayment and collateral arithmetic, so a test can
+// choose the price that produces a chosen repay.
+const liquidationAt = (price: bigint, state: ReturnType<typeof readSplitState>) => {
+  const cv = (COLLATERAL_SATS * price) / ONE;
+  const liquidCollateral = (cv * LIQUIDATION_LTV) / ONE;
+  const denominator = ONE - ((ONE + LIQUIDATION_PREMIUM) * LIQUIDATION_LTV) / ONE;
+  if (state.debt <= liquidCollateral) return null;
+  const totalRepay = ((state.debt - liquidCollateral) * ONE) / denominator;
+  const repayWithoutDiscount = ceilDiv(cv * ONE, ONE + LIQUIDATION_PREMIUM);
+  const repayAllowed = [totalRepay, repayWithoutDiscount, state.debt].reduce((a, b) =>
+    a < b ? a : b
+  );
+  const repay = [
+    ceilDiv(repayAllowed * ONE, converted_price("mock-usdc")),
+    state.debt,
+  ].reduce((a, b) => (a < b ? a : b));
+  const badDebt = cv < state.debt + (cv * LIQUIDATION_PREMIUM) / ONE;
+  const withDiscount = (repay * (ONE + LIQUIDATION_PREMIUM)) / ONE;
+  const collateralToGive = [(withDiscount * ONE) / price, COLLATERAL_SATS].reduce((a, b) =>
+    a < b ? a : b
+  );
+  const remaining = COLLATERAL_SATS - collateralToGive;
+  const liquidAfter = (((remaining * price) / ONE) * LIQUIDATION_LTV) / ONE;
+  const debtAfter = state.debt - repay;
+  const health = debtAfter > 0n ? (liquidAfter * ONE) / debtAfter : 10n ** 30n;
+  return { cv, repay, badDebt, health };
+};
 
 // Mining empty blocks does not run accrual; an empty batch liquidation accrues
 // without touching a position.
@@ -338,12 +390,128 @@ describe("interest split residue", () => {
     repay(Number(repayAmount), borrower);
 
     const after = buckets();
-    expect(after.lp).toBe(before.lp - (split.principalPart + split.lpPart));
-    expect(after.staked).toBe(before.staked - (split.stakedPart + split.remainder));
-    expect(after.protocol).toBe(before.protocol - split.protocolPart);
+    expect(after.lp, "the LP bucket must fall by principal plus its interest part").toBe(
+      before.lp - (split.principalPart + split.lpPart)
+    );
+    expect(
+      after.staked,
+      "the staked bucket must fall by its interest part plus the remainder"
+    ).toBe(before.staked - (split.stakedPart + split.remainder));
+    expect(after.protocol, "the protocol bucket must fall by its interest part").toBe(
+      before.protocol - split.protocolPart
+    );
     expect(after.lp + after.staked + after.protocol).toBe(
       before.lp + before.staked + before.protocol - repayAmount
     );
+  });
+
+  it("falls through to the staked bucket on a near-total liquidation", async () => {
+    openStakedMarket();
+    const reserve = simnet.callPublicFn(
+      "state-v1",
+      "set-protocol-reserve-percentage",
+      [Cl.uint(30_000_000)],
+      deployer
+    );
+    expect(reserve.result).toBeOk(Cl.bool(true));
+    update_supported_collateral(
+      "mock-btc",
+      98_000_000,
+      Number(LIQUIDATION_LTV),
+      Number(LIQUIDATION_PREMIUM),
+      8,
+      deployer
+    );
+    handOverGovernance();
+    const rewards = simnet.callPublicFn(
+      "staking-reward-v1",
+      "update-reward-params",
+      [Cl.int(0), Cl.int(-1), Cl.uint(99_000_000), Cl.uint(99_998_571)],
+      governor
+    );
+    expect(rewards.result).toBeOk(Cl.bool(true));
+    simnet.mineEmptyBlocks(5_000);
+    accrueInterest();
+    freezeInterestAccrual();
+
+    const snapshot = readSplitState();
+    // These settings leave a liquidation with a tiny residual debt and no
+    // collateral; pick the price whose repay puts the borrower's interest
+    // portion one unit short of every bucket's floor.
+    const boundaryCv = ceilDiv(snapshot.debt * ONE, ONE - LIQUIDATION_PREMIUM);
+    const firstPrice = ceilDiv(boundaryCv * ONE, COLLATERAL_SATS);
+    let chosen: { price: bigint; repay: bigint; split: ReturnType<typeof splitAt> } | null = null;
+    for (let step = 0n; step < 5_000n && chosen === null; step++) {
+      const price = firstPrice + step;
+      const outcome = liquidationAt(price, snapshot);
+      if (outcome === null || outcome.badDebt) continue;
+      if (outcome.health > 102_000_000n) continue;
+      const split = splitAt(snapshot, outcome.repay);
+      if (split.remainder !== 2n) continue;
+      if (!(split.lpInterest < split.lpPart + split.remainder)) continue;
+      if (!(split.stakedInterest >= split.stakedPart + split.remainder)) continue;
+      chosen = { price, repay: outcome.repay, split };
+    }
+    expect(
+      chosen,
+      "the state must admit a near-total liquidation where the staked bucket absorbs the remainder"
+    ).not.toBeNull();
+
+    await set_price_without_scaling("mock-btc", chosen!.price, deployer);
+    mint_token("mock-usdc", 20_000_000_000, depositor);
+    simnet.mineEmptyBlocks(6);
+
+    const before = snapshot.buckets;
+    const liquidation = simnet.callPublicFn(
+      "liquidator-v1",
+      "liquidate-collateral",
+      [
+        Cl.buffer(build_price_update()),
+        btc,
+        Cl.principal(borrower),
+        Cl.uint(Number(snapshot.debt)),
+        Cl.uint(0),
+      ],
+      depositor
+    );
+    expect(liquidation.result).toBeOk(Cl.bool(true));
+    const events = liquidation.events.map((e: any) => e.data?.value?.value);
+    expect(
+      events.find((e: any) => e?.["action"]?.value === "socialized-bad-debt"),
+      "bad debt must stay clear, or the deltas include a second split"
+    ).toBeUndefined();
+    const liquidationEvent = events.find(
+      (e: any) => e?.["action"]?.value === "liquidate-collateral"
+    );
+    const repaidAmount = liquidationEvent["repaid-amount"].value as bigint;
+    expect(repaidAmount, "the contract must repay what the search predicted").toBe(
+      chosen!.repay
+    );
+
+    const parts = applyRemainder(chosen!.split);
+    expect(
+      parts.stakedPart,
+      "the staked bucket must absorb the two-unit remainder"
+    ).toBe(chosen!.split.stakedPart + chosen!.split.remainder);
+
+    const after = buckets();
+    expect(after.lp, "the LP bucket must fall by principal plus its interest part").toBe(
+      before.lp - (chosen!.split.principalPart + parts.lpPart)
+    );
+    expect(
+      after.staked,
+      "the staked bucket must fall by its interest part plus the remainder"
+    ).toBe(before.staked - parts.stakedPart);
+    expect(after.protocol, "the protocol bucket must fall by its interest part").toBe(
+      before.protocol - parts.protocolPart
+    );
+    expect(after.lp + after.staked + after.protocol).toBe(
+      before.lp + before.staked + before.protocol - repaidAmount
+    );
+    expect(
+      after.lp >= totalBorrowedAmount(),
+      "LP open interest must still cover total borrowed after the split"
+    ).toBe(true);
   });
 
   it("keeps the split conserving on a partial liquidation", async () => {
@@ -424,7 +592,7 @@ describe("interest split residue", () => {
     await set_price_without_scaling("mock-btc", 50_000_000n, deployer);
     mint_token("mock-usdc", 20_000_000_000_000, liquidator);
 
-    const before = buckets();
+    const snapshot = readSplitState();
     const liquidation = simnet.callPublicFn(
       "liquidator-v1",
       "liquidate-collateral",
@@ -449,11 +617,57 @@ describe("interest split residue", () => {
     const repaidAmount = liquidateEvent["repaid-amount"].value as bigint;
     const socializedAmount = socializedEvent["amount"].value as bigint;
 
+    const liquidateSplit = splitAt(snapshot, repaidAmount);
+    const liquidateParts = applyRemainder(liquidateSplit);
+    const postLiquidateBuckets = {
+      lp: snapshot.buckets.lp - (liquidateSplit.principalPart + liquidateParts.lpPart),
+      staked: snapshot.buckets.staked - liquidateParts.stakedPart,
+      protocol: snapshot.buckets.protocol - liquidateParts.protocolPart,
+    };
+    const socializeSplit = splitAt(
+      {
+        buckets: postLiquidateBuckets,
+        debt: socializedAmount,
+        borrowedAmount: snapshot.borrowedAmount - liquidateSplit.principalPart,
+        totalBorrowed: snapshot.totalBorrowed - liquidateSplit.principalPart,
+      },
+      socializedAmount
+    );
+    const socializeParts = applyRemainder(socializeSplit);
+
+    expect(
+      socializedEvent["lp-part"].value,
+      "lp-part must carry principal plus the LP interest part"
+    ).toBe(socializeSplit.principalPart + socializeParts.lpPart);
+    expect(
+      socializedEvent["staked-part"].value,
+      "staked-part must be the staked bucket's share"
+    ).toBe(socializeParts.stakedPart);
+    expect(
+      socializedEvent["protocol-part"].value,
+      "protocol-part must be the protocol bucket's share"
+    ).toBe(socializeParts.protocolPart);
+
     const after = buckets();
+    expect(after.lp, "the LP bucket must fall by both splits' LP parts").toBe(
+      postLiquidateBuckets.lp - (socializeSplit.principalPart + socializeParts.lpPart)
+    );
+    expect(after.staked, "the staked bucket must fall by both splits' staked parts").toBe(
+      postLiquidateBuckets.staked - socializeParts.stakedPart
+    );
+    expect(after.protocol, "the protocol bucket must fall by both splits' protocol parts").toBe(
+      postLiquidateBuckets.protocol - socializeParts.protocolPart
+    );
     expect(
       after.lp + after.staked + after.protocol,
       "both splits must reduce the buckets by exactly what was repaid and socialized"
-    ).toBe(before.lp + before.staked + before.protocol - repaidAmount - socializedAmount);
+    ).toBe(
+      snapshot.buckets.lp +
+        snapshot.buckets.staked +
+        snapshot.buckets.protocol -
+        repaidAmount -
+        socializedAmount
+    );
     expect(
       after.lp >= totalBorrowedAmount(),
       "LP open interest must still cover total borrowed after both splits"
