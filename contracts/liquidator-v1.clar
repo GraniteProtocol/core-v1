@@ -300,6 +300,7 @@
       ;; Enforce minimum block gap between borrowing and liquidation
       (asserts! (>= stacks-block-height (+ (get borrowed-block position-for-block-check) MINIMUM-LIQUIDATION-BLOCK-GAP)) ERR-LIQUIDATION-NOT-ALLOWED)
       (try! (ensure-non-zero-repay-amount liquidator-repay-amount))
+      (try! (contract-call? .withdrawal-caps-v1 repay repay-amount))
       ;; update state
       (try! (contract-call? .state-v1 update-liquidate-collateral-state collateral {
         liquidator: contract-caller,
@@ -318,7 +319,6 @@
         updated-collaterals: updated-collaterals-list
       }))
       (try! (contract-call? .staking-v1 increase-lp-staked-balance effective-staked-lp-tokens))
-      (try! (contract-call? .withdrawal-caps-v1 repay repay-amount))
       ;; slippage check
       (asserts! (>= collateral-to-give min-collateral-expected) ERR-SLIPPAGE)
       (let (
