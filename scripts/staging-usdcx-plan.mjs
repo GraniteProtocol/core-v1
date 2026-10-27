@@ -63,7 +63,7 @@ if (!bip39.validateMnemonic(entry.mnemonic, wordlist)) {
 if (entry.derivation && entry.derivation !== DERIVATION) {
   throw new Error(`[${table}] uses derivation ${entry.derivation}; this script only handles ${DERIVATION}`);
 }
-// Stacks wallet derivation must go through wallet-sdk: a hand-rolled BIP32 path gives a different address.
+// Stacks addresses hash the compressed public key; deriving from the raw 32-byte key gives a different address.
 const rootNode = bip32.HDKey.fromMasterSeed(bip39.mnemonicToSeedSync(entry.mnemonic));
 const derived = walletSdk.deriveAccount({
   rootNode,
