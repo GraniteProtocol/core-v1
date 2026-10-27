@@ -1,7 +1,7 @@
 ;; SPDX-License-Identifier: BUSL-1.1
 
 ;; TRAITS
-(use-trait token-trait .trait-sip-010.sip-010-trait)
+(use-trait token-trait 'SP3FBR2AGK5H9QBDH3EEN6DF8EK8JY7RX8QJ5SVTE.sip-010-trait-ft-standard.sip-010-trait)
 
 ;; ERRORS
 (define-constant ERR-INTEREST-PARAMS (err u20000))
@@ -38,7 +38,7 @@
         (position-collaterals (get collaterals position))
         ;; Verify the untrusted update up front, then price the market asset and collaterals from it.
         (verified (try! (contract-call? .pyth-adapter-v1 verify-update update)))
-        (market-asset-price (unwrap! (element-at? (try! (contract-call? .pyth-adapter-v1 prices-for verified (list .mock-usdc))) u0) ERR-MISSING-MARKET-PRICE))
+        (market-asset-price (unwrap! (element-at? (try! (contract-call? .pyth-adapter-v1 prices-for verified (list 'SP120SBRBQJ00MCWS7TM5R8WJNTTKD5K0HFRC2CNE.usdcx))) u0) ERR-MISSING-MARKET-PRICE))
         (collateral-prices (try! (contract-call? .pyth-adapter-v1 prices-for verified position-collaterals)))
         (current-debt-shares (get debt-shares position))
         (debt-params (contract-call? .state-v1 get-debt-params))
@@ -200,7 +200,7 @@
         (remove-user-collateral-info (try! (remove-user-collateral user prev-amount amount collateral-token (get debt-shares position) (get collaterals position) (get borrowed-amount position) (get borrowed-block position))))
         (position-collaterals (get position-collaterals remove-user-collateral-info))
         ;; Price the market asset and the post-removal collaterals from the verified update.
-        (market-asset-price (unwrap! (element-at? (try! (contract-call? .pyth-adapter-v1 prices-for verified (list .mock-usdc))) u0) ERR-MISSING-MARKET-PRICE))
+        (market-asset-price (unwrap! (element-at? (try! (contract-call? .pyth-adapter-v1 prices-for verified (list 'SP120SBRBQJ00MCWS7TM5R8WJNTTKD5K0HFRC2CNE.usdcx))) u0) ERR-MISSING-MARKET-PRICE))
         (collateral-prices (try! (contract-call? .pyth-adapter-v1 prices-for verified position-collaterals)))
         (user-list (unwrap-panic (slice? (list user user user user user user user user user user) u0 (len collateral-prices))))
         (total-max-ltv (fold + (map iterate-collateral-value position-collaterals collateral-prices user-list) u0))

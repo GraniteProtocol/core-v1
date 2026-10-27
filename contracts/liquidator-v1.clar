@@ -1,7 +1,7 @@
 ;; SPDX-License-Identifier: BUSL-1.1
 
 ;; TRAITS
-(use-trait token-trait .trait-sip-010.sip-010-trait)
+(use-trait token-trait 'SP3FBR2AGK5H9QBDH3EEN6DF8EK8JY7RX8QJ5SVTE.sip-010-trait-ft-standard.sip-010-trait)
 
 ;; CONSTANTS
 (define-constant SUCCESS (ok true))
@@ -248,7 +248,7 @@
         (user-position-data (contract-call? .state-v1 get-borrow-repay-params user))
         (position-for-block-check (unwrap! (get user-position user-position-data) ERR-NO-POSITION))
         ;; Price the market asset and this position's collaterals from the verified update.
-        (market-asset-price (unwrap! (element-at? (try! (contract-call? .pyth-adapter-v1 prices-for verified (list .mock-usdc))) u0) ERR-MISSING-MARKET-PRICE))
+        (market-asset-price (unwrap! (element-at? (try! (contract-call? .pyth-adapter-v1 prices-for verified (list 'SP120SBRBQJ00MCWS7TM5R8WJNTTKD5K0HFRC2CNE.usdcx))) u0) ERR-MISSING-MARKET-PRICE))
         (collateral-prices (try! (contract-call? .pyth-adapter-v1 prices-for verified (get collaterals position-for-block-check))))
         (liquidation-res (try! (get-liquidation-info user collateral liquidator-repay-amount market-asset-price collateral-prices)))
         (liquidation-info (get liquidation-info liquidation-res))

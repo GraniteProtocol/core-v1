@@ -26,7 +26,7 @@
 (define-constant contract-deployer contract-caller)
 
 ;; lp-token
-(define-constant token-prefix "gusdc")
+(define-constant token-prefix "gusdcx")
 
 ;; staking storages
 (define-data-var withdrawal-finalization-period uint u100)

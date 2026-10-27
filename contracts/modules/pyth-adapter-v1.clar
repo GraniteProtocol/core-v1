@@ -125,7 +125,7 @@
 ;; feed set plus the publish timestamp in seconds. A batch verifies once and prices many tokens
 ;; from the result without repeating the signature check.
 (define-public (verify-update (update (buff 8192)))
-  (let ((decoded (try! (contract-call? .pyth-lazer-oracle verify-price-feeds update .pyth-lazer-decoder-v1 none))))
+  (let ((decoded (try! (contract-call? 'SPMV5HDZ4EMB8XY7HAYT3XW0DF7DZ4E8XEG2J1T8.pyth-lazer-oracle verify-price-feeds update 'SPMV5HDZ4EMB8XY7HAYT3XW0DF7DZ4E8XEG2J1T8.pyth-lazer-decoder-v1 none))))
     (ok {
       timestamp: (/ (get timestamp decoded) MICROS_PER_SECOND),
       feeds: (map slim-feed (get price-feeds decoded)),

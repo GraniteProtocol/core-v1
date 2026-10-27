@@ -2,7 +2,7 @@
 ;; SPDX-License-Identifier: BUSL-1.1
 ;; VERSION: 1.0
 
-(use-trait token-trait .trait-sip-010.sip-010-trait)
+(use-trait token-trait 'SP3FBR2AGK5H9QBDH3EEN6DF8EK8JY7RX8QJ5SVTE.sip-010-trait-ft-standard.sip-010-trait)
 
 ;; CONSTANTS
 (define-constant LP-CONTRACT (as-contract .liquidity-provider-v1))
@@ -97,7 +97,7 @@
     (
       (time-now (try! (get-time-now)))
       (last-ts (var-get last-lp-bucket-update))
-      (total-liquidity (unwrap! (contract-call? .mock-usdc get-balance .state-v1) ERR-FAILED-TO-GET-BALANCE))
+      (total-liquidity (unwrap! (contract-call? 'SP120SBRBQJ00MCWS7TM5R8WJNTTKD5K0HFRC2CNE.usdcx get-balance .state-v1) ERR-FAILED-TO-GET-BALANCE))
       (max-lp-bucket (/ (* total-liquidity (var-get lp-cap-factor)) SCALING-FACTOR))
       (current-bucket (var-get lp-bucket))
       (new-bucket-value (if (>= current-bucket max-lp-bucket) 
