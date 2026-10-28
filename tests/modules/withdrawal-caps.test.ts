@@ -46,6 +46,118 @@ function execute_proposal(response: any) {
   expect(res.result).toBeOk(Cl.bool(true));
 }
 
+function lpBucketMax() {
+  const factor = simnet.callReadOnlyFn(
+    "withdrawal-caps-v1",
+    "get-lp-cap-factor",
+    [],
+    deployer
+  ).result.value as bigint;
+  const balance = simnet.callReadOnlyFn(
+    "mock-usdc",
+    "get-balance",
+    [Cl.contractPrincipal(deployer, "state-v1")],
+    deployer
+  ).result.value.value as bigint;
+  return (balance * factor) / 100_000_000n;
+}
+
+function stateTokenBalance(token: string) {
+  return simnet.callReadOnlyFn(
+    token,
+    "get-balance",
+    [Cl.contractPrincipal(deployer, "state-v1")],
+    deployer
+  ).result.value.value as bigint;
+}
+
+function lpExcessAboveMax() {
+  const bucket = simnet.callReadOnlyFn("withdrawal-caps-v1", "get-lp-bucket", [], deployer).result.value as bigint;
+  const max = lpBucketMax();
+  return bucket > max ? bucket - max : 0n;
+}
+
+// One block of decay is under a hundredth of the excess at this window length.
+function decayDriftBound() {
+  return (lpExcessAboveMax() / 100n) + 2n;
+}
+
+// A very long decay window keeps the per-block drift negligible, while 4,000 blocks
+// still leave the excess well inside the window, so the gross-up genuinely matters.
+function primeLpExcessMidWindow() {
+  setDecayWindow(10_000_000);
+  setLpCap(0.8);
+
+  const base = 1_000_000_000;
+  mint_token("mock-usdc", base, depositor);
+  deposit(base, depositor);
+
+  simnet.mineEmptyBlocks(4_000);
+}
+
+function debtBucketMax() {
+  const factor = simnet.callReadOnlyFn("withdrawal-caps-v1", "get-debt-cap-factor", [], deployer).result.value as bigint;
+  const liquidity = simnet.callReadOnlyFn("state-v1", "get-borrowable-balance", [], deployer).result.value as bigint;
+  return (liquidity * factor) / 100_000_000n;
+}
+
+function collateralBucketMax(token: string) {
+  const cv = Cl.contractPrincipal(deployer, token);
+  const factor = simnet.callReadOnlyFn("withdrawal-caps-v1", "get-collateral-cap-factor", [cv], deployer).result.value as bigint;
+  return (stateTokenBalance(token) * factor) / 100_000_000n;
+}
+
+function setDebtCap(factor: number) {
+  const res = simnet.callPublicFn(
+    "governance-v1",
+    "initiate-proposal-to-update-withdrawal-caps-param",
+    [Cl.uint(ACTION_SET_DEBT_CAP), Cl.tuple({ collateral: Cl.none(), factor: Cl.uint(factor * SCALING_FACTOR) }), Cl.uint(1)],
+    deployer
+  );
+  expect(res.result.type).toBe(ClarityType.ResponseOk);
+  execute_proposal(res);
+}
+
+function setDecayWindow(window: number) {
+  const res = simnet.callPublicFn(
+    "governance-v1",
+    "initiate-proposal-to-update-withdrawal-caps-param",
+    [Cl.uint(ACTION_SET_DECAY_TIME_WINDOW), Cl.tuple({ collateral: Cl.none(), factor: Cl.uint(window) }), Cl.uint(1)],
+    deployer
+  );
+  expect(res.result.type).toBe(ClarityType.ResponseOk);
+  execute_proposal(res);
+}
+
+function setRefillWindow(window: number) {
+  const res = simnet.callPublicFn(
+    "governance-v1",
+    "initiate-proposal-to-update-withdrawal-caps-param",
+    [Cl.uint(ACTION_SET_REFILL_TIME_WINDOW), Cl.tuple({ collateral: Cl.none(), factor: Cl.uint(window) }), Cl.uint(1)],
+    deployer
+  );
+  expect(res.result.type).toBe(ClarityType.ResponseOk);
+  execute_proposal(res);
+}
+
+function setLpCap(factor: number) {
+  const res = simnet.callPublicFn(
+    "governance-v1",
+    "initiate-proposal-to-update-withdrawal-caps-param",
+    [
+      Cl.uint(ACTION_SET_LP_CAP),
+      Cl.tuple({
+        collateral: Cl.none(),
+        factor: Cl.uint(factor * SCALING_FACTOR),
+      }),
+      Cl.uint(1),
+    ],
+    deployer
+  );
+  expect(res.result.type).toBe(ClarityType.ResponseOk);
+  execute_proposal(res);
+}
+
 describe("withdrawal caps tests", () => {
   beforeEach(async () => {
     init_pyth(deployer);
@@ -320,7 +432,7 @@ describe("withdrawal caps tests", () => {
     let collateral_bucket = simnet.callReadOnlyFn(
       "withdrawal-caps-v1",
       "get-collateral-bucket",
-      [btcCV],
+      [btcCV, Cl.uint(stateTokenBalance("mock-btc"))],
       deployer
     ).result;
     expect(collateral_bucket).toBeUint(8000000000);
@@ -352,7 +464,7 @@ describe("withdrawal caps tests", () => {
     collateral_bucket = simnet.callReadOnlyFn(
       "withdrawal-caps-v1",
       "get-collateral-bucket",
-      [btcCV],
+      [btcCV, Cl.uint(stateTokenBalance("mock-btc"))],
       deployer
     ).result;
     expect(collateral_bucket).toBeUint(1400000000n); // 14 btc
@@ -369,7 +481,7 @@ describe("withdrawal caps tests", () => {
     collateral_bucket = simnet.callReadOnlyFn(
       "withdrawal-caps-v1",
       "get-collateral-bucket",
-      [btcCV],
+      [btcCV, Cl.uint(stateTokenBalance("mock-btc"))],
       deployer
     ).result;
     expect(collateral_bucket).toBeUint(400277777n); // ~4 btc
@@ -400,7 +512,7 @@ describe("withdrawal caps tests", () => {
     collateral_bucket = simnet.callReadOnlyFn(
       "withdrawal-caps-v1",
       "get-collateral-bucket",
-      [btcCV],
+      [btcCV, Cl.uint(stateTokenBalance("mock-btc"))],
       deployer
     ).result;
     expect(collateral_bucket).toBeUint(9166665n); // ~0.091 btc
@@ -759,5 +871,311 @@ describe("withdrawal caps tests", () => {
       depositor
     );
     expect(withdraw.result).toBeOk(Cl.bool(true));
+  });
+
+  it("lp excess decays to max by its original deadline despite a mid-window withdrawal", () => {
+    setLpCap(0.8);
+
+    const amount = 500_000_000_00;
+    mint_token("mock-usdc", amount, depositor);
+    deposit(amount, depositor);
+
+    // Touch inside the window, leaving the read below a touch-relative deadline.
+    simnet.mineEmptyBlocks(9);
+    const touch = simnet.callPublicFn(
+      "liquidity-provider-v1",
+      "withdraw",
+      [Cl.uint(1), Cl.principal(depositor)],
+      depositor
+    );
+    expect(touch.result).toBeOk(Cl.bool(true));
+
+    // Past the original deadline, still short of a window measured from the touch.
+    simnet.mineEmptyBlocks(15);
+
+    const bucket = simnet.callReadOnlyFn(
+      "withdrawal-caps-v1",
+      "get-lp-bucket",
+      [],
+      deployer
+    ).result;
+    expect(bucket).toBeUint(lpBucketMax());
+
+    // The enforced cap must agree with the getter, not only the view.
+    const over = simnet.callPublicFn(
+      "liquidity-provider-v1",
+      "withdraw",
+      [Cl.uint(lpBucketMax() + 1n), Cl.principal(depositor)],
+      depositor
+    );
+    expect(over.result).toBeErr(Cl.uint(120002));
+  });
+
+  it("lp excess decays to max by its original deadline despite a mid-window deposit", () => {
+    setLpCap(0.8);
+
+    const amount = 500_000_000_00;
+    mint_token("mock-usdc", amount, depositor);
+    deposit(amount, depositor);
+
+    // A one-unit top-up used to re-age the whole excess.
+    simnet.mineEmptyBlocks(9);
+    mint_token("mock-usdc", 1, depositor);
+    deposit(1, depositor);
+
+    simnet.mineEmptyBlocks(15);
+
+    const bucket = simnet.callReadOnlyFn(
+      "withdrawal-caps-v1",
+      "get-lp-bucket",
+      [],
+      deployer
+    ).result;
+    expect(bucket).toBeUint(lpBucketMax());
+
+    const over = simnet.callPublicFn(
+      "liquidity-provider-v1",
+      "withdraw",
+      [Cl.uint(lpBucketMax() + 1n), Cl.principal(depositor)],
+      depositor
+    );
+    expect(over.result).toBeErr(Cl.uint(120002));
+  });
+
+  it("debt excess decays to max by its original deadline despite a mid-window borrow", async () => {
+    setDebtCap(0.8);
+    setRefillWindow(3_600);
+
+    await set_price("mock-usdc", 1n, deployer);
+    await set_price("mock-btc", 10n, deployer);
+
+    const amount = 500_000_000_00;
+    mint_token("mock-usdc", amount, depositor);
+    deposit(amount, depositor);
+
+    mint_token("mock-btc", 800_000_000_0, borrower);
+    add_collateral("mock-btc", 800_000_000_0, deployer, borrower);
+
+    // Borrow, refill to max, then repay: the repayment is what pushes the bucket
+    // above max in the first place.
+    let res = simnet.callPublicFn(
+      "borrower-v1",
+      "borrow",
+      [Cl.buffer(build_price_update()), Cl.uint(100_000_000_00), Cl.none()],
+      borrower
+    );
+    expect(res.result).toBeOk(Cl.bool(true));
+    simnet.mineEmptyBlocks(6);
+
+    mint_token("mock-usdc", 100_000_000_00, borrower);
+    res = simnet.callPublicFn("borrower-v1", "repay", [Cl.uint(100_000_000_00), Cl.none()], borrower);
+    expect(res.result).toBeOk(Cl.bool(true));
+
+    // Mid-window debit touch.
+    simnet.mineEmptyBlocks(9);
+    res = simnet.callPublicFn(
+      "borrower-v1",
+      "borrow",
+      [Cl.buffer(build_price_update()), Cl.uint(1), Cl.none()],
+      borrower
+    );
+    expect(res.result).toBeOk(Cl.bool(true));
+
+    simnet.mineEmptyBlocks(15);
+
+    const bucket = simnet.callReadOnlyFn(
+      "withdrawal-caps-v1",
+      "get-debt-bucket",
+      [],
+      deployer
+    ).result;
+    expect(bucket).toBeUint(debtBucketMax());
+
+    res = simnet.callPublicFn(
+      "borrower-v1",
+      "borrow",
+      [Cl.buffer(build_price_update()), Cl.uint(debtBucketMax() + 1n), Cl.none()],
+      borrower
+    );
+    expect(res.result).toBeErr(Cl.uint(120003));
+  });
+
+  it("a mid-window deposit credits exactly its inflow", () => {
+    primeLpExcessMidWindow();
+    const bucket = () => simnet.callReadOnlyFn("withdrawal-caps-v1", "get-lp-bucket", [], deployer).result.value as bigint;
+    const before = bucket();
+
+    const inflow = 100_000_000n;
+    mint_token("mock-usdc", inflow, depositor);
+    deposit(inflow, depositor);
+
+    const after = bucket();
+    expect(after - before).toBeLessThanOrEqual(inflow + 1n);
+    expect(after - before).toBeGreaterThanOrEqual(inflow - decayDriftBound());
+  });
+
+  it("a mid-window withdrawal removes exactly its amount", () => {
+    primeLpExcessMidWindow();
+    const bucket = () => simnet.callReadOnlyFn("withdrawal-caps-v1", "get-lp-bucket", [], deployer).result.value as bigint;
+    const before = bucket();
+
+    const amount = 100_000_000n;
+    const res = simnet.callPublicFn(
+      "liquidity-provider-v1",
+      "withdraw",
+      [Cl.uint(amount), Cl.principal(depositor)],
+      depositor
+    );
+    expect(res.result).toBeOk(Cl.bool(true));
+
+    const after = bucket();
+    const drop = before - after;
+    expect(drop).toBeGreaterThanOrEqual(amount - 1n);
+    expect(drop).toBeLessThanOrEqual(amount + decayDriftBound());
+  });
+
+  // Known limitation, under discussion: the same inflow buys less credit as the deadline
+  // nears, so a deposit and a withdrawal one block apart remove more excess than the deposit
+  // added. Measured loss on a 100,000,000 round trip late in the window: about 11,400,000.
+  it.fails("a wash trade just before the deadline still nets out", () => {
+    setLpCap(0.8);
+    const base = 1_000_000_000;
+    mint_token("mock-usdc", base, depositor);
+    deposit(base, depositor);
+
+    // The simnet block length is not fixed, so walk block by block until the excess is
+    // down to a fifth of what it was: late in the window, but still alive.
+    const created = lpExcessAboveMax();
+    const stop = created / 5n;
+    let excessBefore = created;
+    for (let i = 0; i < 60 && excessBefore > stop; i++) {
+      simnet.mineEmptyBlocks(1);
+      excessBefore = lpExcessAboveMax();
+    }
+
+    const bucket = () => simnet.callReadOnlyFn("withdrawal-caps-v1", "get-lp-bucket", [], deployer).result.value as bigint;
+    const before = bucket();
+    expect(excessBefore > 0n).toBe(true);
+
+    const amount = 100_000_000n;
+    mint_token("mock-usdc", amount, depositor);
+    deposit(amount, depositor);
+    const res = simnet.callPublicFn(
+      "liquidity-provider-v1",
+      "withdraw",
+      [Cl.uint(amount), Cl.principal(depositor)],
+      depositor
+    );
+    expect(res.result).toBeOk(Cl.bool(true));
+
+    const after = bucket();
+    expect(after).toBeLessThanOrEqual(before + 1n);
+    expect(after).toBeGreaterThanOrEqual(before - decayDriftBound());
+  });
+
+  it("a deposit and an immediate withdrawal leave the bucket where it was", () => {
+    primeLpExcessMidWindow();
+    const bucket = () => simnet.callReadOnlyFn("withdrawal-caps-v1", "get-lp-bucket", [], deployer).result.value as bigint;
+    const before = bucket();
+
+    // The wash trade the decay window exists to neutralise.
+    const amount = 100_000_000n;
+    mint_token("mock-usdc", amount, depositor);
+    deposit(amount, depositor);
+    const res = simnet.callPublicFn(
+      "liquidity-provider-v1",
+      "withdraw",
+      [Cl.uint(amount), Cl.principal(depositor)],
+      depositor
+    );
+    expect(res.result).toBeOk(Cl.bool(true));
+
+    const after = bucket();
+    expect(after).toBeLessThanOrEqual(before + 1n);
+    expect(after).toBeGreaterThanOrEqual(before - decayDriftBound());
+  });
+
+  it("the bucket never reads above the maximum once the anchor is gone", async () => {
+    setLpCap(0.8);
+
+    const base = 500_000_000_00;
+    mint_token("mock-usdc", base, depositor);
+    deposit(base, depositor);
+
+    // Decay to max, then a unit withdrawal clears the anchor on the sync.
+    simnet.mineEmptyBlocks(20);
+    const touch = simnet.callPublicFn(
+      "liquidity-provider-v1",
+      "withdraw",
+      [Cl.uint(1), Cl.principal(depositor)],
+      depositor
+    );
+    expect(touch.result).toBeOk(Cl.bool(true));
+
+    const beforeMax = lpBucketMax();
+    const before = simnet.callReadOnlyFn("withdrawal-caps-v1", "get-lp-bucket", [], deployer).result;
+    expect(before).toBeUint(beforeMax);
+
+    // A borrow moves the market token out of state-v1, dropping the max.
+    await set_price("mock-btc", 10n, deployer);
+    mint_token("mock-btc", 800_000_000_0, borrower);
+    add_collateral("mock-btc", 800_000_000_0, deployer, borrower);
+    const borrowRes = simnet.callPublicFn(
+      "borrower-v1",
+      "borrow",
+      [Cl.buffer(build_price_update()), Cl.uint(100_000_000_00), Cl.none()],
+      borrower
+    );
+    expect(borrowRes.result).toBeOk(Cl.bool(true));
+
+    const afterMax = lpBucketMax();
+    expect(afterMax < beforeMax).toBe(true);
+    const after = simnet.callReadOnlyFn("withdrawal-caps-v1", "get-lp-bucket", [], deployer).result;
+    expect(after).toBeUint(afterMax);
+  });
+
+  it("collateral excess decays to max by its original deadline despite a mid-window deposit", async () => {
+    const btcCV = Cl.contractPrincipal(deployer, "mock-btc");
+
+    const capResponse = simnet.callPublicFn(
+      "governance-v1",
+      "initiate-proposal-to-update-withdrawal-caps-param",
+      [
+        Cl.uint(ACTION_SET_COLLATERAL_CAP),
+        Cl.tuple({ collateral: Cl.some(btcCV), factor: Cl.uint(0.8 * SCALING_FACTOR) }),
+        Cl.uint(1),
+      ],
+      deployer
+    );
+    expect(capResponse.result.type).toBe(ClarityType.ResponseOk);
+    execute_proposal(capResponse);
+
+    await set_price("mock-btc", 10n, deployer);
+
+    const amount = 800_000_000_0;
+    mint_token("mock-btc", amount, depositor);
+    add_collateral("mock-btc", amount, deployer, depositor);
+
+    simnet.mineEmptyBlocks(9);
+    mint_token("mock-btc", 1, depositor);
+    add_collateral("mock-btc", 1, deployer, depositor);
+
+    simnet.mineEmptyBlocks(15);
+
+    const bucket = simnet.callReadOnlyFn(
+      "withdrawal-caps-v1",
+      "get-collateral-bucket",
+      [btcCV, Cl.uint(stateTokenBalance("mock-btc"))],
+      deployer
+    ).result;
+    expect(bucket).toBeUint(collateralBucketMax("mock-btc"));
+
+    const over = simnet.callPublicFn(
+      "borrower-v1",
+      "remove-collateral",
+      [Cl.buffer(build_price_update()), btcCV, Cl.uint(collateralBucketMax("mock-btc") + 1n), Cl.none()],
+      depositor
+    );
+    expect(over.result).toBeErr(Cl.uint(120004));
   });
 });

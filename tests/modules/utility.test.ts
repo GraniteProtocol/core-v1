@@ -230,8 +230,8 @@ describe("utility per-collateral reads", () => {
     ).toBeOk(
       Cl.tuple({
         "cap-factor": Cl.uint(50_000_000),
-        "old-bucket": Cl.uint(400_000_000),
-        "new-bucket": Cl.uint(313_888_889),
+        "old-bucket": Cl.uint(313_888_888),
+        "new-bucket": Cl.uint(313_888_888),
         "max-bucket": Cl.uint(200_000_000),
       })
     );
@@ -247,14 +247,14 @@ describe("utility per-collateral reads", () => {
     ).toBeOk(
       Cl.tuple({
         "cap-factor": Cl.uint(50_000_000),
-        "old-bucket": Cl.uint(400_000_000),
+        "old-bucket": Cl.uint(200_000_000),
         "new-bucket": Cl.uint(200_000_000),
         "max-bucket": Cl.uint(200_000_000),
       })
     );
   });
 
-  it("clamps a refilled bucket at the maximum", () => {
+  it("clamps the bucket at the maximum", () => {
     const capResponse = simnet.callPublicFn(
       "withdrawal-caps-v1",
       "set-collateral-cap",
@@ -266,32 +266,30 @@ describe("utility per-collateral reads", () => {
     mint_token("mock-eth", 1_000_000, borrower);
     add_collateral("mock-eth", 1_000_000, deployer, borrower);
 
-    // Liquidity above the actual balance makes max 50,000,000.
-    const liquidity = 100_000_000;
+    const liquidity = tokenBalance("mock-eth");
 
     simnet.mineEmptyBlocks(20);
-    // 20 blocks -> 11,250s elapsed, inside the 86,400s refill window.
+    // 20 blocks -> past the 10,800s decay window, so the excess is gone.
     expect(
       read("get-collateral-withdrawal-caps", [ETH, Cl.uint(liquidity), Cl.uint(0)])
     ).toBeOk(
       Cl.tuple({
         "cap-factor": Cl.uint(50_000_000),
-        "old-bucket": Cl.uint(1_000_000),
-        "new-bucket": Cl.uint(7_510_416),
-        "max-bucket": Cl.uint(50_000_000),
+        "old-bucket": Cl.uint(500_000),
+        "new-bucket": Cl.uint(500_000),
+        "max-bucket": Cl.uint(500_000),
       })
     );
 
     simnet.mineEmptyBlocks(130);
-    // 150 blocks -> 89,250s elapsed, past the 86,400s refill window.
     expect(
       read("get-collateral-withdrawal-caps", [ETH, Cl.uint(liquidity), Cl.uint(0)])
     ).toBeOk(
       Cl.tuple({
         "cap-factor": Cl.uint(50_000_000),
-        "old-bucket": Cl.uint(1_000_000),
-        "new-bucket": Cl.uint(50_000_000),
-        "max-bucket": Cl.uint(50_000_000),
+        "old-bucket": Cl.uint(500_000),
+        "new-bucket": Cl.uint(500_000),
+        "max-bucket": Cl.uint(500_000),
       })
     );
   });
@@ -365,8 +363,8 @@ describe("utility per-collateral reads", () => {
     ).toBeOk(
       Cl.tuple({
         "cap-factor": Cl.uint(50_000_000),
-        "old-bucket": Cl.uint(400_000_000),
-        "new-bucket": Cl.uint(294_629_630),
+        "old-bucket": Cl.uint(294_629_629),
+        "new-bucket": Cl.uint(294_629_629),
         "max-bucket": Cl.uint(200_000_000),
       })
     );
@@ -380,8 +378,8 @@ describe("utility per-collateral reads", () => {
     ).toBeOk(
       Cl.tuple({
         "cap-factor": Cl.uint(50_000_000),
-        "old-bucket": Cl.uint(400_000_000),
-        "new-bucket": Cl.uint(905_777_777),
+        "old-bucket": Cl.uint(1_094_629_629),
+        "new-bucket": Cl.uint(1_094_629_629),
         "max-bucket": Cl.uint(1_000_000_000),
       })
     );

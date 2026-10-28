@@ -82,17 +82,6 @@
     (+ new-bucket inflow)
 ))
 
-(define-private (decay-bucket-amount (last-updated-at uint) (time-now uint) (max-bucket uint) (current-bucket uint) (inflow uint))
-  (let (
-      (extra-bucket-amount (- current-bucket max-bucket))
-      (decay-window (contract-call? .withdrawal-caps-v1 get-decay-time-window))
-      (elapsed (if (is-eq last-updated-at u0) decay-window (- time-now last-updated-at)))
-      (decayed-amount (if (>= elapsed decay-window) extra-bucket-amount (/ (* extra-bucket-amount elapsed) decay-window)))
-      (new-bucket (- current-bucket decayed-amount))
-  )
-    (+ new-bucket inflow)
-))
-
 (define-private (get-lp-bucket (inflow uint))
   (let
     (
@@ -102,8 +91,8 @@
       (lp-cap-factor (contract-call? .withdrawal-caps-v1 get-lp-cap-factor))
       (max-lp-bucket (/ (* total-liquidity lp-cap-factor) SCALING-FACTOR))
       (current-bucket (contract-call? .withdrawal-caps-v1 get-lp-bucket))
-      (new-bucket-value (if (>= current-bucket max-lp-bucket) 
-          (decay-bucket-amount last-ts time-now max-lp-bucket current-bucket inflow)
+      (new-bucket-value (if (>= current-bucket max-lp-bucket)
+          (+ current-bucket inflow)
           (refill-bucket-amount last-ts time-now max-lp-bucket current-bucket inflow)))
     )
     (ok {
@@ -124,8 +113,8 @@
       (debt-cap-factor (contract-call? .withdrawal-caps-v1 get-debt-cap-factor))
       (max-debt-bucket (/ (* total-liquidity debt-cap-factor) SCALING-FACTOR))
       (current-bucket (contract-call? .withdrawal-caps-v1 get-debt-bucket))
-      (new-bucket-value (if (>= current-bucket max-debt-bucket) 
-          (decay-bucket-amount last-ts time-now max-debt-bucket current-bucket inflow)
+      (new-bucket-value (if (>= current-bucket max-debt-bucket)
+          (+ current-bucket inflow)
           (refill-bucket-amount last-ts time-now max-debt-bucket current-bucket inflow)))
     )
     (ok {
@@ -144,9 +133,9 @@
       (last-ts (contract-call? .withdrawal-caps-v1 get-last-collateral-bucket-update collateral))
       (collateral-cap-factor (contract-call? .withdrawal-caps-v1 get-collateral-cap-factor collateral))
       (max-collateral-bucket (/ (* total-liquidity collateral-cap-factor) SCALING-FACTOR))
-      (current-bucket (contract-call? .withdrawal-caps-v1 get-collateral-bucket collateral))
+      (current-bucket (contract-call? .withdrawal-caps-v1 get-collateral-bucket collateral total-liquidity))
       (new-bucket-value (if (>= current-bucket max-collateral-bucket)
-          (decay-bucket-amount last-ts time-now max-collateral-bucket current-bucket inflow)
+          (+ current-bucket inflow)
           (refill-bucket-amount last-ts time-now max-collateral-bucket current-bucket inflow)))
     )
     (ok {

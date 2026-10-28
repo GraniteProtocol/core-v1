@@ -142,7 +142,9 @@ describe("Immunefi 97070: liquidation debt-cap ordering", () => {
 
     const bucketAfter = ro("withdrawal-caps-v1", "get-debt-bucket").value as bigint;
     // The repayment is credited once as inflow. The refill component must be capped by the
-    // balance read before the repayment, so the bucket is exactly the intended cap + inflow.
-    expect(bucketAfter).toBe(intendedMax + REPAY);
+    // balance read before the repayment, so the bucket is the intended cap + inflow, less at
+    // most one block of decay of the freshly created excess between the sync and this read.
+    expect(bucketAfter).toBeLessThanOrEqual(intendedMax + REPAY);
+    expect(bucketAfter).toBeGreaterThanOrEqual(intendedMax + REPAY - (REPAY / 50n));
   });
 });
