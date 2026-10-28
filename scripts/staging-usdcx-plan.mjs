@@ -83,13 +83,47 @@ if (expect && expect !== address) {
   throw new Error(`derived ${address} does not match --expect ${expect}`);
 }
 
+// The plan body is authored by hand; force the one ordering the market requires.
+function capBeforeLpInitialize(text) {
+  const lines = text.split('\n');
+  const indent = (l) => l.length - l.trimStart().length;
+  const blocks = [];
+  for (let i = 0; i < lines.length; i++) {
+    if (!/^ {8}- contract-call:$/.test(lines[i])) continue;
+    let end = i + 1;
+    while (end < lines.length && lines[end].trim() !== '' && indent(lines[end]) > 8) end++;
+    const field = (name) => {
+      const l = lines.slice(i, end).find((x) => x.trim().startsWith(`${name}:`));
+      return l ? l.trim().slice(name.length + 1).trim() : '';
+    };
+    blocks.push({ start: i, end, lines: lines.slice(i, end), contractId: field('contract-id'), method: field('method') });
+  }
+  const lp = blocks.findIndex((b) => b.contractId.endsWith('.liquidity-provider-v1') && b.method === 'initialize');
+  const cap = blocks.findIndex((b) => b.contractId.endsWith('.state-v1') && b.method === 'update-asset-cap');
+  if (lp === -1) return { text, reordered: false };
+  if (cap === -1) throw new Error('plan calls liquidity-provider-v1.initialize without state-v1.update-asset-cap');
+  if (cap < lp) return { text, reordered: false };
+  const a = blocks[lp], b = blocks[cap];
+  const out = [
+    ...lines.slice(0, a.start),
+    ...b.lines,
+    ...lines.slice(a.end, b.start),
+    ...a.lines,
+    ...lines.slice(b.end),
+  ];
+  return { text: out.join('\n'), reordered: true };
+}
+
 const text = fs.readFileSync(PLAN, 'utf8');
 const senders = new Set([...text.matchAll(/expected-sender:\s*([SM][0-9A-Z]{20,})/g)].map((m) => m[1]));
 if (senders.size !== 1) {
   throw new Error(`expected exactly one expected-sender in the plan, found ${senders.size}`);
 }
 const [oldAddress] = [...senders];
-const rewritten = text.split(oldAddress).join(address);
+let rewritten = text.split(oldAddress).join(address);
+const order = capBeforeLpInitialize(rewritten);
+if (order.reordered) console.log('plan: moved state-v1.update-asset-cap before liquidity-provider-v1.initialize');
+rewritten = order.text;
 fs.writeFileSync(PLAN, rewritten);
 
 const principals = new Set(
