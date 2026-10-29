@@ -1,0 +1,32 @@
+---
+id: 0
+name: Staging USDCx STX registration, executes
+network: mainnet
+stacks-node: "https://api.hiro.so"
+bitcoin-node: "http://blockstack:blockstacksystem@bitcoin.blockstack.com:8332"
+plan:
+  batches:
+    - id: 0
+      transactions:
+        - contract-call:
+            contract-id: SP2N615VZET7VD3DK3SCGPRXFSA9XSJW89KRC2Y30.governance-v1
+            expected-sender: SPTXMEW26M54HX1ZXF6VN7QKK4XES1038ERD40T5
+            method: execute
+            parameters:
+              - "0x780908c47aed4719e9573fc2d3b4554443376749bc4926f978cd895d73577d18"
+            cost: 50000
+        - contract-call:
+            contract-id: SP2N615VZET7VD3DK3SCGPRXFSA9XSJW89KRC2Y30.governance-v1
+            expected-sender: SPTXMEW26M54HX1ZXF6VN7QKK4XES1038ERD40T5
+            method: execute
+            parameters:
+              - "0xb06caaf0a293a2b426b87785daccebac5c792ff94df11da61d7ff6f309abc5f4"
+            cost: 50000
+        - contract-call:
+            contract-id: SP2N615VZET7VD3DK3SCGPRXFSA9XSJW89KRC2Y30.governance-v1
+            expected-sender: SPTXMEW26M54HX1ZXF6VN7QKK4XES1038ERD40T5
+            method: execute
+            parameters:
+              - "0xa06201a61af89b5294cc67abb4109eba9e5613f1c8a34ed12951967a182509cf"
+            cost: 50000
+      epoch: "4.0"

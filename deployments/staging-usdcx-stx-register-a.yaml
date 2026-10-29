@@ -1,0 +1,41 @@
+---
+id: 0
+name: Staging USDCx STX registration, initiates
+network: mainnet
+stacks-node: "https://api.hiro.so"
+bitcoin-node: "http://blockstack:blockstacksystem@bitcoin.blockstack.com:8332"
+plan:
+  batches:
+    - id: 0
+      transactions:
+        - contract-call:
+            contract-id: SP2N615VZET7VD3DK3SCGPRXFSA9XSJW89KRC2Y30.governance-v1
+            expected-sender: SPTXMEW26M54HX1ZXF6VN7QKK4XES1038ERD40T5
+            method: initiate-proposal-to-update-pyth-feed
+            parameters:
+              - "'SP1HJ8SX8EYF2VXQV5SBZE9GVJRJGGNW72NJZ8JCE.stx-sip010"
+              - u45
+              - u500
+              - u1440
+            cost: 50000
+        - contract-call:
+            contract-id: SP2N615VZET7VD3DK3SCGPRXFSA9XSJW89KRC2Y30.governance-v1
+            expected-sender: SPTXMEW26M54HX1ZXF6VN7QKK4XES1038ERD40T5
+            method: initiate-proposal-to-update-collateral-settings
+            parameters:
+              - "'SP1HJ8SX8EYF2VXQV5SBZE9GVJRJGGNW72NJZ8JCE.stx-sip010"
+              - u30000000
+              - u30000001
+              - u12000000
+              - u1440
+            cost: 50000
+        - contract-call:
+            contract-id: SP2N615VZET7VD3DK3SCGPRXFSA9XSJW89KRC2Y30.governance-v1
+            expected-sender: SPTXMEW26M54HX1ZXF6VN7QKK4XES1038ERD40T5
+            method: initiate-proposal-to-update-withdrawal-caps-param
+            parameters:
+              - u32
+              - "{ collateral: (some 'SP1HJ8SX8EYF2VXQV5SBZE9GVJRJGGNW72NJZ8JCE.stx-sip010), factor: u0 }"
+              - u1440
+            cost: 50000
+      epoch: "4.0"
