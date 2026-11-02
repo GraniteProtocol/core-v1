@@ -1,0 +1,89 @@
+name: Weekly local e2e
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "0 3 * * 1"
+
+concurrency:
+  group: weekly-local-e2e
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  e2e:
+    name: "Full local e2e suite"
+    runs-on: ubuntu-latest
+    timeout-minutes: 100
+    steps:
+      - name: "Checkout code"
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          submodules: true
+      - name: "Install Clarinet"
+        run: |
+          curl -L https://github.com/hirosystems/clarinet/releases/download/v3.22.0/clarinet-linux-x64-glibc.tar.gz | tar -xz
+          chmod +x ./clarinet
+          echo "$PWD" >> "$GITHUB_PATH"
+      - name: "Setup Node.js"
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: "24.x"
+      - name: "Prep CI"
+        run: npm ci
+      - name: "Prefer IPv4 for localhost"
+        run: |
+          echo 'precedence ::ffff:0:0/96  100' | sudo tee -a /etc/gai.conf
+          getent ahosts localhost | head -4
+      - name: "Loopback port probe"
+        run: |
+          docker run -d --rm --name e2e-port-probe -p 18443:18443 alpine:3.20 \
+            sh -c 'while true; do { printf "HTTP/1.0 200 OK\r\n\r\n"; } | nc -l -p 18443; done'
+          sleep 3
+          docker ps -a --format '{{.Names}} {{.Status}}'
+          curl -sv --max-time 3 http://localhost:18443/ || true
+          docker rm -f e2e-port-probe
+      - name: "Run the full suite"
+        run: |
+          # bitcoind runs as uid 1000 and bind-mounts its data dir from .cache, so the directories
+          # clarinet creates must be writable by that user.
+          umask 000
+          mkdir -p .cache
+          chmod 0777 .cache
+          set +e
+          ( while true; do
+              echo "--- $(date -u +%H:%M:%S) ---"
+              docker ps -a --format '{{.Names}} {{.Status}}'
+              for name in $(docker ps -a --format '{{.Names}}' | grep '\.granite-core\.devnet$'); do
+                echo "=== $name ==="
+                docker logs --tail 20 "$name" 2>&1
+              done
+              sleep 2
+            done ) >> e2e-docker.log 2>&1 &
+          watcher=$!
+          node e2e/run.ts --report-dir "${{ github.workspace }}/e2e-report"
+          rc=$?
+          kill "$watcher" 2>/dev/null || true
+          exit "$rc"
+      - name: "Devnet diagnostics"
+        if: always()
+        continue-on-error: true
+        run: |
+          docker ps -a --format '{{.Names}} {{.Status}}'
+          for name in $(docker ps -a --format '{{.Names}}' | grep '\.granite-core\.devnet$'); do
+            echo "=== $name ==="
+            docker logs --tail 50 "$name" 2>&1
+          done
+      - name: "Upload the report"
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: local-e2e-report-${{ github.run_attempt }}
+          path: |
+            e2e-report/report.md
+            e2e-report/report.json
+            e2e-report/devnet*.log
+            e2e-docker.log
+          if-no-files-found: warn

@@ -1,4 +1,4 @@
-import { mkdtempSync } from "node:fs";
+import { mkdirSync, mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Chain, DevnetStallError } from "./chain.ts";
@@ -50,12 +50,15 @@ const DEFAULT_SEED = 20_261_023;
 const USDC = 100_000_000n;
 const TOKENS = [BTC, ETH, STX];
 
-function parseArgs(argv: string[]): { keep: boolean; seed: number } {
+function parseArgs(argv: string[]): { keep: boolean; seed: number; reportDir?: string } {
   const keep = argv.includes("--keep");
   const seedIndex = argv.indexOf("--seed");
   const seed = seedIndex >= 0 ? Number(argv[seedIndex + 1]) : DEFAULT_SEED;
   if (!Number.isInteger(seed) || seed < 0) throw new Error(`invalid --seed value: ${argv[seedIndex + 1]}`);
-  return { keep, seed };
+  const reportDirIndex = argv.indexOf("--report-dir");
+  const reportDir = reportDirIndex >= 0 ? argv[reportDirIndex + 1] : undefined;
+  if (reportDirIndex >= 0 && !reportDir) throw new Error("--report-dir needs a path");
+  return { keep, seed, reportDir };
 }
 
 const ACTOR_NAMES: Array<EnumeratedActor> = ["lp", "safe", "max", "near", "under", "liquidator", "staker", "flash"];
@@ -270,10 +273,11 @@ async function runScenario(session: Session, scenario: Scenario): Promise<Scenar
 }
 
 async function main(): Promise<number> {
-  const { keep, seed } = parseArgs(process.argv.slice(2));
+  const { keep, seed, reportDir: fixedReportDir } = parseArgs(process.argv.slice(2));
   resetAccounting();
   const startedAt = new Date();
-  const reportDir = mkdtempSync(join(tmpdir(), "local-e2e-"));
+  const reportDir = fixedReportDir ?? mkdtempSync(join(tmpdir(), "local-e2e-"));
+  if (fixedReportDir) mkdirSync(reportDir, { recursive: true });
 
   const deployer = loadDeployer();
   const expectedScenarios = [happy, ...matrix].map((scenario) => scenario.name);
