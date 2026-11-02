@@ -57,7 +57,7 @@ export type MarketProfile = {
 
 /** Live USDCx parameters. mock-btc is the local stand-in for sBTC, the live collateral. */
 export const USDCX: MarketProfile = {
-  name: "USDCx",
+  name: "USDCx production (SPSX722NK9V3A8D3CVQT0CDY4EBQ3E9FSDDE61FT)",
   protocolReservePercentage: 25_000_000n,
   ir: {
     slope1: 40_000_000_000n,
@@ -76,9 +76,10 @@ export const USDCX: MarketProfile = {
     windows: { refill: 36_000n, decay: 10_800n },
   },
   withdrawalFinalizationPeriod: 100n,
+  // Recorded live value: 20,000,000 tokens at 6 decimals, which is 200,000 mock units at this
+  // token's 8 decimals. The suite overrides the cap to max for funding headroom.
   assetCap: 20_000_000_000_000n,
   test: {
-    // Live 20,000e8; actor funding is larger, and the cap is a safety limit rather than pricing.
     assetCap: (1n << 128n) - 1n,
     // Live 100 blocks; the unstake scenario has to finish inside a run.
     withdrawalFinalizationPeriod: 4n,
@@ -87,8 +88,8 @@ export const USDCX: MarketProfile = {
     capWindows: { refill: 40n, decay: 20n },
     // Live rewards are zero (slope2 is one negative unit), so no staked interest would ever accrue.
     rewardParams: { slope1: -50_000_000n, slope2: -70_000_000n, kink: 70_000_000n, base: 30_000_000n },
-    // Devnet-only collaterals with no live USDCx counterpart; the multi-collateral and liquidation
-    // flows need a second and third asset.
+    // mock-eth is devnet-only. STX is registered on staging with its own values and not on
+    // production USDCx; the devnet values here are deliberately its own.
     collateral: {
       [ETH]: { maxLtv: 50_000_000n, liquidationLtv: 70_000_000n, liquidationPremium: 10_000_000n, decimals: 8n },
       [STX]: { maxLtv: 50_000_000n, liquidationLtv: 70_000_000n, liquidationPremium: 10_000_000n, decimals: 6n },
@@ -99,3 +100,4 @@ export const USDCX: MarketProfile = {
 
 /** The market a run mirrors. A second market selects here and supplies its own scenario amounts. */
 export const PROFILE: MarketProfile = USDCX;
+// Staging SP2N615 is a separate profile, deferred to the follow-up.

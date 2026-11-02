@@ -290,7 +290,7 @@ export function profileSummary(): Record<string, string | string[]> {
     })
     .join(" ");
   return {
-    market: "USDCx (live parameters)",
+    market: PROFILE.name,
     protocolReservePercentage: PROFILE.protocolReservePercentage.toString(),
     irParams: `slope1=${PROFILE.ir.slope1} slope2=${PROFILE.ir.slope2} kink=${PROFILE.ir.kink} base=${PROFILE.ir.base}`,
     rewardParams: `slope1=${PROFILE.reward.slope1} slope2=${PROFILE.reward.slope2} kink=${PROFILE.reward.kink} base=${PROFILE.reward.base}`,
@@ -303,7 +303,7 @@ export function profileSummary(): Record<string, string | string[]> {
       `withdrawal finalization ${PROFILE.test.withdrawalFinalizationPeriod} blocks, from setup (live ${PROFILE.withdrawalFinalizationPeriod})`,
       `cap windows ${PROFILE.test.capWindows.refill}/${PROFILE.test.capWindows.decay}s while the caps scenarios sample them (live ${PROFILE.caps.windows.refill}/${PROFILE.caps.windows.decay}s)`,
       `staking reward params slope1=${PROFILE.test.rewardParams.slope1} slope2=${PROFILE.test.rewardParams.slope2} kink=${PROFILE.test.rewardParams.kink} base=${PROFILE.test.rewardParams.base} inside the staking scenario only, restored after (live rewards are zero)`,
-      `mock-eth and stx-sip010 are devnet-only collaterals with no live USDCx counterpart; their settings and 50% collateral caps are test fixtures`,
+      `mock-eth is a devnet-only collateral; stx-sip010 is registered on staging with its own values and not on production USDCx. Their settings and 50% collateral caps are test fixtures`
     ],
   };
 }
