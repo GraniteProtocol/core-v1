@@ -957,6 +957,10 @@ scenario("lp-variants", async (ctx) => {
     "shares or assets moved the wrong way",
   );
 
+  // Freeze accrual so the share price cannot move between the quote and the redemption.
+  await ctx.step("freeze interest accrual for the redemption", () =>
+    callAsDeployer(chain, ctx.actors.deployer, "state-v1", "set-interest-accrual-flag", [Cl.bool(false)]),
+  );
   const paramsCv = await chain.read("state-v1", "get-lp-params");
   const params = asTuple(paramsCv);
   const assetsBefore = asUint(params["total-assets"]);
@@ -971,12 +975,15 @@ scenario("lp-variants", async (ctx) => {
   await ctx.assert(
     "redeem pays convert-to-assets and burns the shares",
     (await lpBalance(chain, recipient.address)) === sharesBefore - half &&
-      absDiff(paid, expected) <= 10n &&
+      paid === expected &&
       assetsBefore - asUint(paramsAfter["total-assets"]) === paid,
     `expected ${expected}, got ${paid}, assets ${assetsBefore} -> ${asUint(paramsAfter["total-assets"])}`,
   );
   await ctx.step("redeem the remaining balance", () => redeem(chain, recipient, sharesBefore - half));
   await ctx.assert("the LP position is empty", (await lpBalance(chain, recipient.address)) === 0n, "shares remain");
+  await ctx.step("resume interest accrual", () =>
+    callAsDeployer(chain, ctx.actors.deployer, "state-v1", "set-interest-accrual-flag", [Cl.bool(true)]),
+  );
 
   await ctx.attempt("deposit(0) aborts", () => deposit(chain, sender, 0n), "u10004");
   await ctx.attempt("withdraw(0) aborts", () => withdraw(chain, sender, 0n), "u10004");
@@ -1261,14 +1268,21 @@ scenario("market-parameters", async (ctx) => {
       Cl.uint(0n),
     ]),
   );
-  const protocolPart = asUint(asTuple(await chain.read("state-v1", "get-open-interest"))["protocol-open-interest"]);
+  const protocolPartBefore = asUint(
+    asTuple(await chain.read("state-v1", "get-open-interest"))["protocol-open-interest"],
+  );
   const reserveBefore = asUint(await chain.read("state-v1", "get-reserve-balance"));
   await ctx.step("repay in full", () => repay(chain, borrower, 10n ** 30n), "debt");
+  const protocolPartAfter = asUint(
+    asTuple(await chain.read("state-v1", "get-open-interest"))["protocol-open-interest"],
+  );
   const reserveAfter = asUint(await chain.read("state-v1", "get-reserve-balance"));
+  // The bucket aggregates every borrower's uncollected protocol interest; a repay books only its
+  // own protocol part, so the reserve delta must equal the bucket delta.
   await ctx.assert(
-    "the reserve grows by exactly the protocol bucket read before the repay",
-    reserveAfter - reserveBefore === protocolPart,
-    `protocol ${protocolPart}, reserve ${reserveBefore} -> ${reserveAfter}`,
+    "the repay moves exactly its protocol part into the reserve",
+    reserveAfter > reserveBefore && protocolPartBefore - protocolPartAfter === reserveAfter - reserveBefore,
+    `bucket ${protocolPartBefore} -> ${protocolPartAfter}, reserve ${reserveBefore} -> ${reserveAfter}`,
   );
   await ctx.step("restore the live IR curve and reserve percentage", async () => {
     await chain.call(governor, "linear-kinked-ir-v1", "update-ir-params", [
