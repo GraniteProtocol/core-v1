@@ -610,8 +610,10 @@ scenario("caps", async (ctx) => {
   await ctx.step("set the debt cap to 10%", () =>
     callAsDeployer(chain, actors.deployer, "withdrawal-caps-v1", "set-debt-cap", [Cl.uint(HUNDRED_PCT / 10n)]),
   );
-  const debtBorrower = await fund(ctx, "debt-cap-borrower", { btc: 10n * UNIT, usdc: 1_000n * USDC });
-  await ctx.step("add 10 BTC for the debt-cap probe", () => addCollateral(chain, debtBorrower, BTC, 10n * UNIT));
+  // The probe must be refused by the debt cap, not by max LTV; 40 BTC covers four times the 10%
+  // bucket at the live 50% LTV.
+  const debtBorrower = await fund(ctx, "debt-cap-borrower", { btc: 40n * UNIT, usdc: 1_000n * USDC });
+  await ctx.step("add 40 BTC for the debt-cap probe", () => addCollateral(chain, debtBorrower, BTC, 40n * UNIT));
   await ctx.step("wait past the decay window for the debt bucket", () => sleep(25_000));
   await ctx.step("borrow one dollar to sync the debt bucket", () => borrow(chain, debtBorrower, 1n * USDC), "debt");
   const debtBucket = asUint(await chain.read("withdrawal-caps-v1", "get-debt-bucket"));
