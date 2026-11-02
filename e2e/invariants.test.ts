@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { accountingHolds, accountingStats, gateStepDrift, resetAccounting } from "./invariants";
+import { accountingHolds, accountingStats, accountingSurplus, gateStepDrift, resetAccounting } from "./invariants";
 
 describe("accounting invariant", () => {
   it("accepts only a positive surplus within the rounding window", () => {
@@ -7,13 +7,13 @@ describe("accounting invariant", () => {
     expect(
       accountingHolds({ totalAssets: 80n, reserve: 10n, cash: 50n, debt: 40n, protocolOpenInterest: 0n }).ok,
     ).toBe(true);
-    // +3 units of floor-split residue is accepted.
+    // +2 units of share-rounding residue is accepted.
+    expect(
+      accountingHolds({ totalAssets: 80n, reserve: 10n, cash: 50n, debt: 42n, protocolOpenInterest: 0n }).ok,
+    ).toBe(true);
+    // +3 units is real surplus drift.
     expect(
       accountingHolds({ totalAssets: 80n, reserve: 10n, cash: 50n, debt: 43n, protocolOpenInterest: 0n }).ok,
-    ).toBe(true);
-    // +4 units is real surplus drift.
-    expect(
-      accountingHolds({ totalAssets: 80n, reserve: 10n, cash: 50n, debt: 44n, protocolOpenInterest: 0n }).ok,
     ).toBe(false);
     // Value appearing from nowhere is never rounding.
     expect(
@@ -49,15 +49,40 @@ describe("accounting invariant", () => {
     expect(gateStepDrift(0n, "non-debt").ok).toBe(true); // baseline
     expect(gateStepDrift(1n, "non-debt").ok).toBe(false); // no movement outside a debt op
     expect(gateStepDrift(1n, "debt").ok).toBe(true); // delta 0
-    expect(gateStepDrift(4n, "debt").ok).toBe(true); // +3
-    expect(gateStepDrift(8n, "debt").ok).toBe(false); // +4
-    expect(gateStepDrift(7n, "debt").ok).toBe(false); // negative movement, even on a debt op
-    expect(gateStepDrift(7n, "non-debt").ok).toBe(true); // no movement
-    expect(gateStepDrift(8n, "non-debt").ok).toBe(false); // movement outside a debt op
+    expect(gateStepDrift(3n, "debt").ok).toBe(true); // +2
+    expect(gateStepDrift(6n, "debt").ok).toBe(false); // +3
+    expect(gateStepDrift(5n, "debt").ok).toBe(false); // negative movement, even on a debt op
+    expect(gateStepDrift(5n, "non-debt").ok).toBe(true); // no movement
+    expect(gateStepDrift(6n, "non-debt").ok).toBe(false); // movement outside a debt op
+    expect(gateStepDrift(6n, "debt", false).ok).toBe(true); // an aborted debt op changed nothing
+    expect(gateStepDrift(7n, "debt", false).ok).toBe(false); // and still may not move the surplus
     const stats = accountingStats();
-    expect(stats.drift).toBe(8n);
+    expect(stats.drift).toBe(7n);
     expect(stats.debtOps).toBe(4);
-    expect(stats.maxStepDrift).toBe(4n);
+    expect(stats.maxStepDrift).toBe(3n);
     expect(stats.exactZero).toBe(false);
+  });
+
+  it("keeps the surplus unchanged when a bad-debt write-off is booked net of the protocol part", () => {
+    const before = { totalAssets: 1000n, reserve: 200n, cash: 400n, debt: 900n, protocolOpenInterest: 100n };
+    const writtenOff = 100n;
+    const protocolPart = 10n;
+    // socialize-user-bad-debt receives the debt already net of the protocol part: debt and
+    // protocol-open-interest fall by their full and protocol parts, total assets plus reserve fall
+    // by the net amount, and the surplus does not move.
+    const after = {
+      totalAssets: before.totalAssets - 60n,
+      reserve: before.reserve - 30n,
+      cash: before.cash,
+      debt: before.debt - writtenOff,
+      protocolOpenInterest: before.protocolOpenInterest - protocolPart,
+    };
+    expect(accountingSurplus(before)).toBe(0n);
+    expect(accountingSurplus(after)).toBe(0n);
+    expect(accountingHolds(after).ok).toBe(true);
+    // Booking the gross amount instead would manufacture the protocol part as surplus.
+    const grossBooked = { ...after, totalAssets: before.totalAssets - 90n, reserve: before.reserve - 10n };
+    expect(accountingSurplus(grossBooked)).toBe(10n);
+    expect(accountingHolds(grossBooked).ok).toBe(false);
   });
 });

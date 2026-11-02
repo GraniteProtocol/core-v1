@@ -22,8 +22,8 @@ export function createContext(chain: Chain, actors: Actors, baseline: Snapshot):
   const steps: StepResult[] = [];
   const invariantFailures: string[] = [];
 
-  const verify = async (label: string, kind: OpKind): Promise<void> => {
-    const results = failed(await checkInvariants(chain, kind));
+  const verify = async (label: string, kind: OpKind, applied: boolean): Promise<void> => {
+    const results = failed(await checkInvariants(chain, kind, applied));
     if (results.length > 0) {
       const detail = results.map((result) => `${result.name}: ${result.detail}`).join("; ");
       invariantFailures.push(`${label}: ${detail}`);
@@ -50,7 +50,7 @@ export function createContext(chain: Chain, actors: Actors, baseline: Snapshot):
         record(name, false, failure);
         throw error;
       }
-      await verify(name, kind);
+      await verify(name, kind, true);
     },
     async attempt(name, action, code, kind = "non-debt") {
       try {
@@ -65,7 +65,7 @@ export function createContext(chain: Chain, actors: Actors, baseline: Snapshot):
           throw new Error(failure);
         }
         record(name, true);
-        await verify(name, kind);
+        await verify(name, kind, false);
         return;
       }
       const failure = `expected abort ${code}, but the call succeeded`;

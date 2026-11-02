@@ -39,6 +39,7 @@ export async function userCollateral(chain: Chain, user: string, token: string):
 export type Health = {
   positionHealth: bigint;
   totalLiquidLtv: bigint;
+  totalMaxLtv: bigint;
   currentDebt: bigint;
   currentDebtAdjusted: bigint;
   collaterals: string[];
@@ -67,25 +68,35 @@ export async function healthOf(chain: Chain, user: string): Promise<Health | nul
   const currentDebtAdjusted = ceilDiv(currentDebt * marketPrice, SCALING);
 
   let totalLiquidLtv = 0n;
+  let totalMaxLtv = 0n;
   for (const token of position.collaterals) {
     const name = tokenName(token);
     const amount = await userCollateral(chain, user, name);
     const price = convertedPrice(name);
     let liquidationLtv = 0n;
+    let maxLtv = 0n;
     let decimals = 8n;
     // Only a collateral that is genuinely not configured is de-listed; read/parse errors propagate.
     const config = await collateralSettingsIfConfigured(chain, name);
     if (config) {
       liquidationLtv = config.liquidationLtv;
+      maxLtv = config.maxLtv;
       decimals = config.decimals;
     }
     const rawValue = (amount * price) / SCALING;
     const fixedValue = decimals > 8n ? rawValue / 10n ** (decimals - 8n) : rawValue * 10n ** (8n - decimals);
     totalLiquidLtv += (fixedValue * liquidationLtv) / SCALING;
+    totalMaxLtv += (fixedValue * maxLtv) / SCALING;
   }
 
   const positionHealth = currentDebtAdjusted > 0n ? (totalLiquidLtv * SCALING) / currentDebtAdjusted : SCALING;
-  return { positionHealth, totalLiquidLtv, currentDebt, currentDebtAdjusted, collaterals: position.collaterals };
+  return { positionHealth, totalLiquidLtv, totalMaxLtv, currentDebt, currentDebtAdjusted, collaterals: position.collaterals };
+}
+
+/** Remaining headroom under the maximum-LTV rule; negative once interest has eaten into it. */
+export async function borrowCapacityOf(chain: Chain, user: string): Promise<bigint> {
+  const health = await healthOf(chain, user);
+  return health ? health.totalMaxLtv - health.currentDebtAdjusted : 0n;
 }
 
 export async function lpBalance(chain: Chain, user: string): Promise<bigint> {

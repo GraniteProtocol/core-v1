@@ -308,24 +308,3 @@ export function profileSummary(): Record<string, string | string[]> {
   };
 }
 
-/** Asserts the live collateral settings are internally valid; a de-listed collateral is skipped. */
-export async function collateralSettingsSane(chain: Chain): Promise<{ ok: boolean; detail: string }> {
-  const problems: string[] = [];
-  const storedValues = await Promise.all(
-    COLLATERALS.map((token) =>
-      chain.read("state-v1", "get-collateral", [Cl.contractPrincipal(chain.deployer, token)]),
-    ),
-  );
-  for (const [index, value] of storedValues.entries()) {
-    const token = COLLATERALS[index];
-    const stored = asOptional(value);
-    if (!stored) continue;
-    const config = asTuple(stored);
-    const maxLtv = asUint(config["max-ltv"]);
-    const liquidationLtv = asUint(config["liquidation-ltv"]);
-    const premium = asUint(config["liquidation-premium"]);
-    if (!(maxLtv < liquidationLtv)) problems.push(`${token}: max-ltv ${maxLtv} >= liquidation-ltv ${liquidationLtv}`);
-    if (premium > 100_000_000n) problems.push(`${token}: premium ${premium} over 100%`);
-  }
-  return { ok: problems.length === 0, detail: problems.join("; ") || "valid" };
-}

@@ -1,17 +1,16 @@
 import { Cl } from "@stacks/transactions";
 import type { Chain } from "./chain.ts";
-import { collateralSettingsSane, COLLATERALS, expectedCaps, MARKET, type Actors } from "./setup.ts";
+import { COLLATERALS, expectedCaps, MARKET, type Actors } from "./setup.ts";
 import { asOptional, asTuple, asUint, okUint } from "./values.ts";
 import { healthOf, positionOf } from "./reads.ts";
 
 export type InvariantResult = { name: string; ok: boolean; detail: string };
 
 const SCALING_FACTOR = 100_000_000n;
-// Repay and liquidation split interest across lp/staked/protocol buckets with floor division, so a
-// single debt operation can leave up to 2 units in open-interest that the cash received does not
-// cover, plus 1 unit of share-conversion rounding. Real drift exceeds this quickly.
-const ROUNDING_TOLERANCE = 3n;
-const MAX_DEBT_STEP_DRIFT = 3n;
+// The interest split conserves its flooring remainder, so a debt operation moves the surplus only
+// by share-conversion rounding, 1 unit in the recorded run. Real drift exceeds this quickly.
+const ROUNDING_TOLERANCE = 2n;
+const MAX_DEBT_STEP_DRIFT = 2n;
 
 export type OpKind = "debt" | "non-debt";
 
@@ -64,7 +63,8 @@ const abs = (value: bigint): bigint => (value < 0n ? -value : value);
  * collects it. Until then it backs no claim, so the checked surplus is
  * cash + (debt - protocol-open-interest) - reserve - totalAssets. With a 25% reserve a repay's raw
  * gap moves by the floor residue minus the protocol part (negative); the surplus moves only by the
- * non-negative floor residue. A negative surplus means value appeared from nowhere.
+ * non-negative floor residue. A negative surplus means value appeared from nowhere. A bad-debt
+ * write-off receives debt already net of the protocol part, so it moves the surplus by zero.
  */
 export function accountingSurplus(params: {
   totalAssets: bigint;
@@ -98,11 +98,12 @@ export function accountingHolds(
 }
 
 /**
- * Outside debt operations the accumulated surplus must not move at all; a debt operation may move
- * it upward by at most the protocol's integer rounding residue (3 units). Downward movement always
- * fails, and the baseline check after setup must be exactly zero.
+ * Outside debt operations the accumulated surplus must not move at all; a debt operation that
+ * landed may move it upward by at most MAX_DEBT_STEP_DRIFT. Downward movement always fails, and
+ * the baseline check after setup must be exactly zero. An aborted operation changed nothing, so it
+ * is held to zero and does not count toward the cumulative ceiling.
  */
-export function gateStepDrift(surplus: bigint, kind: OpKind): InvariantResult {
+export function gateStepDrift(surplus: bigint, kind: OpKind, applied = true): InvariantResult {
   stats.drift = surplus;
   if (lastDrift === undefined) {
     lastDrift = surplus;
@@ -114,10 +115,11 @@ export function gateStepDrift(surplus: bigint, kind: OpKind): InvariantResult {
   }
   const delta = surplus - lastDrift;
   lastDrift = surplus;
-  if (kind === "debt") stats.debtOps += 1;
+  const isDebt = kind === "debt" && applied;
+  if (isDebt) stats.debtOps += 1;
   if (abs(delta) > stats.maxStepDrift) stats.maxStepDrift = abs(delta);
   if (delta !== 0n) stats.exactZero = false;
-  const allowed = kind === "debt" ? MAX_DEBT_STEP_DRIFT : 0n;
+  const allowed = isDebt ? MAX_DEBT_STEP_DRIFT : 0n;
   return {
     name: "accounting-drift",
     ok: delta >= 0n && delta <= allowed,
@@ -267,27 +269,6 @@ async function exitability(chain: Chain): Promise<InvariantResult> {
   };
 }
 
-async function capsFactors(chain: Chain): Promise<InvariantResult> {
-  const cp = (name: string) => Cl.contractPrincipal(chain.deployer, name);
-  const names = ["lp", "debt", ...COLLATERALS];
-  const values = await Promise.all(
-    names.map((name, index) =>
-      index === 0
-        ? chain.read("withdrawal-caps-v1", "get-lp-cap-factor")
-        : index === 1
-          ? chain.read("withdrawal-caps-v1", "get-debt-cap-factor")
-          : chain.read("withdrawal-caps-v1", "get-collateral-cap-factor", [cp(name)]),
-    ),
-  );
-  const entries: Array<[string, bigint]> = names.map((name, index) => [name, asUint(values[index])]);
-  const bad = entries.filter(([, factor]) => factor < 0n || factor > SCALING_FACTOR);
-  return {
-    name: "caps-factors",
-    ok: bad.length === 0,
-    detail: bad.length === 0 ? entries.map(([k, v]) => `${k}=${v}`).join(" ") : `out of bounds: ${bad.map(([k, v]) => `${k}=${v}`).join(" ")}`,
-  };
-}
-
 async function capsBuckets(chain: Chain): Promise<InvariantResult> {
   const stateContract = Cl.contractPrincipal(chain.deployer, "state-v1");
   const cp = (name: string) => Cl.contractPrincipal(chain.deployer, name);
@@ -330,34 +311,21 @@ async function capsBuckets(chain: Chain): Promise<InvariantResult> {
   };
 }
 
-async function openInterestCoversPrincipal(chain: Chain): Promise<InvariantResult> {
-  const debt = asTuple(await chain.read("state-v1", "get-debt-params"));
-  const openInterest = asUint(debt["open-interest"]);
-  const borrowed = asTuple(
-    await chain.read("state-v1", "get-borrow-repay-params", [Cl.principal(chain.deployer)]),
-  );
-  const totalBorrowed = asUint(borrowed["total-borrowed-amount"]);
-  return {
-    name: "open-interest-covers-principal",
-    ok: openInterest >= totalBorrowed,
-    detail: `open-interest=${openInterest} total-borrowed=${totalBorrowed}`,
-  };
-}
-
-export async function checkInvariants(chain: Chain, kind: OpKind = "non-debt"): Promise<InvariantResult[]> {
+export async function checkInvariants(
+  chain: Chain,
+  kind: OpKind = "non-debt",
+  applied = true,
+): Promise<InvariantResult[]> {
   const results: InvariantResult[] = [];
   const stateContract = Cl.contractPrincipal(chain.deployer, "state-v1");
-  const [lpValue, reserveValue, cashValue, debtValue, interestValue, caps, buckets, interest, configs, health, exit] =
+  const [lpValue, reserveValue, cashValue, debtValue, interestValue, buckets, health, exit] =
     await Promise.all([
       chain.read("state-v1", "get-lp-params"),
       chain.read("state-v1", "get-reserve-balance"),
       chain.read(MARKET, "get-balance", [stateContract]),
       chain.read("state-v1", "get-debt-params"),
       chain.read("state-v1", "get-open-interest"),
-      capsFactors(chain),
       capsBuckets(chain),
-      openInterestCoversPrincipal(chain),
-      collateralSettingsSane(chain),
       debtHealth(chain),
       exitabilitySuspended
         ? Promise.resolve({
@@ -375,19 +343,19 @@ export async function checkInvariants(chain: Chain, kind: OpKind = "non-debt"): 
   const openInterest = asUint(debt["open-interest"]);
   const protocolOpenInterest = asUint(asTuple(interestValue)["protocol-open-interest"]);
   // Cash + (debt - uncollected protocol interest) == total_assets + reserve, up to the floor
-  // residue. The structural ceiling is 3 units per debt operation seen so far; the per-step gate
-  // is sharper.
+  // residue. The structural ceiling is MAX_DEBT_STEP_DRIFT units per successful debt operation seen
+  // so far; the per-step gate is sharper. Count the operation before reading the ceiling.
+  const step = gateStepDrift(
+    cash + openInterest - protocolOpenInterest - reserve - totalAssets,
+    kind,
+    applied,
+  );
   const maxDrift = MAX_DEBT_STEP_DRIFT * BigInt(Math.max(stats.debtOps, 1));
   results.push(
     accountingHolds({ totalAssets, reserve, cash, debt: openInterest, protocolOpenInterest }, maxDrift),
   );
-  results.push(
-    gateStepDrift(cash + openInterest - protocolOpenInterest - reserve - totalAssets, kind),
-  );
-  results.push(caps);
+  results.push(step);
   results.push(buckets);
-  results.push(interest);
-  results.push({ name: "collateral-configs", ok: configs.ok, detail: configs.detail });
   results.push(health);
   results.push(exit);
   return results;

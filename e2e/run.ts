@@ -517,7 +517,11 @@ async function main(): Promise<number> {
           stat.aborted += 1;
         }
         const violations = failed(
-          await checkInvariants(session.chain, DEBT_OPS.has(op.op) ? "debt" : "non-debt"),
+          await checkInvariants(
+            session.chain,
+            DEBT_OPS.has(op.op) ? "debt" : "non-debt",
+            outcome === "succeeded",
+          ),
         );
         if (violations.length > 0) {
           fuzz.failures += 1;
