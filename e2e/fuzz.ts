@@ -24,6 +24,8 @@ const OPERATIONS: Array<{ op: string; weight: number }> = [
   { op: "unstake", weight: 4 },
   { op: "setPrice", weight: 8 },
   { op: "governance", weight: 2 },
+  { op: "redeem", weight: 4 },
+  { op: "repayOnBehalf", weight: 3 },
 ];
 
 /** mulberry32: small, deterministic, good enough for op sequences. */
@@ -96,6 +98,16 @@ export function generate(seed: number, length: number): Op[] {
           actor: BORROWERS[Math.floor(random() * BORROWERS.length)],
           op,
           args: { amount: amountWithin(random, 10_000) },
+        });
+        break;
+      case "redeem":
+        ops.push({ actor: "lp", op, args: { amount: amountWithin(random, 20_000) } });
+        break;
+      case "repayOnBehalf":
+        ops.push({
+          actor: FUNDED_IN_USDC[Math.floor(random() * FUNDED_IN_USDC.length)],
+          op,
+          args: { target: Math.floor(random() * 4), amount: amountWithin(random, 10_000) },
         });
         break;
       case "liquidate":

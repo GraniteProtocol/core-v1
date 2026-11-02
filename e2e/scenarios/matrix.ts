@@ -1,4 +1,4 @@
-import { Cl } from "@stacks/transactions";
+import { Cl, type ClarityValue } from "@stacks/transactions";
 import type { Account } from "../keys.ts";
 import type { Chain } from "../chain.ts";
 import type { Scenario, ScenarioContext } from "../scenario.ts";
@@ -12,6 +12,7 @@ import {
   flashLoan,
   initiateUnstake,
   liquidate,
+  redeem,
   removeCollateral,
   repay,
   stake,
@@ -29,7 +30,7 @@ import {
   mint,
   setCapWindows,
 } from "../setup.ts";
-import { priceUpdate, resetToBaseline, setPrice, setPriceRaw } from "../prices.ts";
+import { priceUpdate, resetToBaseline, setPrice, setPriceRaw, type PriceUpdateOptions } from "../prices.ts";
 import { borrowCapacityOf, healthOf, lpBalance, positionOf, stakedBalance, tokenBalance, totalStakedLpTokens, userCollateral } from "../reads.ts";
 import { registerProbeUser, suspendExitability } from "../invariants.ts";
 import { asBool, asOptional, asPrincipal, asTuple, asUint, okUint } from "../values.ts";
@@ -924,4 +925,409 @@ scenario("governance", async (ctx) => {
   );
 
   await ctx.assert("STX still configured", (await collateralSettingsOf(chain, STX)).maxLtv === expectedCollateralConfigs()[STX].maxLtv, "STX missing");
+});
+
+scenario("lp-variants", async (ctx) => {
+  const { chain } = ctx;
+  const sender = await fund(ctx, "lp-variant-sender", { usdc: 200_000n * USDC });
+  const recipient = await fund(ctx, "lp-variant-recipient", {});
+
+  const senderBefore = await tokenBalance(chain, MARKET, sender.address);
+  const recipientLpBefore = await lpBalance(chain, recipient.address);
+  await ctx.step("deposit to a different recipient", () =>
+    deposit(chain, sender, 100_000n * USDC, recipient.address),
+  );
+  const senderAfter = await tokenBalance(chain, MARKET, sender.address);
+  const recipientLpAfter = await lpBalance(chain, recipient.address);
+  await ctx.assert(
+    "deposit debits the sender and mints to the recipient",
+    senderAfter === senderBefore - 100_000n * USDC && recipientLpAfter > recipientLpBefore,
+    `sender ${senderBefore} -> ${senderAfter}, recipient lp ${recipientLpBefore} -> ${recipientLpAfter}`,
+  );
+
+  const senderMarketBefore = await tokenBalance(chain, MARKET, sender.address);
+  const recipientLpBeforeWithdraw = await lpBalance(chain, recipient.address);
+  await ctx.step("withdraw to a different recipient", () =>
+    withdraw(chain, recipient, 10_000n * USDC, sender.address),
+  );
+  await ctx.assert(
+    "withdraw burns the caller's shares and pays the recipient",
+    (await lpBalance(chain, recipient.address)) < recipientLpBeforeWithdraw &&
+      (await tokenBalance(chain, MARKET, sender.address)) === senderMarketBefore + 10_000n * USDC,
+    "shares or assets moved the wrong way",
+  );
+
+  const paramsCv = await chain.read("state-v1", "get-lp-params");
+  const params = asTuple(paramsCv);
+  const assetsBefore = asUint(params["total-assets"]);
+  const sharesBefore = await lpBalance(chain, recipient.address);
+  const half = sharesBefore / 2n;
+  const expected = asUint(await chain.read("math-v1", "convert-to-assets", [paramsCv, Cl.uint(half), Cl.bool(false)]));
+  const marketBefore = await tokenBalance(chain, MARKET, recipient.address);
+  await ctx.step("redeem half the LP balance", () => redeem(chain, recipient, half));
+  const marketAfter = await tokenBalance(chain, MARKET, recipient.address);
+  const paid = marketAfter - marketBefore;
+  const paramsAfter = asTuple(await chain.read("state-v1", "get-lp-params"));
+  await ctx.assert(
+    "redeem pays convert-to-assets and burns the shares",
+    (await lpBalance(chain, recipient.address)) === sharesBefore - half &&
+      absDiff(paid, expected) <= 10n &&
+      assetsBefore - asUint(paramsAfter["total-assets"]) === paid,
+    `expected ${expected}, got ${paid}, assets ${assetsBefore} -> ${asUint(paramsAfter["total-assets"])}`,
+  );
+  await ctx.step("redeem the remaining balance", () => redeem(chain, recipient, sharesBefore - half));
+  await ctx.assert("the LP position is empty", (await lpBalance(chain, recipient.address)) === 0n, "shares remain");
+
+  await ctx.attempt("deposit(0) aborts", () => deposit(chain, sender, 0n), "u10004");
+  await ctx.attempt("withdraw(0) aborts", () => withdraw(chain, sender, 0n), "u10004");
+  await ctx.attempt("redeem(0) aborts", () => redeem(chain, sender, 0n), "u10004");
+});
+
+scenario("borrow-variants", async (ctx) => {
+  const { chain } = ctx;
+  const a = await fund(ctx, "borrow-variant-a", { btc: 2n * UNIT });
+  const b = await fund(ctx, "borrow-variant-b", { usdc: 30_000n * USDC });
+  await ctx.step("A posts collateral", () => addCollateral(chain, a, BTC, UNIT));
+  await ctx.step("A borrows 10,000", () => borrow(chain, a, 10_000n * USDC), "debt");
+  const positionBefore = await positionOf(chain, a.address);
+  const aBalanceBefore = await tokenBalance(chain, MARKET, a.address);
+  const bBalanceBefore = await tokenBalance(chain, MARKET, b.address);
+  await ctx.step("B repays 4,000 on A's behalf", () => repay(chain, b, 4_000n * USDC, a.address), "debt");
+  const positionAfter = await positionOf(chain, a.address);
+  await ctx.assert(
+    "repay on behalf lowers A's debt and debits only B",
+    positionBefore !== null &&
+      positionAfter !== null &&
+      positionAfter.debtShares < positionBefore.debtShares &&
+      positionAfter.borrowedAmount < positionBefore.borrowedAmount &&
+      (await tokenBalance(chain, MARKET, a.address)) === aBalanceBefore &&
+      (await tokenBalance(chain, MARKET, b.address)) < bBalanceBefore,
+    `debt shares ${positionBefore?.debtShares} -> ${positionAfter?.debtShares}`,
+  );
+  await ctx.step("B clears A's remaining debt", () => repay(chain, b, 10n ** 30n, a.address), "debt");
+  const cleared = await positionOf(chain, a.address);
+  await ctx.assert("A's position clears", cleared === null || cleared.debtShares === 0n, "debt shares remain");
+
+  const c = await fund(ctx, "borrow-variant-c", { usdc: 1_000n * USDC });
+  await ctx.attempt(
+    "repay for an account without a position aborts",
+    () => repay(chain, c, 1n * USDC, c.address),
+    "u20003",
+    "debt",
+  );
+  await ctx.attempt(
+    "borrow for another principal aborts",
+    () => borrow(chain, a, 1n * USDC, b.address),
+    "u20010",
+    "debt",
+  );
+  await ctx.step("borrow for the sender succeeds", () => borrow(chain, a, 1_000n * USDC, a.address), "debt");
+  await ctx.attempt(
+    "add-collateral for another principal aborts",
+    () => addCollateral(chain, a, BTC, 1n, b.address),
+    "u20010",
+  );
+  await ctx.attempt(
+    "remove-collateral for another principal aborts",
+    () => removeCollateral(chain, a, BTC, 1n, b.address),
+    "u20010",
+  );
+});
+
+scenario("state-admin-flags", async (ctx) => {
+  const { chain, actors } = ctx;
+  const deployer = actors.deployer;
+  const set = (fn: string, args: ClarityValue[]) => callAsDeployer(chain, deployer, "state-v1", fn, args);
+  const depositor = await fund(ctx, "flags-depositor", { usdc: 100_000n * USDC, btc: 2n * UNIT });
+  await ctx.step("depositor posts collateral", () => addCollateral(chain, depositor, BTC, UNIT));
+  await ctx.step("depositor deposits", () => deposit(chain, depositor, 10_000n * USDC));
+
+  await ctx.step("disable deposits", () => set("set-deposit-asset-flag", [Cl.bool(false)]));
+  await ctx.attempt("deposit aborts while deposits are disabled", () => deposit(chain, depositor, 1_000n * USDC), "u102");
+  await ctx.step("enable deposits", () => set("set-deposit-asset-flag", [Cl.bool(true)]));
+  await ctx.step("deposit works again", () => deposit(chain, depositor, 1_000n * USDC));
+
+  await ctx.step("disable withdrawals", () => set("set-withdraw-asset-flag", [Cl.bool(false)]));
+  await ctx.attempt("withdraw aborts while withdrawals are disabled", () => withdraw(chain, depositor, 1_000n * USDC), "u102");
+  await ctx.step("enable withdrawals", () => set("set-withdraw-asset-flag", [Cl.bool(true)]));
+  await ctx.step("withdraw works again", () => withdraw(chain, depositor, 1_000n * USDC));
+
+  await ctx.step("disable borrows", () => set("set-borrow-flag", [Cl.bool(false)]));
+  await ctx.attempt("borrow aborts while borrows are disabled", () => borrow(chain, depositor, 1_000n * USDC), "u102", "debt");
+  await ctx.step("enable borrows", () => set("set-borrow-flag", [Cl.bool(true)]));
+  await ctx.step("borrow works again", () => borrow(chain, depositor, 1_000n * USDC), "debt");
+
+  await ctx.step("disable collateral removal", () => set("set-remove-collateral-flag", [Cl.bool(false)]));
+  await ctx.attempt("remove-collateral aborts while disabled", () => removeCollateral(chain, depositor, BTC, 1n), "u102");
+  await ctx.step("enable collateral removal", () => set("set-remove-collateral-flag", [Cl.bool(true)]));
+
+  await ctx.step("disable liquidation", () => set("set-liquidation-flag", [Cl.bool(false), Cl.uint(0)]));
+  await ctx.step("disable collateral deposits", () => set("set-add-collateral-flag", [Cl.bool(false)]));
+  await ctx.attempt("add-collateral aborts while disabled", () => addCollateral(chain, depositor, BTC, 1n), "u102");
+  await ctx.step("enable collateral deposits", () => set("set-add-collateral-flag", [Cl.bool(true)]));
+  await ctx.step("disable repay", () => set("set-repay-flag", [Cl.bool(false)]));
+  await ctx.attempt("repay aborts while disabled", () => repay(chain, depositor, 1n * USDC), "u102", "debt");
+  await ctx.step("enable repay", () => set("set-repay-flag", [Cl.bool(true)]));
+  await ctx.step("re-enable liquidation", () => set("set-liquidation-flag", [Cl.bool(true), Cl.uint(0)]));
+
+  await ctx.step("disable staking", () => set("set-staking-flag", [Cl.bool(false)]));
+  await ctx.attempt("stake aborts while staking is disabled", () => stake(chain, actors.staker, 1n), "u60009");
+  await ctx.step("enable staking", () => set("set-staking-flag", [Cl.bool(true)]));
+
+  const target = await fund(ctx, "flags-target", { btc: 2n * UNIT });
+  const liquidator = await fund(ctx, "flags-liquidator", { usdc: 50_000n * USDC });
+  await ctx.step("target posts collateral", () => addCollateral(chain, target, BTC, UNIT));
+  await ctx.step("target borrows 25,000", () => borrow(chain, target, 25_000n * USDC), "debt");
+  await ctx.step(`wait ${LIQUIDATION_BLOCK_GAP} blocks`, () => chain.waitBlocks(LIQUIDATION_BLOCK_GAP));
+  setPrice(BTC, 35_000n);
+  await ctx.step("disable liquidation for the probe", () => set("set-liquidation-flag", [Cl.bool(false), Cl.uint(0)]));
+  await ctx.attempt(
+    "liquidation aborts while disabled",
+    () => liquidate(chain, liquidator, BTC, target.address, 100_000n * USDC),
+    "u102",
+    "debt",
+  );
+  await ctx.step("re-enable liquidation for the probe", () => set("set-liquidation-flag", [Cl.bool(true), Cl.uint(0)]));
+  const collateralBefore = await userCollateral(chain, target.address, BTC);
+  await ctx.step("liquidation works again", () => liquidate(chain, liquidator, BTC, target.address, 100_000n * USDC), "debt");
+  await ctx.assert(
+    "the liquidation seized collateral",
+    (await userCollateral(chain, target.address, BTC)) < collateralBefore,
+    "collateral unchanged",
+  );
+  resetToBaseline();
+
+  await ctx.step("disable interest accrual", () => set("set-interest-accrual-flag", [Cl.bool(false)]));
+  const quietBefore = asTuple(await chain.read("state-v1", "get-open-interest"));
+  await ctx.step("wait ten blocks with accrual off", () => chain.waitBlocks(10));
+  const quietAfter = asTuple(await chain.read("state-v1", "get-open-interest"));
+  await ctx.assert(
+    "open interest does not move while accrual is off",
+    asUint(quietBefore["lp-open-interest"]) === asUint(quietAfter["lp-open-interest"]) &&
+      asUint(quietBefore["protocol-open-interest"]) === asUint(quietAfter["protocol-open-interest"]),
+    `lp ${asUint(quietBefore["lp-open-interest"])} -> ${asUint(quietAfter["lp-open-interest"])}`,
+  );
+  await ctx.step("enable interest accrual", () => set("set-interest-accrual-flag", [Cl.bool(true)]));
+  await ctx.step("wait ten blocks with accrual on", () => chain.waitBlocks(10));
+  await ctx.step("trigger accrual with a deposit", () => deposit(chain, depositor, 1n * USDC));
+  const grown = asTuple(await chain.read("state-v1", "get-open-interest"));
+  await ctx.assert(
+    "open interest grows again",
+    asUint(grown["lp-open-interest"]) > asUint(quietAfter["lp-open-interest"]),
+    `lp ${asUint(quietAfter["lp-open-interest"])} -> ${asUint(grown["lp-open-interest"])}`,
+  );
+
+  await ctx.step("pause the market", () => set("pause-market", []));
+  await ctx.attempt("deposit aborts while paused", () => deposit(chain, depositor, 1_000n * USDC), "u102");
+  await ctx.attempt("borrow aborts while paused", () => borrow(chain, depositor, 1_000n * USDC), "u102", "debt");
+  await ctx.step("unpause the market", () => set("unpause-market", [Cl.uint(0)]));
+  await ctx.step("deposit works after unpause", () => deposit(chain, depositor, 1_000n * USDC));
+  await ctx.step("borrow works after unpause", () => borrow(chain, depositor, 1_000n * USDC), "debt");
+});
+
+scenario("state-admin-reserve", async (ctx) => {
+  const { chain, actors } = ctx;
+  const deployer = actors.deployer;
+  const call = (fn: string, args: ClarityValue[]) => callAsDeployer(chain, deployer, "state-v1", fn, args);
+  const reserve = async () => asUint(await chain.read("state-v1", "get-reserve-balance"));
+  const cash = async () => asUint(await chain.read("state-v1", "free-liquidity"));
+  const available = async () => okUint(await chain.read("state-v1", "available-liquidity"));
+  const deployerBalance = () => tokenBalance(chain, MARKET, deployer.address);
+
+  const reserveBefore = await reserve();
+  const cashBefore = await cash();
+  const balanceBefore = await deployerBalance();
+  const depositAmount = 10_000n * USDC;
+  await ctx.step("deposit to the reserve", () => call("deposit-to-reserve", [Cl.uint(depositAmount)]));
+  await ctx.assert(
+    "deposit-to-reserve moves tokens in and raises the reserve",
+    (await reserve()) === reserveBefore + depositAmount &&
+      (await deployerBalance()) === balanceBefore - depositAmount &&
+      (await cash()) === cashBefore + depositAmount &&
+      (await available()) === cashBefore - reserveBefore,
+    `reserve ${reserveBefore} -> ${await reserve()}, cash ${cashBefore} -> ${await cash()}`,
+  );
+
+  const withdrawAmount = 4_000n * USDC;
+  const beforeWithdraw = { reserve: await reserve(), cash: await cash(), balance: await deployerBalance() };
+  await ctx.step("withdraw from the reserve", () => call("withdraw-from-reserve", [Cl.uint(withdrawAmount)]));
+  await ctx.assert(
+    "withdraw-from-reserve pays the governance and lowers the reserve",
+    (await reserve()) === beforeWithdraw.reserve - withdrawAmount &&
+      (await deployerBalance()) === beforeWithdraw.balance + withdrawAmount &&
+      (await cash()) === beforeWithdraw.cash - withdrawAmount,
+    `reserve ${beforeWithdraw.reserve} -> ${await reserve()}`,
+  );
+  await ctx.attempt("withdrawing zero from the reserve aborts", () => call("withdraw-from-reserve", [Cl.uint(0n)]), "u101");
+  const overReserve = (await reserve()) + 1n;
+  await ctx.attempt(
+    "withdrawing more than the reserve aborts",
+    () => call("withdraw-from-reserve", [Cl.uint(overReserve)]),
+    "u105",
+  );
+
+  const lp = asTuple(await chain.read("state-v1", "get-lp-params"));
+  const assets = asUint(lp["total-assets"]);
+  await ctx.step("cap the market just above total assets", () => call("update-asset-cap", [Cl.uint(assets + 1_000n * USDC)]));
+  const overDeposit = await fund(ctx, "reserve-over-depositor", { usdc: 5_000n * USDC });
+  await ctx.attempt("a deposit above the cap aborts", () => deposit(chain, overDeposit, 2_000n * USDC), "u116");
+  await ctx.step("a deposit within the cap succeeds", () => deposit(chain, overDeposit, 100n * USDC));
+  await ctx.step("restore the test asset cap", () => call("update-asset-cap", [Cl.uint(PROFILE.test.assetCap)]));
+
+  await ctx.step("lower the BTC max LTV to 40%", () =>
+    call("update-collateral-settings", [
+      Cl.contractPrincipal(chain.deployer, BTC),
+      Cl.uint(40_000_000n),
+      Cl.uint(65_000_000n),
+      Cl.uint(10_000_000n),
+      Cl.uint(8n),
+    ]),
+  );
+  const borrower = await fund(ctx, "reserve-ltv-borrower", { btc: 2n * UNIT });
+  await ctx.step("borrower posts collateral", () => addCollateral(chain, borrower, BTC, UNIT));
+  await ctx.attempt("a borrow at the old 50% boundary aborts", () => borrow(chain, borrower, 25_000n * USDC), "u20002", "debt");
+  await ctx.step("a borrow within 40% succeeds", () => borrow(chain, borrower, 23_000n * USDC), "debt");
+  await ctx.step("restore the BTC settings", () =>
+    call("update-collateral-settings", [
+      Cl.contractPrincipal(chain.deployer, BTC),
+      Cl.uint(PROFILE.collateral[BTC].maxLtv),
+      Cl.uint(PROFILE.collateral[BTC].liquidationLtv),
+      Cl.uint(PROFILE.collateral[BTC].liquidationPremium),
+      Cl.uint(PROFILE.collateral[BTC].decimals),
+    ]),
+  );
+});
+
+scenario("market-parameters", async (ctx) => {
+  const { chain, actors } = ctx;
+  const deployer = actors.deployer;
+  const governor = await fund(ctx, "params-governor", {});
+  const lpOpenInterest = async () =>
+    asUint(asTuple(await chain.read("state-v1", "get-open-interest"))["lp-open-interest"]);
+  const triggerAccrual = async () => deposit(chain, actors.staker, 1n * USDC);
+
+  // The IR module accepts updates only from the current governance, and never from its own
+  // deployer again. Hand governance to a separate account for the parameter work.
+  await ctx.step("hand governance to the params governor", () =>
+    chain.call(deployer, "state-v1", "update-governance", [Cl.principal(governor.address)]),
+  );
+
+  // Accrual needs debt: open the position the reserve test repays before measuring the curves.
+  const borrower = await fund(ctx, "params-borrower", { btc: 2n * UNIT, usdc: 30_000n * USDC });
+  await ctx.step("borrower posts collateral", () => addCollateral(chain, borrower, BTC, UNIT));
+  await ctx.step("borrow 20,000", () => borrow(chain, borrower, 20_000n * USDC), "debt");
+
+  const start = await lpOpenInterest();
+  await ctx.step("wait eight blocks on the live curve", () => chain.waitBlocks(8));
+  await ctx.step("accrue the live span", triggerAccrual);
+  const liveDelta = (await lpOpenInterest()) - start;
+  await ctx.step("set a steeper IR curve", () =>
+    chain.call(governor, "linear-kinked-ir-v1", "update-ir-params", [
+      Cl.uint(800_000_000_000n),
+      Cl.uint(1_600_000_000_000n),
+      Cl.uint(750_000_000_000n),
+      Cl.uint(350_000_000_000n),
+    ]),
+  );
+  const steeperStart = await lpOpenInterest();
+  await ctx.step("wait eight blocks on the steeper curve", () => chain.waitBlocks(8));
+  await ctx.step("accrue the steeper span", triggerAccrual);
+  const steeperDelta = (await lpOpenInterest()) - steeperStart;
+  await ctx.assert(
+    "the steeper curve accrues more over the same span",
+    steeperDelta > liveDelta,
+    `live ${liveDelta}, steeper ${steeperDelta}`,
+  );
+  await ctx.step("restore the live IR curve", () =>
+    chain.call(governor, "linear-kinked-ir-v1", "update-ir-params", [
+      Cl.uint(PROFILE.ir.slope1),
+      Cl.uint(PROFILE.ir.slope2),
+      Cl.uint(PROFILE.ir.kink),
+      Cl.uint(PROFILE.ir.base),
+    ]),
+  );
+
+  await ctx.step("set the protocol reserve to 50%", () =>
+    chain.call(governor, "state-v1", "set-protocol-reserve-percentage", [Cl.uint(50_000_000n)]),
+  );
+  await ctx.step("wait twelve blocks", () => chain.waitBlocks(12));
+  await ctx.step("accrue the reserve span", triggerAccrual);
+  // Zero the curve so the repay's own block adds nothing and the reserve delta is exact.
+  await ctx.step("zero the IR curve", () =>
+    chain.call(governor, "linear-kinked-ir-v1", "update-ir-params", [
+      Cl.uint(0n),
+      Cl.uint(0n),
+      Cl.uint(800_000_000_000n),
+      Cl.uint(0n),
+    ]),
+  );
+  const protocolPart = asUint(asTuple(await chain.read("state-v1", "get-open-interest"))["protocol-open-interest"]);
+  const reserveBefore = asUint(await chain.read("state-v1", "get-reserve-balance"));
+  await ctx.step("repay in full", () => repay(chain, borrower, 10n ** 30n), "debt");
+  const reserveAfter = asUint(await chain.read("state-v1", "get-reserve-balance"));
+  await ctx.assert(
+    "the reserve grows by exactly the protocol bucket read before the repay",
+    reserveAfter - reserveBefore === protocolPart,
+    `protocol ${protocolPart}, reserve ${reserveBefore} -> ${reserveAfter}`,
+  );
+  await ctx.step("restore the live IR curve and reserve percentage", async () => {
+    await chain.call(governor, "linear-kinked-ir-v1", "update-ir-params", [
+      Cl.uint(PROFILE.ir.slope1),
+      Cl.uint(PROFILE.ir.slope2),
+      Cl.uint(PROFILE.ir.kink),
+      Cl.uint(PROFILE.ir.base),
+    ]);
+    await chain.call(governor, "state-v1", "set-protocol-reserve-percentage", [
+      Cl.uint(PROFILE.protocolReservePercentage),
+    ]);
+  });
+
+  await ctx.step("set a 20-block finalization period", () =>
+    chain.call(governor, "staking-v1", "update-withdrawal-finalization-period", [Cl.uint(20n)]),
+  );
+  if ((await lpBalance(chain, actors.staker.address)) === 0n) {
+    await ctx.step("fund the staker with LP", () => deposit(chain, actors.staker, 1_000n * USDC));
+  }
+  const toStake = (await lpBalance(chain, actors.staker.address)) / 4n;
+  await ctx.step("stake a quarter of the staker's LP", () => stake(chain, actors.staker, toStake));
+  let unstakeIndex = 0n;
+  await ctx.step("initiate an unstake", async () => {
+    const staked = await stakedBalance(chain, actors.staker.address);
+    const result = await initiateUnstake(chain, actors.staker, staked / 2n);
+    const match = /\(ok u(\d+)\)/.exec(result.result ?? "");
+    if (!match) throw new Error(`no unstake index in ${result.result}`);
+    unstakeIndex = BigInt(match[1]);
+  });
+  await ctx.attempt("finalizing early aborts", () => finalizeUnstake(chain, actors.staker, unstakeIndex), "u60004");
+  await ctx.step("wait past the period", () => chain.waitBlocks(22));
+  await ctx.step("finalize after the period", () => finalizeUnstake(chain, actors.staker, unstakeIndex));
+  await ctx.step("restore the finalization period", () =>
+    chain.call(governor, "staking-v1", "update-withdrawal-finalization-period", [
+      Cl.uint(PROFILE.test.withdrawalFinalizationPeriod),
+    ]),
+  );
+  await ctx.step("hand governance back to the deployer", () =>
+    chain.call(governor, "state-v1", "update-governance", [Cl.principal(deployer.address)]),
+  );
+});
+
+scenario("oracle-variants", async (ctx) => {
+  const { chain } = ctx;
+  const borrower = await fund(ctx, "oracle-borrower", { btc: 2n * UNIT });
+  await ctx.step("borrower posts collateral", () => addCollateral(chain, borrower, BTC, UNIT));
+  await ctx.step("a fresh payload borrows", () => borrow(chain, borrower, 1_000n * USDC), "debt");
+  const debtBefore = (await positionOf(chain, borrower.address))?.debtShares ?? 0n;
+  const reject = async (name: string, options: PriceUpdateOptions, code: string) => {
+    const update = await priceUpdate(chain, options);
+    await ctx.attempt(name, () => borrow(chain, borrower, 1n * USDC, undefined, update), code, "debt");
+    const debt = (await positionOf(chain, borrower.address))?.debtShares ?? 0n;
+    await ctx.assert(`${name}: no state left behind`, debt === debtBefore, `debt shares ${debtBefore} -> ${debt}`);
+  };
+  await reject("a stale payload aborts", { offsetSeconds: -400n }, "u80002");
+  await reject("a future payload aborts", { offsetSeconds: 120n }, "u80002");
+  await reject("an over-confident payload aborts", { confidence: { [BTC]: 6_000_000_000_000n } }, "u80004");
+  await reject("a payload missing the collateral feed aborts", { omit: [BTC] }, "u80008");
+  await reject("a negative price aborts", { raw: { [BTC]: { price: -1n } } }, "u80005");
+  await reject("an invalid exponent aborts", { raw: { [BTC]: { price: 6_000_000_000_000n, expo: 12 } } }, "u80006");
+  await ctx.step("a fresh payload still borrows", () => borrow(chain, borrower, 1_000n * USDC), "debt");
 });

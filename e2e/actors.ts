@@ -14,25 +14,51 @@ export async function withdraw(chain: Chain, actor: Account, amount: bigint, rec
   return chain.call(actor, "liquidity-provider-v1", "withdraw", [Cl.uint(amount), Cl.principal(recipient)]);
 }
 
-export async function redeem(chain: Chain, actor: Account, shares: bigint): Promise<TxResult> {
-  return chain.call(actor, "liquidity-provider-v1", "redeem", [Cl.uint(shares), Cl.principal(actor.address)]);
+export async function redeem(chain: Chain, actor: Account, shares: bigint, recipient = actor.address): Promise<TxResult> {
+  return chain.call(actor, "liquidity-provider-v1", "redeem", [Cl.uint(shares), Cl.principal(recipient)]);
 }
 
-export async function addCollateral(chain: Chain, actor: Account, token: string, amount: bigint): Promise<TxResult> {
-  return chain.call(actor, "borrower-v1", "add-collateral", [cp(chain, token), Cl.uint(amount), Cl.none()]);
+export async function addCollateral(
+  chain: Chain,
+  actor: Account,
+  token: string,
+  amount: bigint,
+  maybeUser?: string,
+): Promise<TxResult> {
+  return chain.call(actor, "borrower-v1", "add-collateral", [
+    cp(chain, token),
+    Cl.uint(amount),
+    maybeUser ? Cl.some(Cl.principal(maybeUser)) : Cl.none(),
+  ]);
 }
 
-export async function removeCollateral(chain: Chain, actor: Account, token: string, amount: bigint): Promise<TxResult> {
+export async function removeCollateral(
+  chain: Chain,
+  actor: Account,
+  token: string,
+  amount: bigint,
+  maybeUser?: string,
+): Promise<TxResult> {
   return chain.call(actor, "borrower-v1", "remove-collateral", [
     buffer(await priceUpdate(chain)),
     cp(chain, token),
     Cl.uint(amount),
-    Cl.none(),
+    maybeUser ? Cl.some(Cl.principal(maybeUser)) : Cl.none(),
   ]);
 }
 
-export async function borrow(chain: Chain, actor: Account, amount: bigint): Promise<TxResult> {
-  return chain.call(actor, "borrower-v1", "borrow", [buffer(await priceUpdate(chain)), Cl.uint(amount), Cl.none()]);
+export async function borrow(
+  chain: Chain,
+  actor: Account,
+  amount: bigint,
+  maybeUser?: string,
+  update?: Uint8Array,
+): Promise<TxResult> {
+  return chain.call(actor, "borrower-v1", "borrow", [
+    buffer(update ?? (await priceUpdate(chain))),
+    Cl.uint(amount),
+    maybeUser ? Cl.some(Cl.principal(maybeUser)) : Cl.none(),
+  ]);
 }
 
 export async function repay(chain: Chain, actor: Account, amount: bigint, onBehalfOf?: string): Promise<TxResult> {

@@ -39,12 +39,14 @@ import {
   borrow,
   deposit,
   liquidate,
+  redeem,
   removeCollateral,
   repay,
   stake,
   initiateUnstake,
   withdraw,
 } from "./actors.ts";
+import { governanceReal } from "./scenarios/final.ts";
 
 const DEFAULT_SEED = 20_261_023;
 const USDC = 100_000_000n;
@@ -123,6 +125,13 @@ async function executeOp(chain: Chain, actors: Actors, op: Op): Promise<void> {
       return void (await borrow(chain, actor, BigInt(op.args.amount) * USDC));
     case "repay":
       return void (await repay(chain, actor, BigInt(op.args.amount) * USDC));
+    case "redeem":
+      return void (await redeem(chain, actor, BigInt(op.args.amount) * USDC));
+    case "repayOnBehalf": {
+      const targets = [actors.safe, actors.max, actors.near, actors.under];
+      const target = targets[op.args.target % targets.length];
+      return void (await repay(chain, actor, BigInt(op.args.amount) * USDC, target.address));
+    }
     case "liquidate": {
       const targets = [actors.safe, actors.max, actors.near, actors.under];
       // Pick a target that holds BTC collateral and is past the contract's liquidation block gap,
@@ -280,7 +289,7 @@ async function main(): Promise<number> {
   if (fixedReportDir) mkdirSync(reportDir, { recursive: true });
 
   const deployer = loadDeployer();
-  const expectedScenarios = [happy, ...matrix].map((scenario) => scenario.name);
+  const expectedScenarios = [happy, ...matrix, governanceReal].map((scenario) => scenario.name);
   let session: Session | null = null;
   let liveHandle: DevnetHandle | null = null;
   let restarts = 0;
@@ -559,6 +568,16 @@ async function main(): Promise<number> {
         fuzz.firstFailure ??= `fuzz op ${opName} succeeded ${stat.succeeded}/${stat.attempts}, below ${MIN_OP_RATIO}`;
         console.error(`fuzz failure: ${fuzz.firstFailure}`);
       }
+    }
+
+    // Governance-real runs after the fuzz: it leaves state governance on governance-v1, so nothing
+    // may follow it.
+    phase = "final-scenarios";
+    for (const scenario of [governanceReal]) {
+      phase = `final-scenarios:${scenario.name}`;
+      const result = await runScenario(session, scenario);
+      scenarios.push(result);
+      console.log(`  ${result.passed ? "PASS" : "FAIL"} ${result.name}${result.failure ? `: ${result.failure}` : ""}`);
     }
 
     phase = "final";
