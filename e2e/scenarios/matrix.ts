@@ -397,11 +397,42 @@ scenario("dust-sweep", async (ctx) => {
 scenario("staking", async (ctx) => {
   const { chain, actors } = ctx;
   const deployer = actors.deployer.address;
-  // Live rewards are zero, so the staked-interest split would never execute. Route governance to the
-  // test contract, apply the named test reward params for this scenario, and put both back after.
   const governance = Cl.contractPrincipal(chain.deployer, "governance-test");
   const rewardParamsMatch = async (kink: bigint) =>
     asUint(asTuple(await chain.read("staking-reward-v1", "get-reward-params"))["staked-kink"]) === kink;
+
+  // Live rewards are zero: pin that path before the test override hides it.
+  await ctx.step("deposit for staking", () => deposit(chain, actors.staker, 100_000n * USDC));
+  const lpTokens = await lpBalance(chain, actors.staker.address);
+  const half = lpTokens / 2n;
+  await ctx.step("stake half the LP tokens", () => stake(chain, actors.staker, half));
+  const staked = await stakedBalance(chain, actors.staker.address);
+  const supply = okUint(await chain.read("state-v1", "get-total-supply"));
+  const liveReward = okUint(
+    await chain.read("staking-reward-v1", "get-staking-reward-percentage", [Cl.uint(staked), Cl.uint(supply)]),
+  );
+  await ctx.assert("live reward percentage is zero", liveReward === 0n, `reward percentage ${liveReward}`);
+  const borrower = await fund(ctx, "staking-borrower", { btc: 2n * UNIT, usdc: 1_000n * USDC });
+  await ctx.step(
+    "staking borrower opens a position",
+    async () => {
+      await addCollateral(chain, borrower, BTC, UNIT);
+      await borrow(chain, borrower, 25_000n * USDC);
+    },
+    "debt",
+  );
+  await ctx.step("wait for interest to accrue", () => chain.waitBlocks(12));
+  const liveBucketBefore = asUint(await chain.read("staking-v1", "get-active-staked-lp-tokens"));
+  await ctx.step("staking borrower repays", () => repay(chain, borrower, 10n ** 30n), "debt");
+  const liveBucketAfter = asUint(await chain.read("staking-v1", "get-active-staked-lp-tokens"));
+  await ctx.assert(
+    "a repay with live zero rewards leaves the staked bucket unchanged",
+    liveBucketAfter === liveBucketBefore,
+    `${liveBucketBefore} -> ${liveBucketAfter}`,
+  );
+
+  // Live rewards are zero, so the staked-interest split would never execute. Route governance to the
+  // test contract, apply the named test reward params for this scenario, and put both back after.
   await ctx.step("route governance to the test contract", () =>
     chain.call(actors.deployer, "state-v1", "update-governance", [governance]),
   );
@@ -419,27 +450,8 @@ scenario("staking", async (ctx) => {
     },
     () => rewardParamsMatch(PROFILE.test.rewardParams.kink),
   );
-  await ctx.step("deposit for staking", () => deposit(chain, actors.staker, 100_000n * USDC));
-  const lpTokens = await lpBalance(chain, actors.staker.address);
-  const half = lpTokens / 2n;
-  await ctx.step("stake half the LP tokens", () => stake(chain, actors.staker, half));
-  const staked = await stakedBalance(chain, actors.staker.address);
-  await ctx.assert("staked balance is positive", staked > 0n, "no staked LP tokens");
-  const supply = okUint(await chain.read("state-v1", "get-total-supply"));
-  const reward = okUint(
-    await chain.read("staking-reward-v1", "get-staking-reward-percentage", [Cl.uint(staked), Cl.uint(supply)]),
-  );
-  await ctx.assert("staking reward percentage is positive", reward > 0n, `reward percentage ${reward}`);
   // Interest a borrower pays must land in the staked bucket, not only in lp-open-interest.
-  const borrower = await fund(ctx, "staking-borrower", { btc: 2n * UNIT, usdc: 1_000n * USDC });
-  await ctx.step(
-    "staking borrower opens a position",
-    async () => {
-      await addCollateral(chain, borrower, BTC, UNIT);
-      await borrow(chain, borrower, 25_000n * USDC);
-    },
-    "debt",
-  );
+  await ctx.step("staking borrower borrows again", () => borrow(chain, borrower, 25_000n * USDC), "debt");
   await ctx.step("wait for interest to accrue", () => chain.waitBlocks(12));
   const stakedBucketBefore = asUint(await chain.read("staking-v1", "get-active-staked-lp-tokens"));
   await ctx.step("staking borrower repays", () => repay(chain, borrower, 10n ** 30n), "debt");
