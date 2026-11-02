@@ -1,3 +1,4 @@
+// Manual setup smoke check; not part of the suite.
 import { Chain } from "./chain.ts";
 import { startDevnet, stopDevnet } from "./devnet.ts";
 import { loadAccounts } from "./keys.ts";

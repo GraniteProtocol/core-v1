@@ -173,10 +173,7 @@ export async function setup(chain: Chain, actors: Actors): Promise<Snapshot> {
   // Live is 100 blocks; a short period keeps the unstake scenario inside a run while leaving room
   // for the early-finalize assertion (transactions between initiate and finalize cost a block or two).
   await call("staking-v1", "update-withdrawal-finalization-period", [Cl.uint(PROFILE.test.withdrawalFinalizationPeriod)]);
-  // The test governance is initialized here because the staking scenario uses it to apply and
-  // restore test reward params; the governance scenario drives the proposal lifecycle against it.
-  // Governance-test resolves proposal membership through meta-governance, so that must be
-  // initialized too.
+  // The test governance serves the staking and governance scenarios and reads membership from meta-governance.
   const testGovernance = Cl.list([Cl.some(Cl.principal(deployer)), Cl.none(), Cl.none(), Cl.none(), Cl.none()]);
   await call("meta-governance-v1", "initialize-governance", [testGovernance]);
   await call("governance-test", "initialize-governance", [testGovernance]);

@@ -1,8 +1,4 @@
-// Market configuration the suite runs against. A profile holds the production values read from a
-// live market plus the named devnet-only overrides the local chain needs; the setup and the
-// invariants consume the selected profile, so a second market is another object of this shape
-// rather than a second runner. The scenario amounts are still derived from the profile's LTVs by
-// hand, which is the work a second market owes.
+// Market configuration: production values read from the live market plus the named devnet overrides.
 
 export const MARKET = "mock-usdc";
 export const BTC = "mock-btc";

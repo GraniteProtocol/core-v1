@@ -37,14 +37,6 @@ jobs:
         run: |
           echo 'precedence ::ffff:0:0/96  100' | sudo tee -a /etc/gai.conf
           getent ahosts localhost | head -4
-      - name: "Loopback port probe"
-        run: |
-          docker run -d --rm --name e2e-port-probe -p 18443:18443 alpine:3.20 \
-            sh -c 'while true; do { printf "HTTP/1.0 200 OK\r\n\r\n"; } | nc -l -p 18443; done'
-          sleep 3
-          docker ps -a --format '{{.Names}} {{.Status}}'
-          curl -sv --max-time 3 http://localhost:18443/ || true
-          docker rm -f e2e-port-probe
       - name: "Run the full suite"
         run: |
           # bitcoind runs as uid 1000 and bind-mounts its data dir from .cache, so the directories

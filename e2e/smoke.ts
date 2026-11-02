@@ -1,3 +1,4 @@
+// Manual devnet smoke check; not part of the suite.
 import { manifestContractNames, startDevnet, stopDevnet } from "./devnet.ts";
 
 const handle = await startDevnet();

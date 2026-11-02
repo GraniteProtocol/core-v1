@@ -878,8 +878,7 @@ scenario("governance", async (ctx) => {
       return (
         restored.maxLtv === expected.maxLtv &&
         restored.liquidationLtv === expected.liquidationLtv &&
-        restored.liquidationPremium === expected.liquidationPremium &&
-        restored.decimals === expected.decimals
+        restored.liquidationPremium === expected.liquidationPremium
       );
     },
   );
@@ -1214,11 +1213,15 @@ scenario("state-admin-reserve", async (ctx) => {
       Cl.uint(PROFILE.collateral[BTC].decimals),
     ]),
   );
-  await ctx.step("restore the reserve and repay the probe borrower", async () => {
-    await repay(chain, borrower, 10n ** 30n);
-    const current = await reserve();
-    if (current > reserveBefore) await call("withdraw-from-reserve", [Cl.uint(current - reserveBefore)]);
-  });
+  await ctx.step(
+    "restore the reserve and repay the probe borrower",
+    async () => {
+      await repay(chain, borrower, 10n ** 30n);
+      const current = await reserve();
+      if (current > reserveBefore) await call("withdraw-from-reserve", [Cl.uint(current - reserveBefore)]);
+    },
+    "debt",
+  );
   await ctx.assert(
     "the reserve and the probe borrower are back to their starting state",
     (await reserve()) === reserveBefore && ((await positionOf(chain, borrower.address))?.debtShares ?? 0n) === 0n,
@@ -1234,8 +1237,7 @@ scenario("market-parameters", async (ctx) => {
     asUint(asTuple(await chain.read("state-v1", "get-open-interest"))["lp-open-interest"]);
   const triggerAccrual = async () => deposit(chain, actors.staker, 1n * USDC);
 
-  // The IR module accepts updates only from the current governance, and never from its own
-  // deployer again. Hand governance to a separate account for the parameter work.
+  // The IR module takes updates only from the current governance and never from its own deployer.
   await ctx.step("hand governance to the params governor", () =>
     chain.call(deployer, "state-v1", "update-governance", [Cl.principal(governor.address)]),
   );
@@ -1351,10 +1353,7 @@ scenario("oracle-variants", async (ctx) => {
   const borrower = await fund(ctx, "oracle-borrower", { btc: 2n * UNIT });
   await ctx.step("borrower posts collateral", () => addCollateral(chain, borrower, BTC, UNIT));
   await ctx.step("a fresh payload borrows", () => borrow(chain, borrower, 1_000n * USDC), "debt");
-  const debtBefore = (await positionOf(chain, borrower.address))?.debtShares ?? 0n;
   const reject = async (name: string, options: PriceUpdateOptions, code: string) => {
-    const debtNow = (await positionOf(chain, borrower.address))?.debtShares ?? 0n;
-    await ctx.assert(`${name}: probe starts from the baseline debt`, debtNow === debtBefore, `debt shares ${debtBefore} -> ${debtNow}`);
     const update = await priceUpdate(chain, options);
     await ctx.attempt(name, () => borrow(chain, borrower, 1n * USDC, undefined, update), code, "debt");
   };

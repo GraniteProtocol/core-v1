@@ -55,6 +55,7 @@ export type RunReport = {
     setupMs: number;
     scenarios: Array<{ name: string; ms: number }>;
     matrixMs: number;
+    finalScenariosMs: number;
     fuzzMs: number;
     fuzzOps: number;
     perOpMs: number;
@@ -127,7 +128,7 @@ export async function writeReport(
     lines.push(
       `- timings: boot ${(t.bootMs / 1000).toFixed(1)}s, setup ${(t.setupMs / 1000).toFixed(1)}s, matrix ${(
         t.matrixMs / 1000
-      ).toFixed(1)}s, fuzz ${(t.fuzzMs / 1000).toFixed(1)}s (${t.fuzzOps} ops, ${t.perOpMs}ms/op), total ${(
+      ).toFixed(1)}s, final ${(t.finalScenariosMs / 1000).toFixed(1)}s, fuzz ${(t.fuzzMs / 1000).toFixed(1)}s (${t.fuzzOps} ops, ${t.perOpMs}ms/op), total ${(
         t.totalMs / 1000
       ).toFixed(1)}s`,
     );
@@ -177,7 +178,7 @@ export async function writeReport(
     }
     for (const entry of report.accounting.rebaselines ?? []) {
       lines.push(
-        `- restart rebaseline: pre-restart drift ${entry.drift} at ${entry.at} [${entry.phase}]; the final gap is measured from that baseline`,
+        `- restart rebaseline: the pre-restart drift ${entry.drift} at ${entry.at} [${entry.phase}] was discarded; the final gap is measured on the restarted chain`,
       );
     }
   }

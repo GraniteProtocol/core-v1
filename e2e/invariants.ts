@@ -56,15 +56,7 @@ export function resetDriftBaseline(): void {
 
 const abs = (value: bigint): bigint => (value < 0n ? -value : value);
 
-/**
- * The protocol invariant is `total_assets + reserve == cash + outstanding_debt`, but protocol
- * interest accrues into protocol-open-interest and only becomes reserve-balance when a repay
- * collects it. Until then it backs no claim, so the checked surplus is
- * cash + (debt - protocol-open-interest) - reserve - totalAssets. With a 25% reserve a repay's raw
- * gap moves by the floor residue minus the protocol part (negative); the surplus moves only by the
- * non-negative floor residue. A negative surplus means value appeared from nowhere. A bad-debt
- * write-off receives debt already net of the protocol part, so it moves the surplus by zero.
- */
+/** Checks cash + (debt - protocol-open-interest) - reserve - totalAssets against the floor residue. */
 export function accountingSurplus(params: {
   totalAssets: bigint;
   reserve: bigint;
@@ -72,6 +64,7 @@ export function accountingSurplus(params: {
   debt: bigint;
   protocolOpenInterest: bigint;
 }): bigint {
+  // A bad-debt write-off receives debt already net of the protocol part, so it moves the surplus by zero.
   return params.cash + params.debt - params.protocolOpenInterest - params.reserve - params.totalAssets;
 }
 
@@ -96,12 +89,7 @@ export function accountingHolds(
   };
 }
 
-/**
- * Outside debt operations the accumulated surplus must not move at all; a debt operation that
- * landed may move it upward by at most MAX_DEBT_STEP_DRIFT. Downward movement always fails, and
- * the baseline check after setup must be exactly zero. An aborted operation changed nothing, so it
- * is held to zero and does not count toward the cumulative ceiling.
- */
+/** Only a landed debt operation may move the surplus, upward, by at most MAX_DEBT_STEP_DRIFT. */
 export function gateStepDrift(surplus: bigint, kind: OpKind, applied = true): InvariantResult {
   stats.drift = surplus;
   if (lastDrift === undefined) {
@@ -209,10 +197,7 @@ export async function capsSnapshot(chain: Chain): Promise<CapsSnapshot> {
 }
 
 async function debtHealth(chain: Chain): Promise<InvariantResult> {
-  // liquidator-v1.account-health costs ~212k read length even for one collateral, above the devnet
-  // call-read budget of 200k, so the contract's own check is exercised by the liquidation
-  // scenarios (where it runs inside a transaction) rather than read back here. This check keeps
-  // every known position's health finite and above zero, which is what the mirror feeds scenarios.
+  // account-health exceeds the devnet's call-read budget, so only finiteness is readable here.
   if (probeUsers.length === 0) return { name: "position-health", ok: true, detail: "no probe users" };
   const user = probeUsers[probeIndex++ % probeUsers.length];
   const position = await positionOf(chain, user);
@@ -293,10 +278,7 @@ async function capsBuckets(chain: Chain): Promise<InvariantResult> {
   const decay = asUint(windows[1]);
   if (refill !== expected.refill) problems.push(`refill window ${refill} != ${expected.refill}`);
   if (decay !== expected.decay) problems.push(`decay window ${decay} != ${expected.decay}`);
-  // A bucket is a withdrawal credit, not a liquidity measure: inflows add on top of the cap and
-  // external outflows (liquidation seizures) shrink liquidity without touching the credit, so a
-  // per-step bucket-vs-liquidity bound is not valid. The cap behaviour itself is asserted exactly
-  // by the caps scenarios (withdrawal above the bucket aborts, refill/decay equal the cap).
+  // A bucket is a withdrawal credit, not a liquidity measure, so only its windows are bounded here.
   const buckets = [
     `lp=${asUint(values[0])}`,
     `debt=${asUint(values[3])}`,
@@ -355,9 +337,7 @@ export async function checkInvariants(
   const totalAssets = asUint(lp["total-assets"]);
   const openInterest = asUint(debt["open-interest"]);
   const protocolOpenInterest = asUint(asTuple(interestValue)["protocol-open-interest"]);
-  // Cash + (debt - uncollected protocol interest) == total_assets + reserve, up to the floor
-  // residue. The structural ceiling is MAX_DEBT_STEP_DRIFT units per successful debt operation seen
-  // so far; the per-step gate is sharper. Count the operation before reading the ceiling.
+  // The cumulative ceiling is MAX_DEBT_STEP_DRIFT per landed debt operation; count it first.
   const step = gateStepDrift(
     cash + openInterest - protocolOpenInterest - reserve - totalAssets,
     kind,

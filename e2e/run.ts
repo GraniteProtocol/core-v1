@@ -26,7 +26,7 @@ import { asBool } from "./values.ts";
 import { healthOf, positionOf } from "./reads.ts";
 
 const DEBT_OPS = new Set(["borrow", "repay", "repayOnBehalf", "liquidate"]);
-const MAX_RESTARTS = 20;
+const MAX_RESTARTS = 12;
 // A fuzz run where most ops abort (or an op type never succeeds) is not exercising the protocol.
 const MIN_SUCCESS_RATIO = 0.5;
 const MIN_OP_RATIO = 0.05;
@@ -73,11 +73,7 @@ function loadDeployer(): Account {
   return deployer;
 }
 
-/**
- * Dedicated funded accounts rather than the devnet wallets: clarinet sends its own pox stacking
- * transactions from wallet_1..3, and sharing an account with those puts our transactions behind a
- * nonce we do not control.
- */
+/** Dedicated accounts, because clarinet's own pox stacking would race these nonces. */
 async function bootstrapActors(chain: Chain, deployer: Account): Promise<Actors> {
   const actors = { deployer } as Actors;
   for (const role of ACTOR_NAMES) {
@@ -142,10 +138,7 @@ async function executeOp(chain: Chain, actors: Actors, op: Op): Promise<void> {
     }
     case "liquidate": {
       const targets = [actors.safe, actors.max, actors.near, actors.under];
-      // Pick a target that holds BTC collateral and is past the contract's liquidation block gap,
-      // then scale all of its collateral prices so the whole position is 2% under water while its
-      // collateral still exceeds debt + reward. That exercises liquidation without a socializing
-      // write-off, whose second interest split would move the accounting gate past its residue.
+      // A target 2% under water liquidates without a socializing write-off.
       const height = await chain.blockHeight();
       let target = targets[op.args.target % targets.length];
       for (const candidate of targets) {
@@ -192,11 +185,7 @@ async function executeOp(chain: Chain, actors: Actors, op: Op): Promise<void> {
   }
 }
 
-/**
- * Only a contract error code is an acceptable fuzz outcome. Runtime errors surface as `(err none)`,
- * and a post-condition abort cannot legitimately occur with allow-mode and no post-conditions, so
- * both are harness failures, not expected aborts.
- */
+/** Only a contract error code is an expected abort; runtime failures are ours. */
 function isExpectedContractAbort(error: unknown): boolean {
   const message = error instanceof Error ? error.message : String(error);
   return /aborted \([^)]*\): \(err u\d+\)/.test(message);
@@ -310,6 +299,7 @@ async function main(): Promise<number> {
 
   const deployer = loadDeployer();
   const expectedScenarios = [happy, ...matrix, governanceReal].map((scenario) => scenario.name);
+  const finalScenarioNames = new Set([governanceReal].map((scenario) => scenario.name));
   let session: Session | null = null;
   let liveHandle: DevnetHandle | null = null;
   let restarts = 0;
@@ -403,7 +393,12 @@ async function main(): Promise<number> {
             bootMs: session.timings.bootMs,
             setupMs: session.timings.setupMs,
             scenarios: scenarios.map((scenario) => ({ name: scenario.name, ms: scenario.ms ?? 0 })),
-            matrixMs: scenarios.reduce((sum, scenario) => sum + (scenario.ms ?? 0), 0),
+            matrixMs: scenarios
+              .filter((scenario) => !finalScenarioNames.has(scenario.name))
+              .reduce((sum, scenario) => sum + (scenario.ms ?? 0), 0),
+            finalScenariosMs: scenarios
+              .filter((scenario) => finalScenarioNames.has(scenario.name))
+              .reduce((sum, scenario) => sum + (scenario.ms ?? 0), 0),
             fuzzMs: fuzz.ms,
             fuzzOps: fuzz.ops,
             perOpMs: fuzz.ops > 0 ? Math.round(fuzz.ms / fuzz.ops) : 0,
@@ -588,8 +583,7 @@ async function main(): Promise<number> {
       }
     }
 
-    // Governance-real runs after the fuzz: it leaves state governance on governance-v1, so nothing
-    // may follow it. A devnet stall restarts the chain and re-runs the scenario from setup state.
+    // Governance-real runs last and leaves state governance on governance-v1; a stall restarts it.
     phase = "final-scenarios";
     for (const scenario of [governanceReal]) {
       phase = `final-scenarios:${scenario.name}`;
@@ -654,7 +648,7 @@ async function main(): Promise<number> {
     console.log(
       `timings: boot ${(timings.bootMs / 1000).toFixed(1)}s, setup ${(timings.setupMs / 1000).toFixed(1)}s, matrix ${(
         timings.matrixMs / 1000
-      ).toFixed(1)}s, fuzz ${(timings.fuzzMs / 1000).toFixed(1)}s (${fuzz.ops} ops, ${timings.perOpMs}ms/op), total ${(
+      ).toFixed(1)}s, final ${(timings.finalScenariosMs / 1000).toFixed(1)}s, fuzz ${(timings.fuzzMs / 1000).toFixed(1)}s (${fuzz.ops} ops, ${timings.perOpMs}ms/op), total ${(
         timings.totalMs / 1000
       ).toFixed(1)}s`,
     );

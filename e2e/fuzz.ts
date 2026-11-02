@@ -1,6 +1,6 @@
 export type Op = { actor: string; op: string; args: Record<string, number> };
 
-// Timed budget: 10 sequences of 20-40 ops keeps matrix + fuzz inside ~30 minutes.
+// Timed budget: 10 sequences of 20-40 ops keeps matrix + fuzz inside ~35 minutes.
 export const FUZZ_SEQUENCES = 10;
 export const FUZZ_MIN_OPS = 20;
 export const FUZZ_MAX_OPS = 40;
