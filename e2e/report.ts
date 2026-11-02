@@ -128,9 +128,9 @@ export async function writeReport(
     lines.push(
       `- timings: boot ${(t.bootMs / 1000).toFixed(1)}s, setup ${(t.setupMs / 1000).toFixed(1)}s, matrix ${(
         t.matrixMs / 1000
-      ).toFixed(1)}s, final ${(t.finalScenariosMs / 1000).toFixed(1)}s, fuzz ${(t.fuzzMs / 1000).toFixed(1)}s (${t.fuzzOps} ops, ${t.perOpMs}ms/op), total ${(
-        t.totalMs / 1000
-      ).toFixed(1)}s`,
+      ).toFixed(1)}s, fuzz ${(t.fuzzMs / 1000).toFixed(1)}s (${t.fuzzOps} ops, ${t.perOpMs}ms/op), final ${(
+        t.finalScenariosMs / 1000
+      ).toFixed(1)}s, total ${(t.totalMs / 1000).toFixed(1)}s`,
     );
     lines.push("", "| scenario | ms |", "| --- | --- |");
     for (const scenario of t.scenarios) lines.push(`| ${scenario.name} | ${scenario.ms} |`);
@@ -178,7 +178,7 @@ export async function writeReport(
     }
     for (const entry of report.accounting.rebaselines ?? []) {
       lines.push(
-        `- restart rebaseline: the pre-restart drift ${entry.drift} at ${entry.at} [${entry.phase}] was discarded; the final gap is measured on the restarted chain`,
+        `- restart rebaseline: the pre-restart drift ${entry.drift} at ${entry.at} [${entry.phase}] was discarded and the gap re-baselined to zero on the restarted chain`,
       );
     }
   }

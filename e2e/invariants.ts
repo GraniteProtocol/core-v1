@@ -56,7 +56,10 @@ export function resetDriftBaseline(): void {
 
 const abs = (value: bigint): bigint => (value < 0n ? -value : value);
 
-/** Checks cash + (debt - protocol-open-interest) - reserve - totalAssets against the floor residue. */
+/**
+ * Checks cash + (debt - protocol-open-interest) - reserve - totalAssets against the floor residue.
+ * Uncollected protocol interest backs no claim until a repay collects it.
+ */
 export function accountingSurplus(params: {
   totalAssets: bigint;
   reserve: bigint;
@@ -197,7 +200,7 @@ export async function capsSnapshot(chain: Chain): Promise<CapsSnapshot> {
 }
 
 async function debtHealth(chain: Chain): Promise<InvariantResult> {
-  // account-health exceeds the devnet's call-read budget, so only finiteness is readable here.
+  // account-health exceeds the devnet's call-read budget; the mirror's positive health stands in.
   if (probeUsers.length === 0) return { name: "position-health", ok: true, detail: "no probe users" };
   const user = probeUsers[probeIndex++ % probeUsers.length];
   const position = await positionOf(chain, user);

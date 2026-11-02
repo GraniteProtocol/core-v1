@@ -26,7 +26,7 @@ import { asBool } from "./values.ts";
 import { healthOf, positionOf } from "./reads.ts";
 
 const DEBT_OPS = new Set(["borrow", "repay", "repayOnBehalf", "liquidate"]);
-const MAX_RESTARTS = 12;
+const MAX_RESTARTS = 10;
 // A fuzz run where most ops abort (or an op type never succeeds) is not exercising the protocol.
 const MIN_SUCCESS_RATIO = 0.5;
 const MIN_OP_RATIO = 0.05;
@@ -185,7 +185,7 @@ async function executeOp(chain: Chain, actors: Actors, op: Op): Promise<void> {
   }
 }
 
-/** Only a contract error code is an expected abort; runtime failures are ours. */
+/** Only a contract error code is an expected abort; runtime failures belong to the harness. */
 function isExpectedContractAbort(error: unknown): boolean {
   const message = error instanceof Error ? error.message : String(error);
   return /aborted \([^)]*\): \(err u\d+\)/.test(message);
@@ -648,9 +648,9 @@ async function main(): Promise<number> {
     console.log(
       `timings: boot ${(timings.bootMs / 1000).toFixed(1)}s, setup ${(timings.setupMs / 1000).toFixed(1)}s, matrix ${(
         timings.matrixMs / 1000
-      ).toFixed(1)}s, final ${(timings.finalScenariosMs / 1000).toFixed(1)}s, fuzz ${(timings.fuzzMs / 1000).toFixed(1)}s (${fuzz.ops} ops, ${timings.perOpMs}ms/op), total ${(
-        timings.totalMs / 1000
-      ).toFixed(1)}s`,
+      ).toFixed(1)}s, fuzz ${(timings.fuzzMs / 1000).toFixed(1)}s (${fuzz.ops} ops, ${timings.perOpMs}ms/op), final ${(
+        timings.finalScenariosMs / 1000
+      ).toFixed(1)}s, total ${(timings.totalMs / 1000).toFixed(1)}s`,
     );
     for (const scenario of timings.scenarios) {
       console.log(`  ${scenario.name}: ${(scenario.ms / 1000).toFixed(1)}s`);
