@@ -35,4 +35,18 @@ describe("report", () => {
     expect(md).toContain("accounting: gap=1");
     expect(md).toContain("warning: the accounting gap is non-zero");
   });
+
+  it("serializes bigint values as strings", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "local-e2e-report-"));
+    const report = {
+      startedAt: "2026-10-23T00:00:00.000Z",
+      durationMs: 1,
+      seed: 7,
+      scenarios: [],
+      fuzz: { sequences: 0, sequencesCompleted: 0, ops: 0, succeeded: 0, aborted: 0, failures: 0, perOp: {} },
+      caps: { refillWindow: 40n, decayWindow: "20", lp: { bucket: "1", factor: "1", max: "1" }, debt: { bucket: "1", factor: "1", max: "1" }, collateral: {} },
+    } as unknown as Parameters<typeof writeReport>[1];
+    const paths = await writeReport(dir, report);
+    expect(JSON.parse(readFileSync(paths.jsonPath, "utf8")).caps.refillWindow).toBe("40");
+  });
 });

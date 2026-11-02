@@ -87,7 +87,10 @@ export async function writeReport(
 ): Promise<{ mdPath: string; jsonPath: string }> {
   const jsonPath = join(dir, "report.json");
   const mdPath = join(dir, "report.md");
-  writeFileSync(jsonPath, `${JSON.stringify(report, null, 2)}\n`);
+  writeFileSync(
+    jsonPath,
+    `${JSON.stringify(report, (_, value) => (typeof value === "bigint" ? value.toString() : value), 2)}\n`,
+  );
 
   const expected = report.expectedScenarios ?? report.scenarios.map((scenario) => scenario.name);
   const passed = report.scenarios.filter((scenario) => scenario.passed).length;

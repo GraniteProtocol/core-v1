@@ -295,7 +295,9 @@ export function profileSummary(): Record<string, string | string[]> {
     irParams: `slope1=${PROFILE.ir.slope1} slope2=${PROFILE.ir.slope2} kink=${PROFILE.ir.kink} base=${PROFILE.ir.base}`,
     rewardParams: `slope1=${PROFILE.reward.slope1} slope2=${PROFILE.reward.slope2} kink=${PROFILE.reward.kink} base=${PROFILE.reward.base}`,
     collateral: `max-ltv/liquidation-ltv/premium/decimals: ${collateral}`,
-    caps: `lp=${PROFILE.caps.lp} debt=${PROFILE.caps.debt} collateral=${JSON.stringify(expectedCaps().collateral)} windows=${PROFILE.caps.windows.refill}/${PROFILE.caps.windows.decay}`,
+    caps: `lp=${PROFILE.caps.lp} debt=${PROFILE.caps.debt} collateral=${Object.entries(expectedCaps().collateral)
+      .map(([token, factor]) => `${token}=${factor}`)
+      .join(" ")} windows=${PROFILE.caps.windows.refill}/${PROFILE.caps.windows.decay}`,
     testOverrides: [
       `asset cap ${PROFILE.test.assetCap} (live ${PROFILE.assetCap})`,
       `withdrawal finalization ${PROFILE.test.withdrawalFinalizationPeriod} blocks, from setup (live ${PROFILE.withdrawalFinalizationPeriod})`,

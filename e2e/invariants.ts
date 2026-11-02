@@ -284,7 +284,7 @@ async function capsFactors(chain: Chain): Promise<InvariantResult> {
   return {
     name: "caps-factors",
     ok: bad.length === 0,
-    detail: bad.length === 0 ? entries.map(([k, v]) => `${k}=${v}`).join(" ") : `out of bounds: ${JSON.stringify(bad)}`,
+    detail: bad.length === 0 ? entries.map(([k, v]) => `${k}=${v}`).join(" ") : `out of bounds: ${bad.map(([k, v]) => `${k}=${v}`).join(" ")}`,
   };
 }
 
