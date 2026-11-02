@@ -162,6 +162,23 @@ function devnetNetworkExists(): boolean {
   return res.stdout.split("\n").map((line) => line.trim()).includes(NETWORK);
 }
 
+/** Container state and logs at boot-failure time, before the devnet is torn down. */
+function devnetContainerDump(): string {
+  const docker = dockerPath();
+  const names = devnetContainerNames();
+  if (names.length === 0) return "(no devnet containers)";
+  return names
+    .map((name) => {
+      const status = spawnSync(docker, ["ps", "-a", "--filter", `name=^${name}$`, "--format", "{{.Status}}"], {
+        encoding: "utf8",
+        timeout: DOCKER_TIMEOUT_MS,
+      }).stdout?.trim();
+      const logs = spawnSync(docker, ["logs", "--tail", "40", name], { encoding: "utf8", timeout: DOCKER_TIMEOUT_MS });
+      return `=== ${name} (${status ?? "unknown"}) ===\n${logs.stdout ?? ""}${logs.stderr ?? ""}`.trimEnd();
+    })
+    .join("\n");
+}
+
 /** Refuses to adopt a devnet this run did not start: another run's chain owns these ports and names. */
 async function assertNoForeignDevnet(apiUrl: string): Promise<void> {
   const status = await httpStatus(`${apiUrl}/v2/info`);
@@ -269,9 +286,10 @@ export async function startDevnet(
     return handle;
   } catch (error) {
     handle.workingDir ??= stackDirs().find((name) => !dirsBefore.has(name));
+    const containers = devnetContainerDump();
     await stopDevnet(handle);
     const reason = error instanceof Error ? error.message : String(error);
-    const message = `${reason}\n--- devnet log tail ---\n${logTail(logPath)}`;
+    const message = `${reason}\n--- devnet log tail ---\n${logTail(logPath)}\n--- devnet containers ---\n${containers}`;
     if (error instanceof DevnetStallError) throw new DevnetStallError(message);
     throw new Error(message);
   }
