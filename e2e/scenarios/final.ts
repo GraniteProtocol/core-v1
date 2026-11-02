@@ -22,6 +22,7 @@ const proposalOf = async (chain: Chain, id: string) =>
 const isMemberOf = async (chain: Chain, contract: string, who: string): Promise<boolean> =>
   asBool(asOk(await chain.read(contract, "is-governance-member", [Cl.principal(who)])));
 
+
 /** Runs after the fuzz phase: governance-real leaves state governance on governance-v1. */
 export const governanceReal: Scenario = {
   name: "governance-real",
@@ -62,10 +63,16 @@ export const governanceReal: Scenario = {
         Cl.contractPrincipal(chain.deployer, "governance-v1"),
       ]),
     );
-    await ctx.assert(
-      "the deployer is a governance member through governance-v1",
-      await isMemberOf(chain, "governance-v1", deployer.address),
-      "not a member",
+    await ctx.attempt(
+      "a non-member cannot initiate a governance proposal",
+      () =>
+        chain.call(guardian, "governance-v1", "initiate-proposal-to-set-market-feature", [
+          Cl.uint(2n),
+          Cl.bool(false),
+          Cl.uint(1000n),
+          Cl.uint(0n),
+        ]),
+      "u50000",
     );
     await ctx.step("borrower posts collateral", () => addCollateral(chain, borrower, BTC, 100_000_000n));
 
@@ -229,6 +236,12 @@ export const governanceReal: Scenario = {
       "the unpause also restored the staking flag",
       asBool(await chain.read("state-v1", "is-staking-enabled")),
       "staking still disabled",
+    );
+    const finalGovernance = asPrincipal(await chain.read("state-v1", "get-governance"));
+    await ctx.assert(
+      "state governance is still governance-v1",
+      finalGovernance === `${chain.deployer}.governance-v1`,
+      `governance is ${finalGovernance}`,
     );
   },
 };

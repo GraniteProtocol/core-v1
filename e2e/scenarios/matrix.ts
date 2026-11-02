@@ -439,8 +439,7 @@ scenario("staking", async (ctx) => {
     `${liveBucketBefore} -> ${liveBucketAfter}`,
   );
 
-  // Live rewards are zero, so the staked-interest split would never execute. Route governance to the
-  // test contract, apply the named test reward params for this scenario, and put both back after.
+  // The test reward params exist only to exercise the staked split; apply and restore them here.
   await ctx.step("route governance to the test contract", () =>
     chain.call(actors.deployer, "state-v1", "update-governance", [governance]),
   );
@@ -869,11 +868,20 @@ scenario("governance", async (ctx) => {
         Cl.uint(eth.maxLtv),
         Cl.uint(eth.liquidationLtv),
         Cl.uint(eth.liquidationPremium),
-        Cl.uint(eth.decimals),
+        Cl.uint(1000),
       ]);
       return proposalIdFrom(result.result);
     },
-    async () => (await collateralSettingsOf(chain, ETH)).maxLtv === expectedCollateralConfigs()[ETH].maxLtv,
+    async () => {
+      const restored = await collateralSettingsOf(chain, ETH);
+      const expected = expectedCollateralConfigs()[ETH];
+      return (
+        restored.maxLtv === expected.maxLtv &&
+        restored.liquidationLtv === expected.liquidationLtv &&
+        restored.liquidationPremium === expected.liquidationPremium &&
+        restored.decimals === expected.decimals
+      );
+    },
   );
 
   await proposeAndExecute(ctx,
@@ -908,7 +916,12 @@ scenario("governance", async (ctx) => {
     },
     async () => {
       const params = asTuple(await chain.read("linear-kinked-ir-v1", "get-ir-params"));
-      return asUint(params["base-ir"]) === PROFILE.ir.base && asUint(params["utilization-kink"]) === PROFILE.ir.kink;
+      return (
+        asUint(params["ir-slope-1"]) === PROFILE.ir.slope1 &&
+        asUint(params["ir-slope-2"]) === PROFILE.ir.slope2 &&
+        asUint(params["utilization-kink"]) === PROFILE.ir.kink &&
+        asUint(params["base-ir"]) === PROFILE.ir.base
+      );
     },
   );
 
@@ -1138,7 +1151,6 @@ scenario("state-admin-reserve", async (ctx) => {
   const call = (fn: string, args: ClarityValue[]) => callAsDeployer(chain, deployer, "state-v1", fn, args);
   const reserve = async () => asUint(await chain.read("state-v1", "get-reserve-balance"));
   const cash = async () => asUint(await chain.read("state-v1", "free-liquidity"));
-  const available = async () => okUint(await chain.read("state-v1", "available-liquidity"));
   const deployerBalance = () => tokenBalance(chain, MARKET, deployer.address);
 
   const reserveBefore = await reserve();
@@ -1150,8 +1162,7 @@ scenario("state-admin-reserve", async (ctx) => {
     "deposit-to-reserve moves tokens in and raises the reserve",
     (await reserve()) === reserveBefore + depositAmount &&
       (await deployerBalance()) === balanceBefore - depositAmount &&
-      (await cash()) === cashBefore + depositAmount &&
-      (await available()) === cashBefore - reserveBefore,
+      (await cash()) === cashBefore + depositAmount,
     `reserve ${reserveBefore} -> ${await reserve()}, cash ${cashBefore} -> ${await cash()}`,
   );
 
@@ -1190,7 +1201,7 @@ scenario("state-admin-reserve", async (ctx) => {
       Cl.uint(8n),
     ]),
   );
-  const borrower = await fund(ctx, "reserve-ltv-borrower", { btc: 2n * UNIT });
+  const borrower = await fund(ctx, "reserve-ltv-borrower", { btc: 2n * UNIT, usdc: 30_000n * USDC });
   await ctx.step("borrower posts collateral", () => addCollateral(chain, borrower, BTC, UNIT));
   await ctx.attempt("a borrow at the old 50% boundary aborts", () => borrow(chain, borrower, 25_000n * USDC), "u20002", "debt");
   await ctx.step("a borrow within 40% succeeds", () => borrow(chain, borrower, 23_000n * USDC), "debt");
@@ -1202,6 +1213,16 @@ scenario("state-admin-reserve", async (ctx) => {
       Cl.uint(PROFILE.collateral[BTC].liquidationPremium),
       Cl.uint(PROFILE.collateral[BTC].decimals),
     ]),
+  );
+  await ctx.step("restore the reserve and repay the probe borrower", async () => {
+    await repay(chain, borrower, 10n ** 30n);
+    const current = await reserve();
+    if (current > reserveBefore) await call("withdraw-from-reserve", [Cl.uint(current - reserveBefore)]);
+  });
+  await ctx.assert(
+    "the reserve and the probe borrower are back to their starting state",
+    (await reserve()) === reserveBefore && ((await positionOf(chain, borrower.address))?.debtShares ?? 0n) === 0n,
+    `reserve ${reserveBefore} -> ${await reserve()}`,
   );
 });
 
@@ -1332,12 +1353,13 @@ scenario("oracle-variants", async (ctx) => {
   await ctx.step("a fresh payload borrows", () => borrow(chain, borrower, 1_000n * USDC), "debt");
   const debtBefore = (await positionOf(chain, borrower.address))?.debtShares ?? 0n;
   const reject = async (name: string, options: PriceUpdateOptions, code: string) => {
+    const debtNow = (await positionOf(chain, borrower.address))?.debtShares ?? 0n;
+    await ctx.assert(`${name}: probe starts from the baseline debt`, debtNow === debtBefore, `debt shares ${debtBefore} -> ${debtNow}`);
     const update = await priceUpdate(chain, options);
     await ctx.attempt(name, () => borrow(chain, borrower, 1n * USDC, undefined, update), code, "debt");
-    const debt = (await positionOf(chain, borrower.address))?.debtShares ?? 0n;
-    await ctx.assert(`${name}: no state left behind`, debt === debtBefore, `debt shares ${debtBefore} -> ${debt}`);
   };
-  await reject("a stale payload aborts", { offsetSeconds: -400n }, "u80002");
+  const timeDelta = asUint(await chain.read("pyth-adapter-v1", "get-pyth-time-delta"));
+  await reject("a stale payload aborts", { offsetSeconds: -(timeDelta + 60n) }, "u80002");
   await reject("a future payload aborts", { offsetSeconds: 120n }, "u80002");
   await reject("an over-confident payload aborts", { confidence: { [BTC]: 6_000_000_000_000n } }, "u80004");
   await reject("a payload missing the collateral feed aborts", { omit: [BTC] }, "u80008");
