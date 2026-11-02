@@ -1,0 +1,18 @@
+---
+id: 0
+name: Utility USDCx v1
+network: mainnet
+stacks-node: "https://api.hiro.so"
+bitcoin-node: "http://blockstack:blockstacksystem@bitcoin.blockstack.com:8332"
+plan:
+  batches:
+    - id: 0
+      transactions:
+        - contract-publish:
+            contract-name: utility
+            expected-sender: SPDMQABVKKDVZ25MYCQ0ZW90QWERMZFWT02QP1Q4
+            cost: 100000
+            path: deployments/utility/usdcx.clar
+            anchor-block-only: true
+            clarity-version: 3
+      epoch: "4.0"

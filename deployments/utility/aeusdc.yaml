@@ -1,0 +1,18 @@
+---
+id: 0
+name: Utility aeUSDC v1
+network: mainnet
+stacks-node: "https://api.hiro.so"
+bitcoin-node: "http://blockstack:blockstacksystem@bitcoin.blockstack.com:8332"
+plan:
+  batches:
+    - id: 0
+      transactions:
+        - contract-publish:
+            contract-name: utility
+            expected-sender: SP1060ZZGYJYB8NBYSMME98RSA5VVKW5C7PRFWJJ5
+            cost: 100000
+            path: deployments/utility/aeusdc.clar
+            anchor-block-only: true
+            clarity-version: 3
+      epoch: "4.0"
