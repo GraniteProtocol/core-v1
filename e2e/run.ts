@@ -1,4 +1,5 @@
-import { mkdirSync } from "node:fs";
+import { mkdtempSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Chain, DevnetStallError } from "./chain.ts";
 import { startDevnet, stopDevnet, type BootAttempt, type DevnetHandle } from "./devnet.ts";
@@ -272,8 +273,7 @@ async function main(): Promise<number> {
   const { keep, seed } = parseArgs(process.argv.slice(2));
   resetAccounting();
   const startedAt = new Date();
-  const reportDir = `/tmp/local-e2e-${startedAt.getTime()}`;
-  mkdirSync(reportDir, { recursive: true });
+  const reportDir = mkdtempSync(join(tmpdir(), "local-e2e-"));
 
   const deployer = loadDeployer();
   const expectedScenarios = [happy, ...matrix].map((scenario) => scenario.name);

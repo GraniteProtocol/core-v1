@@ -1,6 +1,7 @@
 import { spawn, spawnSync, type ChildProcess } from "node:child_process";
-import { existsSync, readFileSync, mkdirSync, readdirSync, openSync, closeSync, rmSync } from "node:fs";
+import { existsSync, readFileSync, mkdirSync, mkdtempSync, readdirSync, openSync, closeSync, rmSync } from "node:fs";
 import { connect } from "node:net";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { deriveKey } from "./keys.ts";
 import { DevnetStallError } from "./chain.ts";
@@ -203,7 +204,7 @@ export async function startDevnet(
   onHandle?: (handle: DevnetHandle) => void,
 ): Promise<DevnetHandle> {
   const repoRoot = opts.repoRoot ?? process.cwd();
-  const logDir = opts.logDir ?? `/tmp/local-e2e-${Date.now()}`;
+  const logDir = opts.logDir ?? mkdtempSync(join(tmpdir(), "local-e2e-"));
   mkdirSync(logDir, { recursive: true });
   const logPath = join(logDir, opts.logName ?? "devnet.log");
   const apiUrl = opts.apiUrl ?? "http://localhost:3999";
