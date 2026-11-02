@@ -187,7 +187,7 @@ export async function writeReport(
   lines.push("", "| scenario | result | steps | failure |", "| --- | --- | --- | --- |");
   for (const scenario of report.scenarios) {
     const result = scenario.passed ? "PASS" : "FAIL";
-    const failure = (scenario.failure ?? "").replace(/\|/g, "\\|").replace(/\n/g, " ");
+    const failure = (scenario.failure ?? "").replace(/\\/g, "\\\\").replace(/\|/g, "\\|").replace(/\r?\n/g, " ");
     lines.push(`| ${scenario.name} | ${result} | ${scenario.steps} | ${failure} |`);
   }
   if (report.fuzz.firstFailure) {
