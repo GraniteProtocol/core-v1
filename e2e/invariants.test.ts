@@ -67,9 +67,7 @@ describe("accounting invariant", () => {
     const before = { totalAssets: 1000n, reserve: 200n, cash: 400n, debt: 900n, protocolOpenInterest: 100n };
     const writtenOff = 100n;
     const protocolPart = 10n;
-    // socialize-user-bad-debt receives the debt already net of the protocol part: debt and
-    // protocol-open-interest fall by their full and protocol parts, total assets plus reserve fall
-    // by the net amount, and the surplus does not move.
+    // The write-off books debt already net of the protocol part, so the surplus does not move.
     const after = {
       totalAssets: before.totalAssets - 60n,
       reserve: before.reserve - 30n,
@@ -80,9 +78,11 @@ describe("accounting invariant", () => {
     expect(accountingSurplus(before)).toBe(0n);
     expect(accountingSurplus(after)).toBe(0n);
     expect(accountingHolds(after).ok).toBe(true);
-    // Booking the gross amount instead would manufacture the protocol part as surplus.
+    // Booking the gross amount shows up as a per-step surplus movement.
     const grossBooked = { ...after, totalAssets: before.totalAssets - 90n, reserve: before.reserve - 10n };
     expect(accountingSurplus(grossBooked)).toBe(10n);
-    expect(accountingHolds(grossBooked).ok).toBe(false);
+    resetAccounting();
+    expect(gateStepDrift(0n, "non-debt").ok).toBe(true);
+    expect(gateStepDrift(10n, "debt").ok).toBe(false);
   });
 });

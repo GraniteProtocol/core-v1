@@ -170,9 +170,14 @@ export async function writeReport(
     lines.push(
       `- accounting: gap=${report.accounting.drift}, debt-ops=${report.accounting.debtOps}, max-step=${report.accounting.maxStepDrift}, uncollected-protocol-interest=${protocol}, raw-gap=${raw}`,
     );
-    if (!report.accounting.exactZero) {
+    if (report.accounting.drift !== "0") {
       lines.push(
         `- warning: the accounting gap is non-zero (integer rounding residue; it must not move outside debt operations)`,
+      );
+    }
+    for (const entry of report.accounting.rebaselines ?? []) {
+      lines.push(
+        `- restart rebaseline: pre-restart drift ${entry.drift} at ${entry.at} [${entry.phase}]; the final gap is measured from that baseline`,
       );
     }
   }

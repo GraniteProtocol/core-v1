@@ -148,6 +148,7 @@ export async function snapshot(chain: Chain, actors: Actors): Promise<Snapshot> 
 
 /** Funds actors and configures the market the way the spec describes. */
 export async function setup(chain: Chain, actors: Actors): Promise<Snapshot> {
+  expectedWindows = { ...PROFILE.caps.windows };
   const deployer = actors.deployer.address;
   const cp = (name: string) => contractPrincipal(chain.deployer, name);
   const call = (contract: string, fn: string, args: ClarityValue[], from: Account = actors.deployer) =>

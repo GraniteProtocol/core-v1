@@ -7,8 +7,7 @@ import { healthOf, positionOf } from "./reads.ts";
 export type InvariantResult = { name: string; ok: boolean; detail: string };
 
 const SCALING_FACTOR = 100_000_000n;
-// The interest split conserves its flooring remainder, so a debt operation moves the surplus only
-// by share-conversion rounding, 1 unit in the recorded run. Real drift exceeds this quickly.
+// The split conserves its remainder, so only share rounding moves the surplus.
 const ROUNDING_TOLERANCE = 2n;
 const MAX_DEBT_STEP_DRIFT = 2n;
 
@@ -132,8 +131,7 @@ export function gateStepDrift(surplus: bigint, kind: OpKind, applied = true): In
 const probeUsers: string[] = [];
 let probeIndex = 0;
 
-// The de-listing scenario deliberately constructs the documented stuck state and asserts it; the
-// exitability invariant is the general rule that a run never leaves one behind.
+// The de-listing scenario constructs the stuck state on purpose, so it suspends this check.
 let exitabilitySuspended = false;
 
 export function suspendExitability(value: boolean): void {
@@ -311,6 +309,20 @@ async function capsBuckets(chain: Chain): Promise<InvariantResult> {
   };
 }
 
+async function openInterestCoversPrincipal(chain: Chain): Promise<InvariantResult> {
+  const debt = asTuple(await chain.read("state-v1", "get-debt-params"));
+  const openInterest = asUint(debt["open-interest"]);
+  const borrowed = asTuple(
+    await chain.read("state-v1", "get-borrow-repay-params", [Cl.principal(chain.deployer)]),
+  );
+  const totalBorrowed = asUint(borrowed["total-borrowed-amount"]);
+  return {
+    name: "open-interest-covers-principal",
+    ok: openInterest >= totalBorrowed,
+    detail: `open-interest=${openInterest} total-borrowed=${totalBorrowed}`,
+  };
+}
+
 export async function checkInvariants(
   chain: Chain,
   kind: OpKind = "non-debt",
@@ -318,7 +330,7 @@ export async function checkInvariants(
 ): Promise<InvariantResult[]> {
   const results: InvariantResult[] = [];
   const stateContract = Cl.contractPrincipal(chain.deployer, "state-v1");
-  const [lpValue, reserveValue, cashValue, debtValue, interestValue, buckets, health, exit] =
+  const [lpValue, reserveValue, cashValue, debtValue, interestValue, buckets, principal, health, exit] =
     await Promise.all([
       chain.read("state-v1", "get-lp-params"),
       chain.read("state-v1", "get-reserve-balance"),
@@ -326,6 +338,7 @@ export async function checkInvariants(
       chain.read("state-v1", "get-debt-params"),
       chain.read("state-v1", "get-open-interest"),
       capsBuckets(chain),
+      openInterestCoversPrincipal(chain),
       debtHealth(chain),
       exitabilitySuspended
         ? Promise.resolve({
@@ -356,6 +369,7 @@ export async function checkInvariants(
   );
   results.push(step);
   results.push(buckets);
+  results.push(principal);
   results.push(health);
   results.push(exit);
   return results;

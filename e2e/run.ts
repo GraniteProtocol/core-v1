@@ -6,7 +6,7 @@ import { startDevnet, stopDevnet, type BootAttempt, type DevnetHandle } from "./
 import { loadAccounts } from "./keys.ts";
 import type { Account } from "./keys.ts";
 import { fundAccount, newAccount } from "./accounts.ts";
-import { profileSummary, setup, BTC, ETH, STX, type Actors } from "./setup.ts";
+import { profileSummary, setup, BTC, ETH, PROFILE, STX, type Actors } from "./setup.ts";
 import { createContext, type Scenario } from "./scenario.ts";
 import { happy } from "./scenarios/happy.ts";
 import { matrix } from "./scenarios/matrix.ts";
@@ -25,7 +25,7 @@ import { convertedPrice, resetToBaseline, setPrice, setPriceRaw } from "./prices
 import { asBool } from "./values.ts";
 import { healthOf, positionOf } from "./reads.ts";
 
-const DEBT_OPS = new Set(["borrow", "repay", "liquidate"]);
+const DEBT_OPS = new Set(["borrow", "repay", "repayOnBehalf", "liquidate"]);
 const MAX_RESTARTS = 20;
 // A fuzz run where most ops abort (or an op type never succeeds) is not exercising the protocol.
 const MIN_SUCCESS_RATIO = 0.5;
@@ -129,7 +129,15 @@ async function executeOp(chain: Chain, actors: Actors, op: Op): Promise<void> {
       return void (await redeem(chain, actor, BigInt(op.args.amount) * USDC));
     case "repayOnBehalf": {
       const targets = [actors.safe, actors.max, actors.near, actors.under];
-      const target = targets[op.args.target % targets.length];
+      // Pick a target with live debt, as the liquidation op does, so the op is not a certain no-op.
+      let target = targets[op.args.target % targets.length];
+      for (const candidate of targets) {
+        const position = await positionOf(chain, candidate.address);
+        if (position && position.debtShares > 0n) {
+          target = candidate;
+          break;
+        }
+      }
       return void (await repay(chain, actor, BigInt(op.args.amount) * USDC, target.address));
     }
     case "liquidate": {
@@ -171,10 +179,14 @@ async function executeOp(chain: Chain, actors: Actors, op: Op): Promise<void> {
       setPrice(token, BigInt(op.args.price));
       return;
     }
-    case "governance":
-      return void (await chain.call(actors.deployer, "withdrawal-caps-v1", "set-lp-cap", [
+    case "governance": {
+      await chain.call(actors.deployer, "withdrawal-caps-v1", "set-lp-cap", [
         Cl.uint(op.args.action === 0 ? 0n : 50_000_000n),
+      ]);
+      return void (await chain.call(actors.deployer, "withdrawal-caps-v1", "set-lp-cap", [
+        Cl.uint(PROFILE.caps.lp),
       ]));
+    }
     default:
       throw new Error(`unknown fuzz op ${op.op}`);
   }
@@ -233,6 +245,14 @@ async function startSession(
       const chain = new Chain(deployer.address);
       const actors = await bootstrapActors(chain, deployer);
       const baseline = await setup(chain, actors);
+      resetProbeUsers(actors);
+      resetDriftBaseline();
+      const baselineViolations = failed(await checkInvariants(chain));
+      if (baselineViolations.length > 0) {
+        throw new Error(
+          `invariants violated after setup: ${baselineViolations.map((v) => `${v.name}: ${v.detail}`).join("; ")}`,
+        );
+      }
       bootAttempts.push({ attempt, logPath: devnet.logPath, ok: true });
       return { devnet, chain, actors, baseline, timings: { bootMs, setupMs: Date.now() - setupStarted } };
     } catch (error) {
@@ -342,8 +362,6 @@ async function main(): Promise<number> {
       liveHandle = handle;
     });
     liveHandle = session.devnet;
-    resetDriftBaseline();
-    resetProbeUsers(session.actors);
     console.log("devnet restarted and set up");
   };
 
@@ -571,11 +589,24 @@ async function main(): Promise<number> {
     }
 
     // Governance-real runs after the fuzz: it leaves state governance on governance-v1, so nothing
-    // may follow it.
+    // may follow it. A devnet stall restarts the chain and re-runs the scenario from setup state.
     phase = "final-scenarios";
     for (const scenario of [governanceReal]) {
       phase = `final-scenarios:${scenario.name}`;
-      const result = await runScenario(session, scenario);
+      let result: ScenarioResult | null = null;
+      for (let attempt = 0; attempt < 3; attempt++) {
+        try {
+          result = await runScenario(session, scenario);
+          break;
+        } catch (error) {
+          if (error instanceof DevnetStallError && attempt < 2) {
+            await restart(error.message, `final:${scenario.name}`);
+            continue;
+          }
+          throw error;
+        }
+      }
+      if (!result) throw new Error(`${scenario.name} could not complete after devnet restarts`);
       scenarios.push(result);
       console.log(`  ${result.passed ? "PASS" : "FAIL"} ${result.name}${result.failure ? `: ${result.failure}` : ""}`);
     }
@@ -646,7 +677,7 @@ async function main(): Promise<number> {
       const where = event.sequence !== undefined ? ` sequence ${event.sequence}` : "";
       console.log(`  - [${event.phase}${where}] ${event.reason} (drift at restart ${event.driftAtRestart})`);
     }
-    if (!accounting.exactZero) {
+    if (accounting.drift !== "0") {
       console.log(
         "warning: the accounting gap is non-zero (integer rounding residue; see report.json accounting)",
       );
