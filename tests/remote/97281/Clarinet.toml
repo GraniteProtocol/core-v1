@@ -1,0 +1,32 @@
+[project]
+name = 'granite-remote-97281'
+description = 'Immunefi 97281 remote_data reproduction'
+authors = []
+telemetry = false
+cache_dir = './.cache'
+
+[[project.requirements]]
+contract_id = "SPSX722NK9V3A8D3CVQT0CDY4EBQ3E9FSDDE61FT.pyth-adapter-v1"
+
+[[project.requirements]]
+contract_id = "SPMV5HDZ4EMB8XY7HAYT3XW0DF7DZ4E8XEG2J1T8.pyth-lazer-oracle"
+
+[[project.requirements]]
+contract_id = "SPMV5HDZ4EMB8XY7HAYT3XW0DF7DZ4E8XEG2J1T8.pyth-lazer-decoder-v1"
+
+[[project.requirements]]
+contract_id = "SPMV5HDZ4EMB8XY7HAYT3XW0DF7DZ4E8XEG2J1T8.pyth-lazer-traits"
+
+[[project.requirements]]
+contract_id = "SP3M2BYF7RGF8WKW5FVDNJ6WR8D7AR9BHDXAKPXZE.constants-v1"
+
+[[project.requirements]]
+contract_id = "SP3M2BYF7RGF8WKW5FVDNJ6WR8D7AR9BHDXAKPXZE.constants-v2"
+
+[repl.remote_data]
+enabled = true
+api_url = "https://api.hiro.so"
+initial_height = 8666449
+
+[repl.analysis]
+passes = []

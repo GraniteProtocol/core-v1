@@ -1,0 +1,555 @@
+;; SPDX-License-Identifier: BUSL-1.1
+
+;; TRAITS
+(use-trait token-trait 'SP3FBR2AGK5H9QBDH3EEN6DF8EK8JY7RX8QJ5SVTE.sip-010-trait-ft-standard.sip-010-trait)
+
+;; CONSTANTS
+(define-constant SUCCESS (ok true))
+(define-constant MARKET-TOKEN-DECIMALS (contract-call? 'SP3BJR4P3W2Y9G22HA595Z59VHBC9EQYRFWSKG743.constants-v2 get-market-token-decimals))
+(define-constant SCALING-FACTOR (contract-call? 'SP3BJR4P3W2Y9G22HA595Z59VHBC9EQYRFWSKG743.constants-v2 get-scaling-factor))
+(define-constant PRICE-SCALING-FACTOR (contract-call? 'SP3BJR4P3W2Y9G22HA595Z59VHBC9EQYRFWSKG743.constants-v2 get-price-scaling-factor))
+;; Must have the same precision as SCALING-FACTOR
+(define-constant MINIMUM_HEALTH_RATIO u100000000)
+;; Liquidation buffer of 2.00%
+(define-constant LIQUIDATION-BUFFER u2000000)
+;; Minimum number of Stacks blocks between borrow and liquidation. Prevents
+;; same-block borrow-then-liquidate sandwich attacks against oracle updates.
+(define-constant MINIMUM-LIQUIDATION-BLOCK-GAP u6)
+
+;; ERROR VALUES
+(define-constant ERR-DIVIDE-BY-ZERO (err u30000))
+(define-constant ERR-INTEREST-PARAMS (err u30001))
+(define-constant ERR-NO-POSITION (err u30002))
+(define-constant ERR-USER-POSITION-HEALTHY (err u30003))
+(define-constant ERR-COLLATERAL-NOT-SUPPORTED (err u30005))
+(define-constant ERR-INSUFFICIENT-BALANCE (err u30006))
+(define-constant ERR-SLIPPAGE (err u30007))
+(define-constant ERR-INVALID-ORACLE-PRICE (err u30008))
+(define-constant ERR-MISSING-MARKET-PRICE (err u30009))
+(define-constant ERR-NON-ZERO-REPAY-AMOUNT (err u30010))
+(define-constant ERR-LIQUIDATION-NOT-ALLOWED (err u30011))
+
+;; PUBLIC FUNCTIONS
+(define-public (batch-liquidate (update (buff 8192)) (collateral <token-trait>) (batch (list 20 (optional {
+  user: principal,
+  liquidator-repay-amount: uint,
+  min-collateral-expected: uint
+}))))
+  (begin
+  (try! (accrue-interest))
+  ;; Verify the signed update once for the whole batch, then price each liquidation from it.
+  (let ((verified (try! (contract-call? .pyth-adapter-v1 verify-update update))))
+    (try! (get res (fold fold-execute-liquidation batch {verified: verified, collateral: collateral, res: (ok true)})))
+    SUCCESS
+  )
+))
+
+(define-public (liquidate-collateral (update (buff 8192)) (collateral <token-trait>) (user principal) (liquidator-repay-amount uint) (min-collateral-expected uint))
+  (begin
+    (try! (accrue-interest))
+    (let ((verified (try! (contract-call? .pyth-adapter-v1 verify-update update))))
+      (execute-liquidation verified user collateral liquidator-repay-amount min-collateral-expected)
+    )
+))
+
+;; READ-ONLY FUNCTIONS
+(define-read-only (user-collateral-repayment-info
+    (collateral <token-trait>)
+    (user principal)
+    (user-debt uint)
+    (market-asset-price uint)
+    (collateral-prices (list 10 uint))
+  )
+  (let (
+      (position-data (unwrap! (try! (check-account-unhealthy user market-asset-price collateral-prices)) ERR-USER-POSITION-HEALTHY))
+      (total-liquid-ltv (get total-liquid-ltv position-data))
+      (collateral-token (contract-of collateral))
+      (collateral-price (unwrap! (collateral-price-for collateral-token (get collaterals position-data) collateral-prices) ERR-INVALID-ORACLE-PRICE))
+      (collateral-value (get-collateral-value collateral-token user collateral-price))
+      (collateral-info (unwrap! (contract-call? 'SP35E2BBMDT2Y1HB0NTK139YBGYV3PAPK3WA8BRNA.state-v1 get-collateral collateral-token) ERR-COLLATERAL-NOT-SUPPORTED))
+      (liquidation-premium (get liquidation-premium collateral-info))
+      (collateral-liquidation-ltv (get liquidation-ltv collateral-info))
+      (repayment-info (try! (calculate-repayment-info user-debt total-liquid-ltv collateral-value liquidation-premium collateral-liquidation-ltv)))
+    )
+    (ok (get repay-allowed repayment-info))
+  )
+)
+
+(define-read-only (account-health (user principal) (market-asset-price uint) (collateral-prices (list 10 uint)))
+  (let (
+      (borrow-params (contract-call? 'SP35E2BBMDT2Y1HB0NTK139YBGYV3PAPK3WA8BRNA.state-v1 get-borrow-repay-params user))
+      (position (unwrap! (get user-position borrow-params) ERR-NO-POSITION))
+      ;; get user current debt
+      (debt-params (contract-call? 'SP35E2BBMDT2Y1HB0NTK139YBGYV3PAPK3WA8BRNA.state-v1 get-debt-params))
+      (current-debt (contract-call? 'SP35E2BBMDT2Y1HB0NTK139YBGYV3PAPK3WA8BRNA.math-v1 convert-to-debt-assets debt-params (get debt-shares position) true))
+      (current-debt-adjusted (contract-call? 'SP35E2BBMDT2Y1HB0NTK139YBGYV3PAPK3WA8BRNA.math-v1 get-market-asset-value market-asset-price current-debt))
+      (position-collaterals (get collaterals position))
+      (total-liquid-ltv (if (is-eq (len position-collaterals) u0)
+        u0
+        (fold + (map iterate-collateral-value-ltv position-collaterals (
+          list user user user user user user user user user user
+        ) collateral-prices) u0)))
+      (position-health (if (> current-debt-adjusted u0) (/ (* total-liquid-ltv SCALING-FACTOR) current-debt-adjusted) MINIMUM_HEALTH_RATIO))
+    )
+    (ok {
+      position-health: position-health,
+      total-liquid-ltv: total-liquid-ltv,
+      current-debt: current-debt,
+      borrowed-amount: (get borrowed-amount position),
+      current-debt-adjusted: current-debt-adjusted,
+      collaterals: (get collaterals position),
+      total-borrowed-amount: (get total-borrowed-amount borrow-params)
+    })
+))
+
+(define-read-only (get-liquidation-data
+  (user principal)
+  (collateral <token-trait>)
+  (liquidator-repay-amount uint)
+  (market-asset-price uint)
+  (collateral-prices (list 10 uint)))
+
+  (let (
+    (liquidation-info (try! (get-liquidation-info
+      user
+      collateral
+      liquidator-repay-amount
+      market-asset-price
+      collateral-prices
+    ))))
+    (try! (ensure-non-zero-repay-amount liquidator-repay-amount))
+    (ok (get liquidation-info liquidation-info))))
+
+(define-read-only
+  (liquidate
+    (debt uint)
+    (total-collaterals-liquid-value uint)
+    (collateral-value uint)
+    (liquidation-discount uint)
+    (collateral-liquid-ltv uint)
+    (deposited-collateral-amount uint)
+    (collateral-price uint)
+    (liquidator-repay-amount uint)
+    (collateral-decimals uint)
+  )
+  (let
+    (
+      (repayment-info (try! (calculate-repayment-info debt total-collaterals-liquid-value collateral-value liquidation-discount collateral-liquid-ltv)))
+      (repay-allowed (get repay-allowed repayment-info))
+      ;; if the total repay amount is <= liquidator repay amount, return total repay amount
+      ;; else return liquidator repay amount
+      (repay-amount (if (<= repay-allowed liquidator-repay-amount) repay-allowed liquidator-repay-amount))
+      (collateral-to-give (if (is-eq u0 repay-amount)
+        deposited-collateral-amount
+        (try! (calc-collateral-to-give repay-amount liquidation-discount collateral-price collateral-decimals deposited-collateral-amount))
+      ))
+    )
+    (ok {
+      repay-amount: repay-amount,
+      collateral-to-give: collateral-to-give,
+      repayment-info: repayment-info,
+      collateral-price: collateral-price 
+    })
+))
+
+
+;; PRIVATE FUNCTIONS
+(define-private (get-liquidate-params
+  (user principal)
+  (collateral <token-trait>)
+  (market-asset-price uint)
+  (collateral-prices (list 10 uint))
+)
+  (let (
+    (position-data (unwrap! (try! (check-account-unhealthy user market-asset-price collateral-prices)) ERR-USER-POSITION-HEALTHY))
+    (collateral-token (contract-of collateral))
+    (collateral-price (unwrap! (collateral-price-for collateral-token (get collaterals position-data) collateral-prices) ERR-INVALID-ORACLE-PRICE))
+    (collateral-value (get-collateral-value collateral-token user collateral-price))
+    (collateral-info (unwrap! (contract-call? 'SP35E2BBMDT2Y1HB0NTK139YBGYV3PAPK3WA8BRNA.state-v1 get-collateral collateral-token) ERR-COLLATERAL-NOT-SUPPORTED))
+    (user-balance (unwrap! (get amount (contract-call? 'SP35E2BBMDT2Y1HB0NTK139YBGYV3PAPK3WA8BRNA.state-v1 get-user-collateral user collateral-token))  ERR-INSUFFICIENT-BALANCE))
+  )
+    (ok {
+      position-data: position-data,
+      collateral-value: collateral-value,
+      collateral-info: collateral-info,
+      user-balance: user-balance,
+      collateral-price: collateral-price
+    })
+  )
+)
+
+(define-private (get-liquidation-info
+  (user principal)
+  (collateral <token-trait>)
+  (liquidator-repay-amount uint)
+  (market-asset-price uint)
+  (collateral-prices (list 10 uint))
+)
+  (let (
+    (liquidation-params (try! (get-liquidate-params user collateral market-asset-price collateral-prices)))
+    ;; check position is unhealthy
+    (position-data (get position-data liquidation-params))
+    (user-borrowed-amount (get borrowed-amount position-data))
+    ;; get user current debt
+    (current-debt (get current-debt position-data))
+    (current-debt-adjusted (get current-debt-adjusted position-data))
+    (user-collaterals (get collaterals position-data))
+    (bad-debt (is-bad-debt current-debt-adjusted (get-user-total-collateral-value-and-reward user user-collaterals collateral-prices)))
+    (total-liquid-ltv (get total-liquid-ltv position-data))
+    (collateral-value (get collateral-value liquidation-params))
+    (collateral-info (get collateral-info liquidation-params))
+    (collateral-decimals (get decimals collateral-info))
+    (liquidation-premium (get liquidation-premium collateral-info))
+    (liquidation-ltv (get liquidation-ltv collateral-info))
+    (user-balance (get user-balance liquidation-params))
+    (collateral-price (get collateral-price liquidation-params))
+    (liquidation-info (try! (liquidate
+        current-debt-adjusted
+        total-liquid-ltv
+        collateral-value
+        liquidation-premium
+        liquidation-ltv
+        user-balance
+        collateral-price
+        liquidator-repay-amount
+        collateral-decimals
+    ))))
+    (ok {
+      liquidation-info: liquidation-info,
+      current-debt: current-debt,
+      user-borrowed-amount: user-borrowed-amount,
+      position-data: position-data,
+      user-balance: user-balance,
+      bad-debt: bad-debt,
+      collateral-price: collateral-price
+    })
+  )
+)
+
+(define-private (execute-liquidation (verified { timestamp: uint, feeds: (list 16 { feed-id: uint, price: int, exponent: int, confidence: (optional uint) }) }) (user principal) (collateral <token-trait>) (liquidator-repay-amount uint) (min-collateral-expected uint))
+  (let
+      (
+        (collateral-token (contract-of collateral))
+        (user-position-data (contract-call? 'SP35E2BBMDT2Y1HB0NTK139YBGYV3PAPK3WA8BRNA.state-v1 get-borrow-repay-params user))
+        (position-for-block-check (unwrap! (get user-position user-position-data) ERR-NO-POSITION))
+        ;; Price the market asset and this position's collaterals from the verified update.
+        (market-asset-price (unwrap! (element-at? (try! (contract-call? .pyth-adapter-v1 prices-for verified (list 'SP3Y2ZSH8P7D50B0VBTSX11S7XSG24M1VB9YFQA4K.token-aeusdc))) u0) ERR-MISSING-MARKET-PRICE))
+        (collateral-prices (try! (contract-call? .pyth-adapter-v1 prices-for verified (get collaterals position-for-block-check))))
+        (liquidation-res (try! (get-liquidation-info user collateral liquidator-repay-amount market-asset-price collateral-prices)))
+        (liquidation-info (get liquidation-info liquidation-res))
+        (current-debt (get current-debt liquidation-res))
+        (user-borrowed-amount (get user-borrowed-amount liquidation-res))
+        (position-data (get position-data liquidation-res))
+        (user-balance (get user-balance liquidation-res))
+        (bad-debt (get bad-debt liquidation-res))
+        ;; get open interest
+        (open-interest-info (contract-call? 'SP35E2BBMDT2Y1HB0NTK139YBGYV3PAPK3WA8BRNA.state-v1 get-open-interest))
+        (open-interest (+ (get lp-open-interest open-interest-info) (get staked-open-interest open-interest-info) (get protocol-open-interest open-interest-info)))
+        ;; get collateral to give to liquidator
+        (collateral-to-give (get collateral-to-give liquidation-info))
+        (repay-amount-value (get repay-amount liquidation-info))
+        (repay-amount-raw (contract-call? 'SP35E2BBMDT2Y1HB0NTK139YBGYV3PAPK3WA8BRNA.math-v1 divide-round-up (* repay-amount-value PRICE-SCALING-FACTOR) market-asset-price))
+        (repay-amount (if (< repay-amount-raw current-debt) repay-amount-raw current-debt))
+        ;; convert repay amount to debt shares
+        (debt-params (contract-call? 'SP35E2BBMDT2Y1HB0NTK139YBGYV3PAPK3WA8BRNA.state-v1 get-debt-params))
+        (paid-shares (contract-call? 'SP35E2BBMDT2Y1HB0NTK139YBGYV3PAPK3WA8BRNA.math-v1 convert-to-debt-shares debt-params repay-amount false))
+        (effective-borrowed-amount (if (< current-debt user-borrowed-amount) current-debt user-borrowed-amount))
+        (interest-portion (contract-call? 'SP35E2BBMDT2Y1HB0NTK139YBGYV3PAPK3WA8BRNA.math-v1 calculate-interest-portions current-debt effective-borrowed-amount repay-amount))
+        (principal-part (get principal-part interest-portion))
+        (interest-part (get interest-part interest-portion))
+        (total-borrowed-amount (get total-borrowed-amount position-data))
+        (open-interest-without-principal (contract-call? 'SP35E2BBMDT2Y1HB0NTK139YBGYV3PAPK3WA8BRNA.math-v1 safe-sub open-interest total-borrowed-amount))
+        (lp-open-interest-without-principal (contract-call? 'SP35E2BBMDT2Y1HB0NTK139YBGYV3PAPK3WA8BRNA.math-v1 safe-sub (get lp-open-interest open-interest-info) total-borrowed-amount))
+        ;; calculate liquidity provider and protocol debt repaid
+        (lp-part (contract-call? 'SP35E2BBMDT2Y1HB0NTK139YBGYV3PAPK3WA8BRNA.math-v1 safe-div (* interest-part lp-open-interest-without-principal) open-interest-without-principal))
+        (protocol-part (contract-call? 'SP35E2BBMDT2Y1HB0NTK139YBGYV3PAPK3WA8BRNA.math-v1 safe-div (* interest-part (get protocol-open-interest open-interest-info)) open-interest-without-principal))
+        (staked-part (contract-call? 'SP35E2BBMDT2Y1HB0NTK139YBGYV3PAPK3WA8BRNA.math-v1 safe-div (* interest-part (get staked-open-interest open-interest-info)) open-interest-without-principal))
+        (asset-params (contract-call? 'SP35E2BBMDT2Y1HB0NTK139YBGYV3PAPK3WA8BRNA.state-v1 get-lp-params))
+        (staked-lp-tokens (contract-call? 'SP35E2BBMDT2Y1HB0NTK139YBGYV3PAPK3WA8BRNA.math-v1 convert-to-shares asset-params staked-part false))
+        (is-wiped (contract-call? .staking-v1 is-staking-wiped-out))
+        (effective-staked-lp-tokens (if is-wiped u0 staked-lp-tokens))
+        (remaining-user-debt-shares (contract-call? 'SP35E2BBMDT2Y1HB0NTK139YBGYV3PAPK3WA8BRNA.math-v1 safe-sub (get debt-shares position-for-block-check) paid-shares))
+        (updated-borrowed-amount (contract-call? 'SP35E2BBMDT2Y1HB0NTK139YBGYV3PAPK3WA8BRNA.math-v1 safe-sub effective-borrowed-amount principal-part))
+        (updated-total-borrowed-amount (contract-call? 'SP35E2BBMDT2Y1HB0NTK139YBGYV3PAPK3WA8BRNA.math-v1 safe-sub total-borrowed-amount
+          (if (is-eq remaining-user-debt-shares u0) user-borrowed-amount principal-part)))
+        (remaining-collateral-balance (- user-balance collateral-to-give))
+        (updated-collaterals-list (if (is-eq remaining-collateral-balance u0)
+          (get new-list (contract-call? 'SP35E2BBMDT2Y1HB0NTK139YBGYV3PAPK3WA8BRNA.state-v1 remove-item (get collaterals position-data) collateral-token))
+          (get collaterals position-data)
+        ))
+      )
+      ;; Enforce minimum block gap between borrowing and liquidation
+      (asserts! (>= stacks-block-height (+ (get borrowed-block position-for-block-check) MINIMUM-LIQUIDATION-BLOCK-GAP)) ERR-LIQUIDATION-NOT-ALLOWED)
+      (try! (ensure-non-zero-repay-amount liquidator-repay-amount))
+      ;; update state
+      (try! (contract-call? 'SP35E2BBMDT2Y1HB0NTK139YBGYV3PAPK3WA8BRNA.state-v1 update-liquidate-collateral-state collateral {
+        liquidator: contract-caller,
+        user: user,
+        collateral-to-give: collateral-to-give,
+        repay-amount: repay-amount,
+        paid-shares: paid-shares,
+        lp-part: (+ principal-part lp-part),
+        protocol-part: protocol-part,
+        staked-part: staked-part,
+        staked-lp-tokens: effective-staked-lp-tokens,
+        borrowed-amount: updated-borrowed-amount,
+        total-borrowed-amount: updated-total-borrowed-amount,
+        staking-contract: .staking-v1,
+        remaining-balance: remaining-collateral-balance,
+        updated-collaterals: updated-collaterals-list
+      }))
+      (try! (contract-call? .staking-v1 increase-lp-staked-balance effective-staked-lp-tokens))
+      (try! (contract-call? .withdrawal-caps-v1 repay repay-amount))
+      ;; slippage check
+      (asserts! (>= collateral-to-give min-collateral-expected) ERR-SLIPPAGE)
+      (let (
+          ;; Re-price against a fresh read of the post-liquidation collateral set, so the prices
+          ;; line up one-to-one with what account-health and socialize-bad-debt read back.
+          (post-liq-collaterals (get collaterals (unwrap! (get user-position (contract-call? 'SP35E2BBMDT2Y1HB0NTK139YBGYV3PAPK3WA8BRNA.state-v1 get-borrow-repay-params user)) ERR-NO-POSITION)))
+          (post-liq-collateral-prices (try! (contract-call? .pyth-adapter-v1 prices-for verified post-liq-collaterals)))
+          (account-health-data (try! (account-health user market-asset-price post-liq-collateral-prices)))
+          (position-health (get position-health account-health-data))
+        )
+
+        ;; check account health post liquidation
+        (asserts! (<= position-health (+ LIQUIDATION-BUFFER MINIMUM_HEALTH_RATIO)) (err position-health))
+        ;; socialize debt if bad debt
+        (try! (socialize-bad-debt bad-debt user post-liq-collateral-prices))
+        (print {
+            action: "liquidate-collateral",
+            collateral: collateral-token,
+            liquidator: contract-caller,
+            user: user,
+            liquidated-collateral-amount: collateral-to-give,
+            repaid-amount: repay-amount,
+            repaid-shares: paid-shares,
+            bad-debt: bad-debt,
+            account-health: account-health-data,
+            liquidation-info: liquidation-res
+        })
+        SUCCESS
+)))
+
+(define-private (fold-execute-liquidation (maybe-liquidation-data (optional {
+  user: principal,
+  liquidator-repay-amount: uint,
+  min-collateral-expected: uint
+})) (result {verified: { timestamp: uint, feeds: (list 16 { feed-id: uint, price: int, exponent: int, confidence: (optional uint) }) }, collateral: <token-trait>, res: (response bool uint)}))
+  (let (
+      (prev-result (get res result))
+    )
+
+    (if (is-err prev-result)
+      result
+      (match maybe-liquidation-data liquidation-data
+        (merge result {res: (execute-liquidation (get verified result) (get user liquidation-data) (get collateral result) (get liquidator-repay-amount liquidation-data) (get min-collateral-expected liquidation-data))})
+        result
+      )
+    )
+  )
+)
+
+(define-private (calculate-repayment-info
+    (debt uint)
+    (total-collaterals-liquid-value uint)
+    (collateral-value uint)
+    (liquidation-discount uint)
+    (collateral-liquid-ltv uint)
+  )
+  (let
+    (
+      (denominator (- SCALING-FACTOR
+        (try! (safe-div (* (+ SCALING-FACTOR liquidation-discount) collateral-liquid-ltv) SCALING-FACTOR))))
+      (total-repay-amount (try! (safe-div (* (- debt total-collaterals-liquid-value) SCALING-FACTOR) denominator)))
+      (repay-amount-without-discount (contract-call? 'SP35E2BBMDT2Y1HB0NTK139YBGYV3PAPK3WA8BRNA.math-v1 divide-round-up (* collateral-value SCALING-FACTOR) (+ liquidation-discount SCALING-FACTOR)))
+      (repay-allowed-raw (if (< total-repay-amount repay-amount-without-discount) total-repay-amount repay-amount-without-discount))
+      (repay-allowed (if (< repay-allowed-raw debt) repay-allowed-raw debt))
+    )
+    (ok {
+        repay-allowed: repay-allowed, 
+        repay-amount-without-discount: repay-amount-without-discount,
+        denominator: denominator,
+        total-repay-amount: total-repay-amount,
+        total-collaterals-liquid-value: total-collaterals-liquid-value,
+        collateral-value: collateral-value,
+        liquidation-discount: liquidation-discount,
+        collateral-liquid-ltv: collateral-liquid-ltv,
+        debt: debt
+      })
+))
+
+(define-private (calc-collateral-to-give (repay-amount uint) (liquidation-discount uint) (collateral-price uint) (collateral-decimals uint) (deposited-collateral uint))
+  (let
+    (
+      (repay-amount-with-discount (/ (* repay-amount (+ SCALING-FACTOR liquidation-discount)) SCALING-FACTOR))
+      (collateral-amount (try! (safe-div (* repay-amount-with-discount SCALING-FACTOR) collateral-price)))
+      (decimal-corrected-collateral (contract-call? 'SP35E2BBMDT2Y1HB0NTK139YBGYV3PAPK3WA8BRNA.math-v1 to-fixed collateral-amount MARKET-TOKEN-DECIMALS collateral-decimals))
+    )
+    (ok (if (> decimal-corrected-collateral deposited-collateral) deposited-collateral decimal-corrected-collateral))
+))
+
+(define-private (safe-div (x uint) (y uint))
+  (begin
+    (asserts! (> y u0) ERR-DIVIDE-BY-ZERO)
+    (ok (/ x y))
+))
+
+(define-private (accrue-interest)
+  (let (
+    (accrue-interest-params (unwrap! (contract-call? 'SP35E2BBMDT2Y1HB0NTK139YBGYV3PAPK3WA8BRNA.state-v1 get-accrue-interest-params) ERR-INTEREST-PARAMS))
+    (accrued-interest (try! (contract-call? .linear-kinked-ir-v1 accrue-interest
+      (get last-accrued-block-time accrue-interest-params)
+      (get lp-interest accrue-interest-params)
+      (get staked-interest accrue-interest-params)
+      (try! (contract-call? 'SP35E2BBMDT2Y1HB0NTK139YBGYV3PAPK3WA8BRNA.staking-reward-v1 calculate-staking-reward-percentage (contract-call? .staking-v1 get-active-staked-lp-tokens)))
+      (get protocol-interest accrue-interest-params)
+      (get protocol-reserve-percentage accrue-interest-params)
+      (get total-assets accrue-interest-params)))
+    )
+  )
+  (contract-call? 'SP35E2BBMDT2Y1HB0NTK139YBGYV3PAPK3WA8BRNA.state-v1 set-accrued-interest accrued-interest)
+))
+
+(define-private (check-account-unhealthy (user principal) (market-asset-price uint) (collateral-prices (list 10 uint)))
+  (let ((health-data (try! (account-health user market-asset-price collateral-prices))))
+    (if (< (get position-health health-data) MINIMUM_HEALTH_RATIO)
+      (ok (some health-data))
+      (ok none)
+    )
+))
+
+(define-private (get-collateral-value (collateral principal) (user principal) (collateral-price uint))
+  (contract-call? 'SP35E2BBMDT2Y1HB0NTK139YBGYV3PAPK3WA8BRNA.math-v1 to-fixed
+    (/
+      (* 
+        (default-to u0 (get amount (contract-call? 'SP35E2BBMDT2Y1HB0NTK139YBGYV3PAPK3WA8BRNA.state-v1 get-user-collateral user collateral)))
+        collateral-price
+      )
+      PRICE-SCALING-FACTOR
+    ) 
+    (default-to u8 (get decimals (contract-call? 'SP35E2BBMDT2Y1HB0NTK139YBGYV3PAPK3WA8BRNA.state-v1 get-collateral collateral)))
+    MARKET-TOKEN-DECIMALS
+  )
+)
+
+(define-private (iterate-collateral-value-ltv (collateral principal) (user principal) (collateral-price uint))
+  (let
+    (
+      (collateral-info (contract-call? 'SP35E2BBMDT2Y1HB0NTK139YBGYV3PAPK3WA8BRNA.state-v1 get-collateral collateral))
+      (user-collateral-value (get-collateral-value collateral user collateral-price))
+      (liquidation-ltv (default-to u0 (get liquidation-ltv collateral-info)))
+    )
+    (/ (* user-collateral-value liquidation-ltv) SCALING-FACTOR)
+))
+
+(define-private (iterate-collateral-value-and-reward (collateral principal) (user principal) (collateral-price uint))
+  (let
+    (
+      (collateral-info (contract-call? 'SP35E2BBMDT2Y1HB0NTK139YBGYV3PAPK3WA8BRNA.state-v1 get-collateral collateral))
+      (user-collateral-value (get-collateral-value collateral user collateral-price))
+      (liquidation-premium (default-to u0 (get liquidation-premium collateral-info)))
+    )
+    {collateral-value: user-collateral-value, collateral-reward: (/ (* user-collateral-value liquidation-premium) SCALING-FACTOR)}
+))
+
+(define-private (fold-iterate-collateral-value-and-reward (a {collateral-value: uint, collateral-reward: uint}) (b {collateral-value: uint, collateral-reward: uint}))
+  {
+    collateral-value: (+ (get collateral-value a) (get collateral-value b)),
+    collateral-reward: (+ (get collateral-reward a) (get collateral-reward b)),
+  }
+)
+
+(define-private (get-user-total-collateral-value-and-reward (user principal) (position-collaterals (list 10 principal)) (collateral-prices (list 10 uint)))
+  (fold fold-iterate-collateral-value-and-reward 
+    (map iterate-collateral-value-and-reward position-collaterals (
+        list user user user user user user user user user user
+    ) collateral-prices) {collateral-value: u0, collateral-reward: u0}
+))
+
+(define-private (is-bad-debt (current-debt uint) (collateral-value-and-reward {collateral-value: uint, collateral-reward: uint}))
+  ;; if collateral_value < debt + reward, it is a bad debt
+  (let (
+      (collateral-value (get collateral-value collateral-value-and-reward))
+      (collateral-reward (get collateral-reward collateral-value-and-reward))
+    ) 
+    (if (< collateral-value (+ current-debt collateral-reward)) true false)
+))
+
+(define-private (get-user-total-collateral-value (user principal) (position-collaterals (list 10 principal)) (collateral-prices (list 10 uint)))
+  (fold +
+    (map get-collateral-value position-collaterals (
+        list user user user user user user user user user user
+    ) collateral-prices) u0
+))
+
+(define-private (ensure-non-zero-repay-amount (amount uint))
+  (if (> amount u0)
+    SUCCESS
+    ERR-NON-ZERO-REPAY-AMOUNT
+  )
+)
+
+(define-private (socialize-bad-debt (bad-debt bool) (user principal) (collateral-prices (list 10 uint)))
+  (if (not bad-debt)
+    SUCCESS
+    (let (
+        (repay-params (contract-call? 'SP35E2BBMDT2Y1HB0NTK139YBGYV3PAPK3WA8BRNA.state-v1 get-borrow-repay-params user))
+        (position (unwrap! (get user-position repay-params) ERR-NO-POSITION))
+        (total-borrowed-amount (get total-borrowed-amount repay-params))
+        (user-collaterals (get collaterals position))
+        (total-collateral-value (get-user-total-collateral-value user user-collaterals collateral-prices))
+        (debt-params (contract-call? 'SP35E2BBMDT2Y1HB0NTK139YBGYV3PAPK3WA8BRNA.state-v1 get-debt-params))
+        (remaining-debt (contract-call? 'SP35E2BBMDT2Y1HB0NTK139YBGYV3PAPK3WA8BRNA.math-v1 convert-to-debt-assets debt-params (get debt-shares position) true))
+      )
+      
+      (if (or (> total-collateral-value u0) (is-eq remaining-debt u0))
+        SUCCESS
+        (let (
+            (user-borrowed-amount (get borrowed-amount position))
+            (open-interest-data (contract-call? 'SP35E2BBMDT2Y1HB0NTK139YBGYV3PAPK3WA8BRNA.state-v1 get-open-interest))
+            (lp-open-interest-val (get lp-open-interest open-interest-data))
+            (protocol-open-interest-val (get protocol-open-interest open-interest-data))
+            (staked-open-interest-val (get staked-open-interest open-interest-data))
+            (total-open-interest (+ lp-open-interest-val protocol-open-interest-val staked-open-interest-val))
+            (interest-portion (if (>= remaining-debt user-borrowed-amount)
+              (contract-call? 'SP35E2BBMDT2Y1HB0NTK139YBGYV3PAPK3WA8BRNA.math-v1 calculate-interest-portions remaining-debt user-borrowed-amount remaining-debt)
+              {principal-part: remaining-debt, interest-part: u0}
+            ))
+            (principal-part (get principal-part interest-portion))
+            (interest-part (get interest-part interest-portion))
+            (open-interest-without-principal (contract-call? 'SP35E2BBMDT2Y1HB0NTK139YBGYV3PAPK3WA8BRNA.math-v1 safe-sub total-open-interest total-borrowed-amount))
+            (lp-open-interest-without-principal (contract-call? 'SP35E2BBMDT2Y1HB0NTK139YBGYV3PAPK3WA8BRNA.math-v1 safe-sub lp-open-interest-val total-borrowed-amount))
+            (lp-interest-part (contract-call? 'SP35E2BBMDT2Y1HB0NTK139YBGYV3PAPK3WA8BRNA.math-v1 safe-div (* interest-part lp-open-interest-without-principal) open-interest-without-principal))
+            (protocol-part (contract-call? 'SP35E2BBMDT2Y1HB0NTK139YBGYV3PAPK3WA8BRNA.math-v1 safe-div (* interest-part protocol-open-interest-val) open-interest-without-principal))
+            (staked-part (contract-call? 'SP35E2BBMDT2Y1HB0NTK139YBGYV3PAPK3WA8BRNA.math-v1 safe-div (* interest-part staked-open-interest-val) open-interest-without-principal))
+            (lp-part (+ principal-part lp-interest-part))
+            (updated-total-borrowed-amount (contract-call? 'SP35E2BBMDT2Y1HB0NTK139YBGYV3PAPK3WA8BRNA.math-v1 safe-sub total-borrowed-amount user-borrowed-amount))
+            (staked-lp-tokens (contract-call? .staking-v1 get-total-staked-lp-tokens))
+            (is-wiped (contract-call? .staking-v1 is-staking-wiped-out))
+            (effective-staked-lp-tokens (if is-wiped u0 staked-lp-tokens))
+            (burned-staking-lp-tokens (try! (contract-call? 'SP35E2BBMDT2Y1HB0NTK139YBGYV3PAPK3WA8BRNA.state-v1 socialize-user-bad-debt user remaining-debt lp-part staked-part protocol-part updated-total-borrowed-amount .staking-v1 effective-staked-lp-tokens)))
+          )
+          (print {
+            user: user,
+            action: "socialized-bad-debt",
+            amount: remaining-debt,
+            lp-part: lp-part,
+            staked-part: staked-part,
+            protocol-part: protocol-part,
+            updated-total-borrowed-amount: updated-total-borrowed-amount,
+            burned-staking-lp-tokens: burned-staking-lp-tokens
+          })
+          (if (> burned-staking-lp-tokens u0) (try! (contract-call? .staking-v1 slash-total-staked-lp-tokens burned-staking-lp-tokens)) true)
+          SUCCESS
+      ))
+    )
+))
+
+;; The verified price for a specific collateral, taken from an injected list aligned to `collaterals`.
+(define-private (collateral-price-for (token principal) (collaterals (list 10 principal)) (collateral-prices (list 10 uint)))
+  (match (index-of? collaterals token)
+    idx (element-at? collateral-prices idx)
+    none
+  )
+)
+

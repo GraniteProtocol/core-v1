@@ -1,0 +1,23 @@
+[project]
+name = 'granite-remote-97356'
+description = 'Immunefi 97356 remote_data reproduction'
+authors = []
+telemetry = false
+cache_dir = './.cache'
+
+[[project.requirements]]
+contract_id = "SP119QJ4NVE3RQP8RXJVW5EXAV3XD4CJZWRCEEAAR.staking-v1"
+
+[[project.requirements]]
+contract_id = "SP119QJ4NVE3RQP8RXJVW5EXAV3XD4CJZWRCEEAAR.liquidator-v1"
+
+[[project.requirements]]
+contract_id = "SP35E2BBMDT2Y1HB0NTK139YBGYV3PAPK3WA8BRNA.state-v1"
+
+[repl.remote_data]
+enabled = true
+api_url = "https://api.hiro.so"
+initial_height = 9411225
+
+[repl.analysis]
+passes = []

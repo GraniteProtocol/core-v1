@@ -1,0 +1,409 @@
+;; SPDX-License-Identifier: BUSL-1.1
+
+;; TOKENS
+(define-fungible-token staked-lp-token)
+
+;; ERRORS
+(define-constant ERR-SENDER-MISMATCH (err u60000))
+(define-constant ERR-LP-TOKEN-SUPPLY (err u60001))
+(define-constant ERR-STAKED-LP-TOKEN-USER-NOT-ENOUGH-BALANCE (err u60002))
+(define-constant ERR-MISSING-WITHDRAWAL (err u60003))
+(define-constant ERR-WITHDRAWAL-NOT-FINALIZED (err u60004))
+(define-constant ERR-ZERO-LP-TOKEN-STAKE (err u60005))
+(define-constant ERR-ZERO-STAKED-LP-TOKEN-UNSTAKE (err u60006))
+(define-constant ERR-NOT-GOVERNANCE (err u60007))
+(define-constant ERR-INTEREST-PARAMS (err u60008))
+(define-constant ERR-STAKING-DISABLED (err u60009))
+(define-constant ERR-STAKING-WIPED-OUT (err u60010))
+(define-constant ERR-ALREADY-INITIALIZED (err u60011))
+(define-constant ERR-NOT-INITIALIZED (err u60012))
+(define-constant ERR-NOT-DEPLOYER (err u60013))
+
+;; Constants
+(define-constant SUCCESS (ok true))
+(define-constant MINIMUM_INITIAL_STAKE u1000)
+(define-constant NULL_ADDRESS (unwrap-panic (principal-construct? (if is-in-mainnet 0x16 0x1a) 0x0000000000000000000000000000000000000000)))
+(define-constant contract-deployer contract-caller)
+
+;; lp-token
+(define-constant token-prefix "gusdc")
+
+;; staking storages
+(define-data-var withdrawal-finalization-period uint u100)
+(define-data-var unfinalized-withdrawals {lp-tokens: uint, shares: uint} {lp-tokens: u0, shares: u0})
+(define-map user-withdrawal-index principal uint)
+(define-map user-withdrawals { user: principal, index: uint } { withdrawal-shares: uint, finalization-at: uint })
+(define-data-var total-lp-tokens-staked uint u0)
+(define-data-var staking-wiped-out bool false)
+(define-data-var initialized bool false)
+
+;; governance
+(define-public (update-withdrawal-finalization-period (new-value uint))
+  (begin
+    (asserts! (is-eq contract-caller (contract-call? 'SP35E2BBMDT2Y1HB0NTK139YBGYV3PAPK3WA8BRNA.state-v1 get-governance)) ERR-NOT-GOVERNANCE)
+    (print {
+      sender: contract-caller,
+      old-withdrawal-finalization-period: (var-get withdrawal-finalization-period),
+      new-withdrawal-finalization-period: new-value,
+      action: "update-withdrawal-finalization-period"
+    })
+    (var-set withdrawal-finalization-period new-value)
+    SUCCESS
+  )
+)
+
+;; SIP-10 LP-TOKEN FUNCTIONS
+(define-public (transfer (amount uint) (sender principal) (recipient principal) (memo (optional (buff 34))))
+  (begin
+    (asserts! (or (is-eq tx-sender sender) (is-eq contract-caller sender)) ERR-SENDER-MISMATCH)
+    (asserts! (contract-call? 'SP35E2BBMDT2Y1HB0NTK139YBGYV3PAPK3WA8BRNA.state-v1 is-staking-enabled) ERR-STAKING-DISABLED)
+    (match memo to-print (print to-print) 0x)
+    (try! (ft-transfer? staked-lp-token amount sender recipient))
+    (print {
+      sender: sender,
+      recipient: recipient,
+      amount: amount,
+      memo: memo,
+      action: "staked-lp-token-transfer"
+    })
+    SUCCESS
+  )
+)
+
+(define-read-only (get-balance (account principal))
+  (ok (ft-get-balance staked-lp-token account))
+)
+
+(define-read-only (get-total-supply)
+  (ok (ft-get-supply staked-lp-token))
+)
+
+(define-read-only (get-name)
+  (ok (concat token-prefix " - Granite Staked LP Token"))
+)
+
+(define-read-only (get-symbol)
+  (ok (concat token-prefix "-GSLP"))
+)
+
+(define-read-only (get-decimals)
+  ;; Lp token decimals -> market asset decimals
+  (contract-call? 'SP35E2BBMDT2Y1HB0NTK139YBGYV3PAPK3WA8BRNA.state-v1 get-decimals)
+)
+
+(define-read-only (get-token-uri)
+  (ok none)
+)
+
+(define-read-only (get-next-user-withdrawal-index (user principal)) 
+  (ok (map-get? user-withdrawal-index user))
+)
+
+;; Read only functions
+;; lp-tokens * total-staked-lp-tokens / total-lp-token
+(define-read-only (convert-to-staked-lp-tokens (lp-tokens uint) (round-up bool))
+  (let (
+      (total-staked-lp-tokens (ft-get-supply staked-lp-token))
+      (total-lp-tokens (var-get total-lp-tokens-staked))
+    )
+    (if (is-eq total-staked-lp-tokens u0)
+      lp-tokens
+      (contract-call? 'SP35E2BBMDT2Y1HB0NTK139YBGYV3PAPK3WA8BRNA.math-v1 divide round-up (* total-staked-lp-tokens lp-tokens) total-lp-tokens)
+    )
+))
+
+;; staked-lp-tokens * total-lp-tokens / total-staked-lp-tokens
+(define-read-only (convert-to-lp-tokens (staked-lp-tokens uint) (round-up bool))
+  (let (
+      (total-staked-lp-tokens (ft-get-supply staked-lp-token))
+      (total-lp-tokens (var-get total-lp-tokens-staked))
+    )
+    (if (is-eq total-lp-tokens u0)
+      staked-lp-tokens
+      (contract-call? 'SP35E2BBMDT2Y1HB0NTK139YBGYV3PAPK3WA8BRNA.math-v1 divide round-up (* staked-lp-tokens total-lp-tokens) total-staked-lp-tokens)
+    )
+))
+
+;; lp-tokens * total-withdraw-share / total-lp-tokens-in-withdrawal
+(define-read-only (convert-to-withdrawal-shares (lp-tokens uint))
+  (let (
+      (unfinalized-withdrawals-info (var-get unfinalized-withdrawals))
+      (total-withdrawal-shares (get shares unfinalized-withdrawals-info))
+      (total-withdrawal-lp-tokens (get lp-tokens unfinalized-withdrawals-info))
+    )
+    (if (is-eq total-withdrawal-shares u0)
+      lp-tokens
+      (contract-call? 'SP35E2BBMDT2Y1HB0NTK139YBGYV3PAPK3WA8BRNA.math-v1 divide false (* total-withdrawal-shares lp-tokens) total-withdrawal-lp-tokens)
+    )
+))
+
+;; withdrawal-shares * total-withdrawal-lp-tokens / total-withdrawal-shares
+(define-read-only (convert-to-withdrawal-lp-tokens (withdrawal-shares uint))
+  (let (
+      (unfinalized-withdrawals-info (var-get unfinalized-withdrawals))
+      (total-withdrawal-shares (get shares unfinalized-withdrawals-info))
+      (total-withdrawal-lp-tokens (get lp-tokens unfinalized-withdrawals-info))
+    )
+    (if (is-eq total-withdrawal-lp-tokens u0)
+      u0
+      (contract-call? 'SP35E2BBMDT2Y1HB0NTK139YBGYV3PAPK3WA8BRNA.math-v1 divide false (* withdrawal-shares total-withdrawal-lp-tokens) total-withdrawal-shares)
+    )
+))
+
+(define-read-only (get-withdrawal (user principal) (index uint))
+  (map-get? user-withdrawals {user: user, index: index})
+)
+
+(define-read-only (get-active-staked-lp-tokens)
+  (var-get total-lp-tokens-staked)
+)
+
+(define-read-only (get-total-staked-lp-tokens)
+  (+ (var-get total-lp-tokens-staked) (get lp-tokens (var-get unfinalized-withdrawals)))
+)
+
+(define-read-only (get-withdrawal-finalization-period)
+  (var-get withdrawal-finalization-period)
+)
+
+(define-read-only (is-staking-wiped-out)
+  (var-get staking-wiped-out)
+)
+
+;; Public functions
+(define-public (initialize (min-stake (optional uint)))
+  (let (
+      (stake-amount (default-to MINIMUM_INITIAL_STAKE min-stake))
+      (total-staked (ft-get-supply staked-lp-token))
+      (dust-burned (is-eq total-staked u0))
+      (initial-balance (ft-get-balance staked-lp-token contract-caller))
+    )
+    (asserts! (is-eq contract-caller contract-deployer) ERR-NOT-DEPLOYER)
+    (asserts! (not (var-get initialized)) ERR-ALREADY-INITIALIZED)
+    (var-set initialized true)
+    (try! (if (and dust-burned (> stake-amount u0))
+      (begin
+        (try! (stake stake-amount))
+        (transfer (- (ft-get-balance staked-lp-token contract-caller) initial-balance) contract-caller NULL_ADDRESS none)
+      )
+      SUCCESS
+    ))
+    (print {
+      action: "initialized",
+      user: contract-caller,
+      total-staked: total-staked,
+      dust-burned: dust-burned,
+    })
+    SUCCESS
+  )
+)
+
+(define-public (stake (lp-tokens uint))
+  (begin
+    (try! (check-staking-enabled))
+    (try! (accrue-interest))
+    (let (
+        (staked-lp-tokens-to-mint (convert-to-staked-lp-tokens lp-tokens false))
+      )
+      (asserts! (> lp-tokens u0) ERR-ZERO-LP-TOKEN-STAKE)
+      (asserts! (var-get initialized) ERR-NOT-INITIALIZED)
+      (try! (contract-call? 'SP35E2BBMDT2Y1HB0NTK139YBGYV3PAPK3WA8BRNA.state-v1 transfer lp-tokens contract-caller (as-contract contract-caller) none))
+      (try! (ft-mint? staked-lp-token staked-lp-tokens-to-mint contract-caller))
+      (var-set total-lp-tokens-staked (+ (var-get total-lp-tokens-staked) lp-tokens))
+      (print {
+        sender: contract-caller,
+        lp-tokens: lp-tokens,
+        staked-lp-tokens: staked-lp-tokens-to-mint,
+        action: "lp-token-staked"
+      })
+      SUCCESS
+    )
+  )
+)
+
+(define-public (increase-lp-staked-balance (lp-tokens uint))
+  (begin
+    (try! (contract-call? 'SP35E2BBMDT2Y1HB0NTK139YBGYV3PAPK3WA8BRNA.state-v1 is-allowed-contract contract-caller))
+    (if (var-get staking-wiped-out)
+      (begin
+        (print {
+          action: "increase-lp-staked-balance-skipped-wiped",
+          amount: lp-tokens,
+        })
+        SUCCESS
+      )
+      (begin
+        (var-set total-lp-tokens-staked (+ (var-get total-lp-tokens-staked) lp-tokens))
+        (print {
+          action: "increase-lp-staked-balance",
+          amount: lp-tokens,
+        })
+        SUCCESS
+      )
+    )
+  )
+)
+
+
+(define-public (slash-total-staked-lp-tokens (lp-tokens uint))
+  (begin
+    (try! (contract-call? 'SP35E2BBMDT2Y1HB0NTK139YBGYV3PAPK3WA8BRNA.state-v1 is-allowed-contract contract-caller))
+    (if (or (is-eq lp-tokens u0) (is-eq (get-total-staked-lp-tokens) u0))
+      SUCCESS
+      (let (
+          (total-staked-lp-tokens (get-total-staked-lp-tokens))
+          (unfinalized-withdrawal-info (var-get unfinalized-withdrawals))
+          (withdrawal-lp-tokens (get lp-tokens unfinalized-withdrawal-info))
+          (withdrawal-lp-tokens-to-slash (/ (* lp-tokens withdrawal-lp-tokens) total-staked-lp-tokens))
+          (active-staked-lp-tokens-to-slash (- lp-tokens withdrawal-lp-tokens-to-slash))
+          (new-active (- (var-get total-lp-tokens-staked) active-staked-lp-tokens-to-slash))
+        )
+        (var-set total-lp-tokens-staked new-active)
+        (if (is-eq withdrawal-lp-tokens withdrawal-lp-tokens-to-slash)
+          (var-set unfinalized-withdrawals { lp-tokens: u0, shares: u0 })
+          (var-set unfinalized-withdrawals {
+            lp-tokens: (- withdrawal-lp-tokens withdrawal-lp-tokens-to-slash),
+            shares: (get shares unfinalized-withdrawal-info),
+          })
+        )
+        (if (is-eq new-active u0)
+          (begin
+            (var-set staking-wiped-out true)
+            (print { action: "staking-wipe-out", amount: lp-tokens })
+            SUCCESS
+          )
+          (begin
+            (print { action: "slash-total-staked-lp-tokens", amount: lp-tokens })
+            SUCCESS
+          )
+        )
+      )
+    )
+  )
+)
+
+(define-public (reconcile-lp-token-balance)
+  (let (
+      (current-balance (unwrap! (contract-call? 'SP35E2BBMDT2Y1HB0NTK139YBGYV3PAPK3WA8BRNA.state-v1 get-balance (as-contract contract-caller)) ERR-LP-TOKEN-SUPPLY))
+      (staked-lp-tokens (var-get total-lp-tokens-staked))
+      (accounted-lp-tokens (+ staked-lp-tokens (get lp-tokens (var-get unfinalized-withdrawals))))
+    )
+    (try! (check-staking-enabled))
+    (try! (accrue-interest))
+    (asserts! (is-eq (contract-call? 'SP35E2BBMDT2Y1HB0NTK139YBGYV3PAPK3WA8BRNA.state-v1 get-governance) contract-caller) ERR-NOT-GOVERNANCE)
+    (if (>= current-balance accounted-lp-tokens)
+      (var-set total-lp-tokens-staked (+ staked-lp-tokens (- current-balance accounted-lp-tokens)))
+      (var-set total-lp-tokens-staked (- staked-lp-tokens (- accounted-lp-tokens current-balance)))
+    )
+    (print {
+      action: "reconcile-lp-token-balance",
+      previous-staked-lp-tokens: staked-lp-tokens,
+      new-staked-lp-tokens: (var-get total-lp-tokens-staked)
+    })  
+    SUCCESS
+  )
+)
+
+(define-public (initiate-unstake (staked-lp-tokens uint))
+  (begin
+    (try! (check-staking-enabled))
+    (try! (accrue-interest))
+    (let (
+        (user contract-caller)
+        (user-total-balance (ft-get-balance staked-lp-token user))
+        (withdrawal-index (default-to u0 (map-get? user-withdrawal-index user)))
+        (finalization-at (+ stacks-block-height (var-get withdrawal-finalization-period)))
+        (lp-tokens-to-return (convert-to-lp-tokens staked-lp-tokens false))
+        (withdraw-shares (convert-to-withdrawal-shares lp-tokens-to-return))
+        (unfinalized-withdrawal-info (var-get unfinalized-withdrawals))
+      )
+      (asserts! (> staked-lp-tokens u0) ERR-ZERO-STAKED-LP-TOKEN-UNSTAKE)
+      (asserts! (>= user-total-balance staked-lp-tokens) ERR-STAKED-LP-TOKEN-USER-NOT-ENOUGH-BALANCE)
+      (map-set user-withdrawal-index user (+ withdrawal-index u1))
+      (try! (ft-burn? staked-lp-token staked-lp-tokens user))
+      (map-set user-withdrawals {user: user, index: withdrawal-index} {withdrawal-shares: withdraw-shares, finalization-at: finalization-at})
+      (var-set total-lp-tokens-staked (- (var-get total-lp-tokens-staked) lp-tokens-to-return))
+      (var-set unfinalized-withdrawals {
+        lp-tokens: (+ (get lp-tokens unfinalized-withdrawal-info) lp-tokens-to-return),
+        shares: (+ (get shares unfinalized-withdrawal-info) withdraw-shares),
+      })
+      (print {
+        sender: user,
+        index: withdrawal-index,
+        amount: staked-lp-tokens,
+        action: "initiated-unstake"
+      })
+      (ok withdrawal-index)
+    )
+  )
+)
+
+;; No staking-enabled check: users must always be able to finalize
+;; pending withdrawals, even if staking has been disabled or wiped out.
+(define-public (finalize-unstake (index uint))
+  (let (
+      (user contract-caller)
+      (unfinalized-withdrawal-info (var-get unfinalized-withdrawals))
+      (withdrawal (unwrap! (map-get? user-withdrawals {user: user, index: index}) ERR-MISSING-WITHDRAWAL))
+      (withdraw-shares (get withdrawal-shares withdrawal))
+      (lp-tokens-to-return (convert-to-withdrawal-lp-tokens withdraw-shares))
+      (finalization-at (get finalization-at withdrawal))
+    )
+    (asserts! (>= stacks-block-height finalization-at) ERR-WITHDRAWAL-NOT-FINALIZED)
+    (try! (if (> lp-tokens-to-return u0)
+      (as-contract (contract-call? 'SP35E2BBMDT2Y1HB0NTK139YBGYV3PAPK3WA8BRNA.state-v1 transfer lp-tokens-to-return (as-contract contract-caller) user none))
+      SUCCESS
+    ))
+    (if (not (var-get staking-wiped-out))
+      (var-set unfinalized-withdrawals {
+        lp-tokens: (- (get lp-tokens unfinalized-withdrawal-info) lp-tokens-to-return),
+        shares: (- (get shares unfinalized-withdrawal-info) withdraw-shares),
+      })
+      (var-set unfinalized-withdrawals {
+        lp-tokens: (contract-call? 'SP35E2BBMDT2Y1HB0NTK139YBGYV3PAPK3WA8BRNA.math-v1 safe-sub (get lp-tokens unfinalized-withdrawal-info) lp-tokens-to-return),
+        shares: (contract-call? 'SP35E2BBMDT2Y1HB0NTK139YBGYV3PAPK3WA8BRNA.math-v1 safe-sub (get shares unfinalized-withdrawal-info) withdraw-shares),
+      })
+    )
+    (map-delete user-withdrawals {user: user, index: index})
+     (print {
+      sender: user,
+      index: index,
+      lp-tokens: lp-tokens-to-return,
+      action: "finalize-unstake"
+    })
+    SUCCESS
+  )
+)
+
+;; private functions
+(define-private (accrue-interest)
+  (let (
+    (accrue-interest-params (unwrap! (contract-call? 'SP35E2BBMDT2Y1HB0NTK139YBGYV3PAPK3WA8BRNA.state-v1 get-accrue-interest-params) ERR-INTEREST-PARAMS))
+    (accrued-interest (try! (contract-call? .linear-kinked-ir-v1 accrue-interest
+      (get last-accrued-block-time accrue-interest-params)
+      (get lp-interest accrue-interest-params)
+      (get staked-interest accrue-interest-params)
+      (try! (contract-call? 'SP35E2BBMDT2Y1HB0NTK139YBGYV3PAPK3WA8BRNA.staking-reward-v1 calculate-staking-reward-percentage (get-active-staked-lp-tokens)))
+      (get protocol-interest accrue-interest-params)
+      (get protocol-reserve-percentage accrue-interest-params)
+      (get total-assets accrue-interest-params)))
+    )
+  )
+  (contract-call? 'SP35E2BBMDT2Y1HB0NTK139YBGYV3PAPK3WA8BRNA.state-v1 set-accrued-interest accrued-interest)
+))
+
+
+(define-private (check-staking-enabled)
+  (let (
+    (staking-disabled (not (contract-call? 'SP35E2BBMDT2Y1HB0NTK139YBGYV3PAPK3WA8BRNA.state-v1 is-staking-enabled)))
+    (wiped-out (var-get staking-wiped-out))
+  )
+    (if wiped-out
+      ERR-STAKING-WIPED-OUT
+      (if staking-disabled
+        ERR-STAKING-DISABLED
+        (ok true)
+      )
+    )
+  )
+)
