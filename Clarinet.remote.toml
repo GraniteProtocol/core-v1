@@ -1,0 +1,20 @@
+[project]
+name = 'granite-remote-repro'
+
+[repl.remote_data]
+enabled = true
+api_url = 'https://api.hiro.so'
+initial_height = 9411000
+use_mainnet_wallets = true
+
+[[project.requirements]]
+contract_id = "SP3M2BYF7RGF8WKW5FVDNJ6WR8D7AR9BHDXAKPXZE.state-v1"
+
+[[project.requirements]]
+contract_id = "SPSX722NK9V3A8D3CVQT0CDY4EBQ3E9FSDDE61FT.borrower-v1"
+
+[[project.requirements]]
+contract_id = "SPSX722NK9V3A8D3CVQT0CDY4EBQ3E9FSDDE61FT.liquidity-provider-v1"
+
+[[project.requirements]]
+contract_id = "SPSX722NK9V3A8D3CVQT0CDY4EBQ3E9FSDDE61FT.withdrawal-caps-v1"
