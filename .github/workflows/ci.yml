@@ -26,3 +26,7 @@ jobs:
         run: npm ci
       - name: "Execute unit tests"
         run: npm run test:report
+      - name: "Execute e2e harness tests"
+        run: npm run test:e2e
+      - name: "Typecheck the e2e harness"
+        run: npm run typecheck:e2e

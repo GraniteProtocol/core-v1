@@ -207,6 +207,11 @@ plan:
       path: contracts/test/borrower-proxy.clar
       clarity-version: 3
     - transaction-type: emulated-contract-publish
+      contract-name: governance-test
+      emulated-sender: ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM
+      path: contracts/test/governance-test.clar
+      clarity-version: 3
+    - transaction-type: emulated-contract-publish
       contract-name: governance-v1
       emulated-sender: ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM
       path: contracts/governance-v1.clar
