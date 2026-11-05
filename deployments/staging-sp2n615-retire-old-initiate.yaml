@@ -1,0 +1,47 @@
+---
+id: 0
+name: SP2N615 retire old mutators (proposal initiate)
+network: mainnet
+stacks-node: https://api.hiro.so
+bitcoin-node: http://blockstack:blockstacksystem@bitcoin.blockstack.com:8332
+plan:
+  batches:
+    - id: 0
+      transactions:
+        - contract-call:
+            contract-id: SP2E4S1CVTQG3CMGRJW1B9ECNBZKJEVF424JKDTVJ.governance-v1
+            expected-sender: SPTXMEW26M54HX1ZXF6VN7QKK4XES1038ERD40T5
+            method: initiate-proposal-to-update-allowed-contract
+            parameters:
+              - u15
+              - "'SP2N615VZET7VD3DK3SCGPRXFSA9XSJW89KRC2Y30.borrower-v1"
+              - u1000
+            cost: 50000
+        - contract-call:
+            contract-id: SP2E4S1CVTQG3CMGRJW1B9ECNBZKJEVF424JKDTVJ.governance-v1
+            expected-sender: SPTXMEW26M54HX1ZXF6VN7QKK4XES1038ERD40T5
+            method: initiate-proposal-to-update-allowed-contract
+            parameters:
+              - u15
+              - "'SP2N615VZET7VD3DK3SCGPRXFSA9XSJW89KRC2Y30.liquidator-v1"
+              - u1000
+            cost: 50000
+        - contract-call:
+            contract-id: SP2E4S1CVTQG3CMGRJW1B9ECNBZKJEVF424JKDTVJ.governance-v1
+            expected-sender: SPTXMEW26M54HX1ZXF6VN7QKK4XES1038ERD40T5
+            method: initiate-proposal-to-update-allowed-contract
+            parameters:
+              - u15
+              - "'SP2N615VZET7VD3DK3SCGPRXFSA9XSJW89KRC2Y30.liquidity-provider-v1"
+              - u1000
+            cost: 50000
+        - contract-call:
+            contract-id: SP2E4S1CVTQG3CMGRJW1B9ECNBZKJEVF424JKDTVJ.governance-v1
+            expected-sender: SPTXMEW26M54HX1ZXF6VN7QKK4XES1038ERD40T5
+            method: initiate-proposal-to-update-allowed-contract
+            parameters:
+              - u15
+              - "'SP2N615VZET7VD3DK3SCGPRXFSA9XSJW89KRC2Y30.staking-v1"
+              - u1000
+            cost: 50000
+      epoch: "4.0"

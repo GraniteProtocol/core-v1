@@ -1,0 +1,39 @@
+---
+id: 0
+name: SP2N615 retire old mutators (proposal execute)
+network: mainnet
+stacks-node: https://api.hiro.so
+bitcoin-node: http://blockstack:blockstacksystem@bitcoin.blockstack.com:8332
+plan:
+  batches:
+    - id: 0
+      transactions:
+        - contract-call:
+            contract-id: SP2E4S1CVTQG3CMGRJW1B9ECNBZKJEVF424JKDTVJ.governance-v1
+            expected-sender: SPTXMEW26M54HX1ZXF6VN7QKK4XES1038ERD40T5
+            method: execute
+            parameters:
+              - "0x8c0dde9914e24913fe6e096f38674b1dbb2fb4d06a037b261f8fd4061479b6dd"
+            cost: 50000
+        - contract-call:
+            contract-id: SP2E4S1CVTQG3CMGRJW1B9ECNBZKJEVF424JKDTVJ.governance-v1
+            expected-sender: SPTXMEW26M54HX1ZXF6VN7QKK4XES1038ERD40T5
+            method: execute
+            parameters:
+              - "0x70a160634b59d4e119f1f9a7be609b2f167475e992eef8380a603cfc5a59fc68"
+            cost: 50000
+        - contract-call:
+            contract-id: SP2E4S1CVTQG3CMGRJW1B9ECNBZKJEVF424JKDTVJ.governance-v1
+            expected-sender: SPTXMEW26M54HX1ZXF6VN7QKK4XES1038ERD40T5
+            method: execute
+            parameters:
+              - "0x34688ad4ba6e02f93e30218700e42e22ab47aa050bdaae648748734485307c5b"
+            cost: 50000
+        - contract-call:
+            contract-id: SP2E4S1CVTQG3CMGRJW1B9ECNBZKJEVF424JKDTVJ.governance-v1
+            expected-sender: SPTXMEW26M54HX1ZXF6VN7QKK4XES1038ERD40T5
+            method: execute
+            parameters:
+              - "0x812ebadd1d09c82da3831e3035cea035d826bd848ca3dd7c9dd0821175bdbafd"
+            cost: 50000
+      epoch: "4.0"
