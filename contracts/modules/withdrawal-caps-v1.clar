@@ -190,8 +190,12 @@
 )
 
 (define-public (lp-deposit (amount uint))
-  (begin 
+  (begin
     (asserts! (is-eq contract-caller LP-CONTRACT) ERR-RESTRICTED)
+    ;; Sync before state-v1 credits the deposit, so the ceiling uses the pre-deposit balance.
+    (if (is-eq (var-get debt-cap-factor) u0)
+      true
+      (try! (sync-debt-bucket u0)))
     (if (is-eq (var-get lp-cap-factor) u0)
       SUCCESS
       (sync-lp-bucket amount)

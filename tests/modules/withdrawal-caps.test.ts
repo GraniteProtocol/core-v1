@@ -1,3 +1,4 @@
+import { tx } from "@stacks/clarinet-sdk";
 import { Cl, ClarityType } from "@stacks/transactions";
 import { beforeEach, describe, expect, it } from "vitest";
 import {
@@ -185,7 +186,8 @@ describe("withdrawal caps tests", () => {
     await set_price("mock-btc", 10n, deployer);
     await set_price("mock-eth", 1n, deployer);
 
-    // Deposit 500 USDC
+    // Deposit 500 USDC. lp-deposit syncs the debt bucket against the pre-deposit
+    // balance, so the stored bucket is sized on the 1,000-unit init dust only.
     let amount = 500_000_000_00;
     mint_token("mock-usdc", amount, depositor);
     deposit(amount, depositor);
@@ -196,7 +198,11 @@ describe("withdrawal caps tests", () => {
       [],
       deployer
     ).result;
-    expect(debt_bucket).toBeUint(0);
+    expect(debt_bucket).toBeUint(800);
+
+    // Refill window is 86,400 s and simnet advances 600 s per block; the next borrow
+    // syncs the bucket up to the post-deposit ceiling.
+    simnet.mineEmptyBlocks(8_640);
 
     // Add collateral
     mint_token("mock-btc", 800_000_000_0, borrower);
@@ -759,5 +765,103 @@ describe("withdrawal caps tests", () => {
       depositor
     );
     expect(withdraw.result).toBeOk(Cl.bool(true));
+  });
+});
+
+// Immunefi 97175/97264: lp-deposit ran before state-v1 credited the deposit, so the
+// next borrow sized the debt cap from an inflated borrowable balance.
+describe("withdrawal caps: lp-deposit syncs the debt bucket", () => {
+  const USDC = 100_000_000n; // simnet mock-usdc has 8 decimals
+  const SCALING = 100_000_000n;
+  const DEBT_CAP_FACTOR = 20_000_000n;
+
+  const ro = (fn: string) =>
+    simnet.callReadOnlyFn("withdrawal-caps-v1", fn, [], deployer).result.value as bigint;
+  const borrowable = () =>
+    simnet.callReadOnlyFn("state-v1", "get-borrowable-balance", [], deployer).result
+      .value as bigint;
+
+  beforeEach(async () => {
+    init_pyth(deployer);
+    set_pyth_time_delta(7200, deployer);
+    set_allowed_contracts(deployer);
+    set_asset_cap(deployer, 2n ** 128n - 1n);
+    initialize_ir(deployer);
+    initialize_staking_reward(deployer);
+    initialize_lp(deployer);
+    await set_initial_price("mock-usdc", 1n, deployer);
+    await set_initial_price("mock-btc", 1n, deployer);
+
+    const params = [
+      ["set-debt-cap", DEBT_CAP_FACTOR],
+      ["set-lp-cap", DEBT_CAP_FACTOR],
+      ["set-refill-time-window", 36_000n],
+      ["set-decay-time-window", 10_800n],
+    ] as const;
+    for (const [fn, value] of params) {
+      const res = simnet.callPublicFn("withdrawal-caps-v1", fn, [Cl.uint(value)], deployer);
+      expect(res.result).toBeOk(Cl.bool(true));
+    }
+
+    update_supported_collateral("mock-btc", 70_000_000, 80_000_000, 10_000_000, 8, deployer);
+  });
+
+  const seed = () => {
+    mint_token("mock-usdc", Number(1_000n * USDC), depositor);
+    deposit(Number(1_000n * USDC), depositor);
+    mint_token("mock-btc", Number(2_000n * USDC), borrower);
+    add_collateral("mock-btc", Number(2_000n * USDC), deployer, borrower);
+    // Refill window is 36,000 s and simnet advances 600 s per block, so the attack
+    // deposit's sync refills the bucket to its ceiling.
+    simnet.mineEmptyBlocks(3_600);
+  };
+
+  it("control: borrowing the full pre-deposit cap succeeds", () => {
+    seed();
+    const cap = (borrowable() * DEBT_CAP_FACTOR) / SCALING;
+    const res = simnet.callPublicFn(
+      "borrower-v1",
+      "borrow",
+      [Cl.buffer(build_price_update()), Cl.uint(cap), Cl.none()],
+      borrower
+    );
+    expect(res.result).toBeOk(Cl.bool(true));
+    expect(ro("get-debt-bucket")).toBe(0n);
+  });
+
+  it("a same-block deposit cannot raise the ceiling above the pre-deposit balance", () => {
+    seed();
+    const preDepositCap = (borrowable() * DEBT_CAP_FACTOR) / SCALING;
+    const depositAmount = 10_000n * USDC;
+    // 5x the real per-window cap, still inside the ceiling the deposit would create.
+    const borrowAmount = preDepositCap * 5n;
+    mint_token("mock-usdc", Number(depositAmount), depositor);
+
+    const block = simnet.mineBlock([
+      tx.callPublicFn(
+        "liquidity-provider-v1",
+        "deposit",
+        [Cl.uint(depositAmount), Cl.principal(depositor)],
+        depositor
+      ),
+      tx.callPublicFn(
+        "borrower-v1",
+        "borrow",
+        [Cl.buffer(build_price_update()), Cl.uint(borrowAmount), Cl.none()],
+        borrower
+      ),
+      tx.callPublicFn(
+        "liquidity-provider-v1",
+        "withdraw",
+        [Cl.uint(depositAmount - 1_000n), Cl.principal(depositor)],
+        depositor
+      ),
+    ]);
+
+    expect(block[0].result).toBeOk(Cl.bool(true));
+    // The deposit pinned the ceiling to the balance it saw, not the post-deposit one.
+    expect(ro("get-debt-bucket")).toBe(preDepositCap);
+    expect(block[1].result).toBeErr(Cl.uint(120003)); // ERR-WITHDRAWAL-DEBT-CAP-EXCEEDED
+    expect(block[2].result).toBeOk(Cl.bool(true));
   });
 });

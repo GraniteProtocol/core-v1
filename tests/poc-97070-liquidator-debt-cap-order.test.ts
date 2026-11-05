@@ -96,6 +96,10 @@ describe("Immunefi 97070: liquidation debt-cap ordering", () => {
     mint_token("mock-usdc", Number(100_000n * USDC), depositor);
     deposit(Number(100_000n * USDC), depositor);
 
+    // lp-deposit syncs the debt bucket against the pre-deposit balance, so let the
+    // deposit's own ceiling refill before borrowing.
+    simnet.mineEmptyBlocks(3_600);
+
     update_supported_collateral(
       "mock-btc",
       70_000_000,

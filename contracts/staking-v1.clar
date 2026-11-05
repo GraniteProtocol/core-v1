@@ -201,6 +201,7 @@
 (define-public (stake (lp-tokens uint))
   (begin
     (try! (check-staking-enabled))
+    (try! (check-active-accounting))
     (try! (accrue-interest))
     (let (
         (staked-lp-tokens-to-mint (convert-to-staked-lp-tokens lp-tokens false))
@@ -257,16 +258,17 @@
           (withdrawal-lp-tokens-to-slash (/ (* lp-tokens withdrawal-lp-tokens) total-staked-lp-tokens))
           (active-staked-lp-tokens-to-slash (- lp-tokens withdrawal-lp-tokens-to-slash))
           (new-active (- (var-get total-lp-tokens-staked) active-staked-lp-tokens-to-slash))
+          (new-withdrawal-lp-tokens (- withdrawal-lp-tokens withdrawal-lp-tokens-to-slash))
         )
         (var-set total-lp-tokens-staked new-active)
-        (if (is-eq withdrawal-lp-tokens withdrawal-lp-tokens-to-slash)
+        (if (is-eq new-withdrawal-lp-tokens u0)
           (var-set unfinalized-withdrawals { lp-tokens: u0, shares: u0 })
           (var-set unfinalized-withdrawals {
-            lp-tokens: (- withdrawal-lp-tokens withdrawal-lp-tokens-to-slash),
+            lp-tokens: new-withdrawal-lp-tokens,
             shares: (get shares unfinalized-withdrawal-info),
           })
         )
-        (if (is-eq new-active u0)
+        (if (and (is-eq new-active u0) (is-eq new-withdrawal-lp-tokens u0))
           (begin
             (var-set staking-wiped-out true)
             (print { action: "staking-wipe-out", amount: lp-tokens })
@@ -307,6 +309,7 @@
 (define-public (initiate-unstake (staked-lp-tokens uint))
   (begin
     (try! (check-staking-enabled))
+    (try! (check-active-accounting))
     (try! (accrue-interest))
     (let (
         (user contract-caller)
@@ -392,6 +395,17 @@
   (contract-call? .state-v1 set-accrued-interest accrued-interest)
 ))
 
+
+;; With active at zero, staking stays shut while staked tokens or a queue remain;
+;; a fresh module (no supply, no queue) still stakes 1:1.
+(define-private (check-active-accounting)
+  (if (and (is-eq (var-get total-lp-tokens-staked) u0)
+           (or (> (ft-get-supply staked-lp-token) u0)
+               (> (get lp-tokens (var-get unfinalized-withdrawals)) u0)))
+    ERR-STAKING-WIPED-OUT
+    (ok true)
+  )
+)
 
 (define-private (check-staking-enabled)
   (let (

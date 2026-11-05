@@ -97,9 +97,9 @@
         (interest-part (get interest-part interest-portion))
         (open-interest-without-principal (contract-call? .math-v1 safe-sub open-interest total-borrowed-amount))
         (lp-open-interest-without-principal (contract-call? .math-v1 safe-sub (get lp-open-interest interest-params) total-borrowed-amount))
-        (lp-part-raw (contract-call? .math-v1 safe-div (* interest-part lp-open-interest-without-principal) open-interest-without-principal))
-        (protocol-part-raw (contract-call? .math-v1 safe-div (* interest-part (get protocol-open-interest interest-params)) open-interest-without-principal))
-        (staked-part-raw (contract-call? .math-v1 safe-div (* interest-part (get staked-open-interest interest-params)) open-interest-without-principal))
+        (lp-part-raw (clamp-to-bucket (contract-call? .math-v1 safe-div (* interest-part lp-open-interest-without-principal) open-interest-without-principal) lp-open-interest-without-principal))
+        (protocol-part-raw (clamp-to-bucket (contract-call? .math-v1 safe-div (* interest-part (get protocol-open-interest interest-params)) open-interest-without-principal) (get protocol-open-interest interest-params)))
+        (staked-part-raw (clamp-to-bucket (contract-call? .math-v1 safe-div (* interest-part (get staked-open-interest interest-params)) open-interest-without-principal) (get staked-open-interest interest-params)))
         (split (conserve-interest-split interest-part lp-part-raw staked-part-raw protocol-part-raw lp-open-interest-without-principal (get staked-open-interest interest-params) (get protocol-open-interest interest-params)))
         (lp-part (get lp-part split))
         (staked-part (get staked-part split))
@@ -234,6 +234,11 @@
 ))
 
 ;; PRIVATE FUNCTIONS
+
+;; A split part is subtracted from its bucket by state-v1, so it cannot exceed it.
+(define-private (clamp-to-bucket (part uint) (bucket uint))
+  (if (> part bucket) bucket part)
+)
 
 ;; Give the split's flooring remainder to the first bucket with interest room for
 ;; it, so a remainder cannot consume LP principal backing.
