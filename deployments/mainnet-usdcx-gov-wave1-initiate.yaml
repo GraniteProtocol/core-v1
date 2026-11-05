@@ -1,0 +1,55 @@
+---
+id: 0
+name: Production USDCx governance wave 1 initiate (authorise new mutators and hand over governance)
+network: mainnet
+stacks-node: "https://api.hiro.so"
+bitcoin-node: "http://blockstack:blockstacksystem@bitcoin.blockstack.com:8332"
+plan:
+  batches:
+    - id: 0
+      transactions:
+        - contract-call:
+            contract-id: SPSX722NK9V3A8D3CVQT0CDY4EBQ3E9FSDDE61FT.governance-v1
+            expected-sender: SPTXMEW26M54HX1ZXF6VN7QKK4XES1038ERD40T5
+            method: initiate-proposal-to-update-allowed-contract
+            parameters:
+              - "u14"
+              - "'SPZYYJNG83VASG6YXR15R8PK8C8KMQGSPF2HNPS0.borrower-v1"
+              - "u110000"
+            cost: 100000
+        - contract-call:
+            contract-id: SPSX722NK9V3A8D3CVQT0CDY4EBQ3E9FSDDE61FT.governance-v1
+            expected-sender: SPTXMEW26M54HX1ZXF6VN7QKK4XES1038ERD40T5
+            method: initiate-proposal-to-update-allowed-contract
+            parameters:
+              - "u14"
+              - "'SPZYYJNG83VASG6YXR15R8PK8C8KMQGSPF2HNPS0.liquidator-v1"
+              - "u110000"
+            cost: 100000
+        - contract-call:
+            contract-id: SPSX722NK9V3A8D3CVQT0CDY4EBQ3E9FSDDE61FT.governance-v1
+            expected-sender: SPTXMEW26M54HX1ZXF6VN7QKK4XES1038ERD40T5
+            method: initiate-proposal-to-update-allowed-contract
+            parameters:
+              - "u14"
+              - "'SPZYYJNG83VASG6YXR15R8PK8C8KMQGSPF2HNPS0.liquidity-provider-v1"
+              - "u110000"
+            cost: 100000
+        - contract-call:
+            contract-id: SPSX722NK9V3A8D3CVQT0CDY4EBQ3E9FSDDE61FT.governance-v1
+            expected-sender: SPTXMEW26M54HX1ZXF6VN7QKK4XES1038ERD40T5
+            method: initiate-proposal-to-update-allowed-contract
+            parameters:
+              - "u14"
+              - "'SPZYYJNG83VASG6YXR15R8PK8C8KMQGSPF2HNPS0.staking-v1"
+              - "u110000"
+            cost: 100000
+        - contract-call:
+            contract-id: SPSX722NK9V3A8D3CVQT0CDY4EBQ3E9FSDDE61FT.governance-v1
+            expected-sender: SPTXMEW26M54HX1ZXF6VN7QKK4XES1038ERD40T5
+            method: initiate-proposal-to-update-governance
+            parameters:
+              - "'SPZYYJNG83VASG6YXR15R8PK8C8KMQGSPF2HNPS0.governance-v1"
+              - "u110000"
+            cost: 100000
+      epoch: "4.0"

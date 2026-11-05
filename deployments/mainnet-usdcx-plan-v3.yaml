@@ -10,49 +10,49 @@ plan:
       transactions:
         - contract-publish:
             contract-name: staking-v1
-            expected-sender: SP3QQG04DMNEAFY8XS5K5XCJ81JNSK01RTSY2THR8
+            expected-sender: SPZYYJNG83VASG6YXR15R8PK8C8KMQGSPF2HNPS0
             cost: 100000
             path: contracts/staking-v1.clar
             anchor-block-only: true
             clarity-version: 3
         - contract-publish:
             contract-name: withdrawal-caps-v1
-            expected-sender: SP3QQG04DMNEAFY8XS5K5XCJ81JNSK01RTSY2THR8
+            expected-sender: SPZYYJNG83VASG6YXR15R8PK8C8KMQGSPF2HNPS0
             cost: 100000
             path: contracts/modules/withdrawal-caps-v1.clar
             anchor-block-only: true
             clarity-version: 3
         - contract-publish:
             contract-name: borrower-v1
-            expected-sender: SP3QQG04DMNEAFY8XS5K5XCJ81JNSK01RTSY2THR8
+            expected-sender: SPZYYJNG83VASG6YXR15R8PK8C8KMQGSPF2HNPS0
             cost: 100000
             path: contracts/borrower-v1.clar
             anchor-block-only: true
             clarity-version: 3
         - contract-publish:
             contract-name: liquidator-v1
-            expected-sender: SP3QQG04DMNEAFY8XS5K5XCJ81JNSK01RTSY2THR8
+            expected-sender: SPZYYJNG83VASG6YXR15R8PK8C8KMQGSPF2HNPS0
             cost: 100000
             path: contracts/liquidator-v1.clar
             anchor-block-only: true
             clarity-version: 3
         - contract-publish:
             contract-name: liquidity-provider-v1
-            expected-sender: SP3QQG04DMNEAFY8XS5K5XCJ81JNSK01RTSY2THR8
+            expected-sender: SPZYYJNG83VASG6YXR15R8PK8C8KMQGSPF2HNPS0
             cost: 100000
             path: contracts/liquidity-provider-v1.clar
             anchor-block-only: true
             clarity-version: 3
         - contract-publish:
             contract-name: governance-v1
-            expected-sender: SP3QQG04DMNEAFY8XS5K5XCJ81JNSK01RTSY2THR8
+            expected-sender: SPZYYJNG83VASG6YXR15R8PK8C8KMQGSPF2HNPS0
             cost: 100000
             path: contracts/governance-v1.clar
             anchor-block-only: true
             clarity-version: 3
         - contract-publish:
             contract-name: utility
-            expected-sender: SP3QQG04DMNEAFY8XS5K5XCJ81JNSK01RTSY2THR8
+            expected-sender: SPZYYJNG83VASG6YXR15R8PK8C8KMQGSPF2HNPS0
             cost: 100000
             path: contracts/modules/utility.clar
             anchor-block-only: true
