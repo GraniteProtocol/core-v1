@@ -1,0 +1,20 @@
+---
+id: 0
+name: SP2N615 borrow proof
+network: mainnet
+stacks-node: https://api.hiro.so
+bitcoin-node: http://blockstack:blockstacksystem@bitcoin.blockstack.com:8332
+plan:
+  batches:
+    - id: 0
+      transactions:
+        - contract-call:
+            contract-id: SP2E4S1CVTQG3CMGRJW1B9ECNBZKJEVF424JKDTVJ.borrower-v1
+            expected-sender: SP2FER95BTPCAPNQ5507ETSCDRP8ZNS4BJPJFA9V2
+            method: borrow
+            parameters:
+              - "0x2a22999a3e59b61ae75fffc611f22ef68b8d498f7ddf9d99cad0e414e467dace7fc193733c931772788ecf0c5f63b0915312f7156f82fe2d8cb15100f9feaf47bd80a6cc00003693c7d37500065f8543ea94c004020000000103000000074c69497c9a04fff803001b0000000703000000000005f5a42804fff803000d"
+              - u1000000
+              - none
+            cost: 50000
+      epoch: "4.0"
