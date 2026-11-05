@@ -1,0 +1,25 @@
+---
+id: 0
+name: SP2N615 utility pair
+network: mainnet
+stacks-node: https://api.hiro.so
+bitcoin-node: http://blockstack:blockstacksystem@bitcoin.blockstack.com:8332
+plan:
+  batches:
+    - id: 0
+      transactions:
+        - contract-publish:
+            contract-name: linear-kinked-ir-utility
+            expected-sender: SP2E4S1CVTQG3CMGRJW1B9ECNBZKJEVF424JKDTVJ
+            cost: 100000
+            path: contracts/modules/linear-kinked-ir-utility.clar
+            anchor-block-only: true
+            clarity-version: 3
+        - contract-publish:
+            contract-name: utility
+            expected-sender: SP2E4S1CVTQG3CMGRJW1B9ECNBZKJEVF424JKDTVJ
+            cost: 100000
+            path: contracts/modules/utility.clar
+            anchor-block-only: true
+            clarity-version: 3
+      epoch: "4.0"

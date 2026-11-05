@@ -1,0 +1,18 @@
+---
+id: 0
+name: SP2N615 staking dead-share initialize retry
+network: mainnet
+stacks-node: https://api.hiro.so
+bitcoin-node: http://blockstack:blockstacksystem@bitcoin.blockstack.com:8332
+plan:
+  batches:
+    - id: 0
+      transactions:
+        - contract-call:
+            contract-id: SP2E4S1CVTQG3CMGRJW1B9ECNBZKJEVF424JKDTVJ.staking-v1
+            expected-sender: SP2E4S1CVTQG3CMGRJW1B9ECNBZKJEVF424JKDTVJ
+            method: initialize
+            parameters:
+              - none
+            cost: 10000
+      epoch: "4.0"

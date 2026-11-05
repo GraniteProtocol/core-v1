@@ -1,0 +1,55 @@
+---
+id: 0
+name: Staging SP2N615 upgrade v2 (fresh deployer)
+network: mainnet
+stacks-node: "https://api.hiro.so"
+bitcoin-node: "http://blockstack:blockstacksystem@bitcoin.blockstack.com:8332"
+plan:
+  batches:
+    - id: 0
+      transactions:
+        - contract-publish:
+            contract-name: staking-v1
+            expected-sender: SP2E4S1CVTQG3CMGRJW1B9ECNBZKJEVF424JKDTVJ
+            cost: 100000
+            path: contracts/staking-v1.clar
+            anchor-block-only: true
+            clarity-version: 3
+        - contract-publish:
+            contract-name: withdrawal-caps-v1
+            expected-sender: SP2E4S1CVTQG3CMGRJW1B9ECNBZKJEVF424JKDTVJ
+            cost: 100000
+            path: contracts/modules/withdrawal-caps-v1.clar
+            anchor-block-only: true
+            clarity-version: 3
+        - contract-publish:
+            contract-name: borrower-v1
+            expected-sender: SP2E4S1CVTQG3CMGRJW1B9ECNBZKJEVF424JKDTVJ
+            cost: 100000
+            path: contracts/borrower-v1.clar
+            anchor-block-only: true
+            clarity-version: 3
+        - contract-publish:
+            contract-name: liquidator-v1
+            expected-sender: SP2E4S1CVTQG3CMGRJW1B9ECNBZKJEVF424JKDTVJ
+            cost: 100000
+            path: contracts/liquidator-v1.clar
+            anchor-block-only: true
+            clarity-version: 3
+        - contract-publish:
+            contract-name: liquidity-provider-v1
+            expected-sender: SP2E4S1CVTQG3CMGRJW1B9ECNBZKJEVF424JKDTVJ
+            cost: 100000
+            path: contracts/liquidity-provider-v1.clar
+            anchor-block-only: true
+            clarity-version: 3
+      epoch: "4.0"
+    - id: 1
+      transactions:
+        - contract-call:
+            contract-id: SP2E4S1CVTQG3CMGRJW1B9ECNBZKJEVF424JKDTVJ.liquidity-provider-v1
+            expected-sender: SP2E4S1CVTQG3CMGRJW1B9ECNBZKJEVF424JKDTVJ
+            method: initialize
+            parameters: []
+            cost: 50000
+      epoch: "4.0"

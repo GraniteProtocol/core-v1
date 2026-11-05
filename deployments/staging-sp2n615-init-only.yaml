@@ -1,0 +1,17 @@
+---
+id: 0
+name: SP2N615 LP initialize only
+network: mainnet
+stacks-node: https://api.hiro.so
+bitcoin-node: http://blockstack:blockstacksystem@bitcoin.blockstack.com:8332
+plan:
+  batches:
+    - id: 0
+      transactions:
+        - contract-call:
+            contract-id: SP2E4S1CVTQG3CMGRJW1B9ECNBZKJEVF424JKDTVJ.liquidity-provider-v1
+            expected-sender: SP2E4S1CVTQG3CMGRJW1B9ECNBZKJEVF424JKDTVJ
+            method: initialize
+            parameters: []
+            cost: 50000
+      epoch: "4.0"

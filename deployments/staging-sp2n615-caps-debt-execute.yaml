@@ -1,0 +1,18 @@
+---
+id: 0
+name: SP2N615 set debt cap factor (proposal execute)
+network: mainnet
+stacks-node: https://api.hiro.so
+bitcoin-node: http://blockstack:blockstacksystem@bitcoin.blockstack.com:8332
+plan:
+  batches:
+    - id: 0
+      transactions:
+        - contract-call:
+            contract-id: SP2E4S1CVTQG3CMGRJW1B9ECNBZKJEVF424JKDTVJ.governance-v1
+            expected-sender: SPTXMEW26M54HX1ZXF6VN7QKK4XES1038ERD40T5
+            method: execute
+            parameters:
+              - "0x071afafe46a3bb6998724a893804d0f1f65a42a817f62b6dae72088ae23a4270"
+            cost: 50000
+      epoch: "4.0"

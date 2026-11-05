@@ -1,0 +1,28 @@
+---
+id: 0
+name: SP2N615 staking dead-share initialize
+network: mainnet
+stacks-node: https://api.hiro.so
+bitcoin-node: http://blockstack:blockstacksystem@bitcoin.blockstack.com:8332
+plan:
+  batches:
+    - id: 0
+      transactions:
+        - contract-call:
+            contract-id: SP2N615VZET7VD3DK3SCGPRXFSA9XSJW89KRC2Y30.state-v1
+            expected-sender: SP2M1DGAD8ZAPD5X3D919GK0RPKTAE851W5Y584YE
+            method: transfer
+            parameters:
+              - u1000
+              - "'SP2M1DGAD8ZAPD5X3D919GK0RPKTAE851W5Y584YE"
+              - "'SP2E4S1CVTQG3CMGRJW1B9ECNBZKJEVF424JKDTVJ"
+              - none
+            cost: 5000
+        - contract-call:
+            contract-id: SP2E4S1CVTQG3CMGRJW1B9ECNBZKJEVF424JKDTVJ.staking-v1
+            expected-sender: SP2E4S1CVTQG3CMGRJW1B9ECNBZKJEVF424JKDTVJ
+            method: initialize
+            parameters:
+              - none
+            cost: 10000
+      epoch: "4.0"
