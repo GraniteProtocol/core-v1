@@ -13,23 +13,23 @@
 ;; read-only functions
 (define-read-only (get-market-state)
   (let (
-    (accrue-interest-params (unwrap! (contract-call? .state-v1 get-accrue-interest-params) ERR-INTEREST-PARAMS))
-    (accrued-interest (try! (contract-call? .linear-kinked-ir-v1 accrue-interest
+    (accrue-interest-params (unwrap! (contract-call? 'SP2N615VZET7VD3DK3SCGPRXFSA9XSJW89KRC2Y30.state-v1 get-accrue-interest-params) ERR-INTEREST-PARAMS))
+    (accrued-interest (try! (contract-call? 'SP2N615VZET7VD3DK3SCGPRXFSA9XSJW89KRC2Y30.linear-kinked-ir-v1 accrue-interest
       (get last-accrued-block-time accrue-interest-params)
       (get lp-interest accrue-interest-params)
       (get staked-interest accrue-interest-params)
-      (try! (contract-call? .staking-reward-v1 calculate-staking-reward-percentage (contract-call? .staking-v1 get-active-staked-lp-tokens)))
+      (try! (contract-call? 'SP2N615VZET7VD3DK3SCGPRXFSA9XSJW89KRC2Y30.staking-reward-v1 calculate-staking-reward-percentage (contract-call? .staking-v1 get-active-staked-lp-tokens)))
       (get protocol-interest accrue-interest-params)
       (get protocol-reserve-percentage accrue-interest-params)
       (get total-assets accrue-interest-params)))
     )
-    (reserve-balance (contract-call? .state-v1 get-reserve-balance ))
-    (asset-cap (contract-call? .state-v1 get-asset-cap ))
-    (borrowable-balance (contract-call? .state-v1 get-borrowable-balance ))
-    (total-debt-shares (get total-debt-shares (contract-call? .state-v1 get-debt-params )))
-    (market-token-balance (unwrap-panic (contract-call? .mock-usdc get-balance .state-v1)))
-    (sbtc-balance (unwrap-panic (contract-call? .mock-btc get-balance .state-v1)))
-    (total-lp-shares (unwrap! (contract-call? .state-v1 get-total-supply ) ERR-FAILED-TO-GET-BALANCE))
+    (reserve-balance (contract-call? 'SP2N615VZET7VD3DK3SCGPRXFSA9XSJW89KRC2Y30.state-v1 get-reserve-balance ))
+    (asset-cap (contract-call? 'SP2N615VZET7VD3DK3SCGPRXFSA9XSJW89KRC2Y30.state-v1 get-asset-cap ))
+    (borrowable-balance (contract-call? 'SP2N615VZET7VD3DK3SCGPRXFSA9XSJW89KRC2Y30.state-v1 get-borrowable-balance ))
+    (total-debt-shares (get total-debt-shares (contract-call? 'SP2N615VZET7VD3DK3SCGPRXFSA9XSJW89KRC2Y30.state-v1 get-debt-params )))
+    (market-token-balance (unwrap-panic (contract-call? 'SP120SBRBQJ00MCWS7TM5R8WJNTTKD5K0HFRC2CNE.usdcx get-balance 'SP2N615VZET7VD3DK3SCGPRXFSA9XSJW89KRC2Y30.state-v1)))
+    (sbtc-balance (unwrap-panic (contract-call? 'SM3VDXK3WZZSA84XXFKAFAF15NNZX32CTSG82JFQ4.sbtc-token get-balance 'SP2N615VZET7VD3DK3SCGPRXFSA9XSJW89KRC2Y30.state-v1)))
+    (total-lp-shares (unwrap! (contract-call? 'SP2N615VZET7VD3DK3SCGPRXFSA9XSJW89KRC2Y30.state-v1 get-total-supply ) ERR-FAILED-TO-GET-BALANCE))
     (total-staked-shares (unwrap! (contract-call? .staking-v1 get-total-supply ) ERR-FAILED-TO-GET-BALANCE))
     (active-staked-lp-tokens (contract-call? .staking-v1 get-active-staked-lp-tokens ))
     (total-staked-lp-tokens (contract-call? .staking-v1 get-total-staked-lp-tokens )))
@@ -61,7 +61,7 @@
 
 ;; Callers pass the token's get-balance of state-v1 as total-liquidity; Clarity forbids trait calls in read-only functions.
 (define-read-only (get-collateral-withdrawal-caps (collateral-token principal) (total-liquidity uint) (inflow uint))
-  (match (contract-call? .state-v1 get-collateral collateral-token)
+  (match (contract-call? 'SP2N615VZET7VD3DK3SCGPRXFSA9XSJW89KRC2Y30.state-v1 get-collateral collateral-token)
     collateral-info (collateral-bucket collateral-token total-liquidity inflow)
     ERR-COLLATERAL-NOT-SUPPORTED)
 )
@@ -98,7 +98,7 @@
     (
       (time-now (get-time-now))
       (last-ts (contract-call? .withdrawal-caps-v1 get-last-lp-bucket-update))
-      (total-liquidity (unwrap! (contract-call? .mock-usdc get-balance .state-v1) ERR-FAILED-TO-GET-BALANCE))
+      (total-liquidity (unwrap! (contract-call? 'SP120SBRBQJ00MCWS7TM5R8WJNTTKD5K0HFRC2CNE.usdcx get-balance 'SP2N615VZET7VD3DK3SCGPRXFSA9XSJW89KRC2Y30.state-v1) ERR-FAILED-TO-GET-BALANCE))
       (lp-cap-factor (contract-call? .withdrawal-caps-v1 get-lp-cap-factor))
       (max-lp-bucket (/ (* total-liquidity lp-cap-factor) SCALING-FACTOR))
       (current-bucket (contract-call? .withdrawal-caps-v1 get-lp-bucket))
@@ -120,7 +120,7 @@
     (
       (time-now (get-time-now))
       (last-ts (contract-call? .withdrawal-caps-v1 get-last-debt-bucket-update))
-      (total-liquidity (contract-call? .state-v1 get-borrowable-balance))
+      (total-liquidity (contract-call? 'SP2N615VZET7VD3DK3SCGPRXFSA9XSJW89KRC2Y30.state-v1 get-borrowable-balance))
       (debt-cap-factor (contract-call? .withdrawal-caps-v1 get-debt-cap-factor))
       (max-debt-bucket (/ (* total-liquidity debt-cap-factor) SCALING-FACTOR))
       (current-bucket (contract-call? .withdrawal-caps-v1 get-debt-bucket))
