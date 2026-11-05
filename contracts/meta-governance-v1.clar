@@ -64,7 +64,7 @@
 ;; Threshold to either execute or remove proposal
 ;; 60% and above
 ;; 1 & 2 Account Multisig will require all of them to execute or deny proposal
-(define-constant THRESHOLD u60)
+(define-constant THRESHOLD u10)
 
 ;; Success response
 (define-constant SUCCESS (ok true))
