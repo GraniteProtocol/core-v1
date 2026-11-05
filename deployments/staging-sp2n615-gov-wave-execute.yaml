@@ -1,0 +1,53 @@
+---
+id: 0
+name: SP2N615 governance wave execute (5 authorisations + handover)
+network: mainnet
+stacks-node: https://api.hiro.so
+bitcoin-node: http://blockstack:blockstacksystem@bitcoin.blockstack.com:8332
+plan:
+  batches:
+    - id: 0
+      transactions:
+        - contract-call:
+            contract-id: SP2N615VZET7VD3DK3SCGPRXFSA9XSJW89KRC2Y30.governance-v1
+            expected-sender: SPTXMEW26M54HX1ZXF6VN7QKK4XES1038ERD40T5
+            method: execute
+            parameters:
+              - "0xaf54c09ccaec0b76431c19f4f6b953d330335044938b51375e93dd9ea9f24620"
+            cost: 50000
+        - contract-call:
+            contract-id: SP2N615VZET7VD3DK3SCGPRXFSA9XSJW89KRC2Y30.governance-v1
+            expected-sender: SPTXMEW26M54HX1ZXF6VN7QKK4XES1038ERD40T5
+            method: execute
+            parameters:
+              - "0x9aab1864451dbfd7eae1a550b484fb7f20b5985b48dcb821c973081094283913"
+            cost: 50000
+        - contract-call:
+            contract-id: SP2N615VZET7VD3DK3SCGPRXFSA9XSJW89KRC2Y30.governance-v1
+            expected-sender: SPTXMEW26M54HX1ZXF6VN7QKK4XES1038ERD40T5
+            method: execute
+            parameters:
+              - "0x271be81c7215e2faa617edd8ba50c348738c7f24dff24d857b13fd6739ddb1fb"
+            cost: 50000
+        - contract-call:
+            contract-id: SP2N615VZET7VD3DK3SCGPRXFSA9XSJW89KRC2Y30.governance-v1
+            expected-sender: SPTXMEW26M54HX1ZXF6VN7QKK4XES1038ERD40T5
+            method: execute
+            parameters:
+              - "0xd24a860b0c637c57e832f05b269c62b289da0ccd38e2a689731647675827345a"
+            cost: 50000
+        - contract-call:
+            contract-id: SP2N615VZET7VD3DK3SCGPRXFSA9XSJW89KRC2Y30.governance-v1
+            expected-sender: SPTXMEW26M54HX1ZXF6VN7QKK4XES1038ERD40T5
+            method: execute
+            parameters:
+              - "0xbe0ce7b7cdf22cb2db5b3676afec6e2d4d726b1025055d03ce34290d0b90e35f"
+            cost: 50000
+        - contract-call:
+            contract-id: SP2N615VZET7VD3DK3SCGPRXFSA9XSJW89KRC2Y30.governance-v1
+            expected-sender: SPTXMEW26M54HX1ZXF6VN7QKK4XES1038ERD40T5
+            method: execute
+            parameters:
+              - "0xf0b828f88344fa77e5859a524a0ee347f630bb1661c79217e48d34c329904b20"
+            cost: 50000
+      epoch: "4.0"
