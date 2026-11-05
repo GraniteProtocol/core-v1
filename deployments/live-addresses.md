@@ -38,9 +38,12 @@ Applied in this order:
 3. `gov-wave-initiate` and `gov-wave-execute` ran the five `u14` authorisations and the governance
    handover under the old governance.
 4. `validate` ran the live deposit and add-collateral between the governance wave and staking init.
-5. `staking-init` ran the deployer-gated initialize and dead-share stake. It is use-once and not
-   replayable: re-applying moves another 1,000 LP from `SP2M1DGAD8ZAPD5X3D919GK0RPKTAE851W5Y584YE`
-   to the deployer before failing.
+5. `staking-init`'s batch moved the 1,000 LP and its initialize aborted on the same-block race: the
+   transfer landed at tx index 1 in block 9417300, after the initialize at index 0, so the stake saw
+   a zero balance and the call returned `(err u1)`. `staking-init-retry` then applied the initialize
+   at block 9417312 and staked the floor. `staking-init` is use-once and not replayable: re-applying
+   moves another 1,000 LP from `SP2M1DGAD8ZAPD5X3D919GK0RPKTAE851W5Y584YE` to the deployer before
+   failing.
 6. `utility-pair` published the two read-only utilities.
 7. `caps-debt-set`, `caps-debt-execute`, `deposit-proof`, `borrow-proof`, `repay-proof`,
    `caps-reset-initiate` and `caps-reset-execute` ran the cap and borrow validation, ending with
