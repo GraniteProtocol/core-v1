@@ -1,0 +1,18 @@
+---
+id: 0
+name: Pyth Lazer gov shim execute revoke deployer pause role
+network: mainnet
+stacks-node: "https://api.hiro.so"
+bitcoin-node: "http://blockstack:blockstacksystem@bitcoin.blockstack.com:8332"
+plan:
+  batches:
+    - id: 0
+      transactions:
+        - contract-call:
+            contract-id: SPA105SQJJSN4YCZXR9F1C6GYQE8DRZ95WNY5HZF.pyth-lazer-gov
+            expected-sender: SPTXMEW26M54HX1ZXF6VN7QKK4XES1038ERD40T5
+            method: execute
+            parameters:
+              - "0xabae6ec4aea697f636d18be798952379e2484bc7ce1b99512fe3ccf054213eca"
+            cost: 100000
+      epoch: "3.4"
