@@ -5,7 +5,7 @@
 ;; mirroring governance-v1's propose / approve / execute / timelock flow. One instance per
 ;; environment. meta-governance-v1 is untouched.
 
-(use-trait decoder-trait .pyth-lazer-traits.decoder-trait)
+(use-trait decoder-trait 'SPMV5HDZ4EMB8XY7HAYT3XW0DF7DZ4E8XEG2J1T8.pyth-lazer-traits.decoder-trait)
 
 ;; ACTIONS
 (define-constant ACTION_SET_TRUSTED_SIGNERS u0)
@@ -99,7 +99,7 @@
 
 ;; PRIVATE FUNCTIONS
 (define-read-only (is-governance-member (member principal))
-  (contract-call? .meta-governance-v1 is-governance-member member)
+  (contract-call? 'SP3M2BYF7RGF8WKW5FVDNJ6WR8D7AR9BHDXAKPXZE.meta-governance-v1 is-governance-member member)
 )
 
 (define-private (create-proposal (proposal-id (buff 32)) (action uint) (expires-in uint))
@@ -116,7 +116,7 @@
       closed: false,
       executed: false,
       execute-at: none,
-      member-count: (contract-call? .meta-governance-v1 governance-multisig-count),
+      member-count: (contract-call? 'SP3M2BYF7RGF8WKW5FVDNJ6WR8D7AR9BHDXAKPXZE.meta-governance-v1 governance-multisig-count),
     })
     (map-set proposal-approved-members { proposal-id: proposal-id, member: contract-caller } true)
     (print { action: "proposal-initiated", proposal-id: proposal-id })
@@ -147,24 +147,24 @@
 ))
 
 (define-private (execute-set-trusted-signers (proposal-id (buff 32)))
-  (contract-call? .pyth-lazer-oracle set-trusted-signers (unwrap-panic (map-get? trusted-signers-data proposal-id)))
+  (contract-call? 'SPMV5HDZ4EMB8XY7HAYT3XW0DF7DZ4E8XEG2J1T8.pyth-lazer-oracle set-trusted-signers (unwrap-panic (map-get? trusted-signers-data proposal-id)))
 )
 
 (define-private (execute-set-fee (proposal-id (buff 32)))
-  (contract-call? .pyth-lazer-oracle set-fee (unwrap-panic (map-get? fee-data proposal-id)))
+  (contract-call? 'SPMV5HDZ4EMB8XY7HAYT3XW0DF7DZ4E8XEG2J1T8.pyth-lazer-oracle set-fee (unwrap-panic (map-get? fee-data proposal-id)))
 )
 
 (define-private (execute-set-fee-recipient (proposal-id (buff 32)))
-  (contract-call? .pyth-lazer-oracle set-fee-recipient (unwrap-panic (map-get? fee-recipient-data proposal-id)))
+  (contract-call? 'SPMV5HDZ4EMB8XY7HAYT3XW0DF7DZ4E8XEG2J1T8.pyth-lazer-oracle set-fee-recipient (unwrap-panic (map-get? fee-recipient-data proposal-id)))
 )
 
 (define-private (execute-set-stale-threshold (proposal-id (buff 32)))
-  (contract-call? .pyth-lazer-oracle set-stale-price-threshold (unwrap-panic (map-get? stale-threshold-data proposal-id)))
+  (contract-call? 'SPMV5HDZ4EMB8XY7HAYT3XW0DF7DZ4E8XEG2J1T8.pyth-lazer-oracle set-stale-price-threshold (unwrap-panic (map-get? stale-threshold-data proposal-id)))
 )
 
 (define-private (execute-set-role (proposal-id (buff 32)))
   (let ((data (unwrap-panic (map-get? role-data proposal-id))))
-    (contract-call? .pyth-lazer-oracle set-role (get who data) (get role data) (get enabled data))
+    (contract-call? 'SPMV5HDZ4EMB8XY7HAYT3XW0DF7DZ4E8XEG2J1T8.pyth-lazer-oracle set-role (get who data) (get role data) (get enabled data))
 ))
 
 ;; Dispatch every non-trait action. set-decoder is handled by execute-set-decoder, which must
@@ -439,7 +439,7 @@
   (let (
       (proposal (unwrap! (map-get? governance-proposal proposal-id) ERR-UNKNOWN-PROPOSAL))
       (total-voted (+ (get approve-count proposal) (get deny-count proposal)))
-      (current-count (contract-call? .meta-governance-v1 governance-multisig-count))
+      (current-count (contract-call? 'SP3M2BYF7RGF8WKW5FVDNJ6WR8D7AR9BHDXAKPXZE.meta-governance-v1 governance-multisig-count))
       (has-threshold-met (or (try! (deny-threshold-met proposal-id)) (try! (approve-threshold-met proposal-id))))
     )
     (try! (is-governance-member contract-caller))
@@ -480,7 +480,7 @@
     (asserts! (<= (unwrap! (get execute-at proposal) ERR-PROPOSAL-NOT-TIME-LOCKED) stacks-block-height) ERR-PROPOSAL-TIME-LOCKED)
     (asserts! (< stacks-block-height (get expires-at proposal)) ERR-PROPOSAL-EXPIRED)
     (asserts! (is-eq (contract-of decoder) (unwrap-panic (map-get? decoder-data proposal-id))) ERR-DECODER-MISMATCH)
-    (try! (contract-call? .pyth-lazer-oracle set-decoder decoder))
+    (try! (contract-call? 'SPMV5HDZ4EMB8XY7HAYT3XW0DF7DZ4E8XEG2J1T8.pyth-lazer-oracle set-decoder decoder))
     (map-set governance-proposal proposal-id (merge proposal { closed: true, executed: true, execute-at: (some stacks-block-height) }))
     (print { action: "proposal-executed", proposal-id: proposal-id })
     SUCCESS
@@ -493,12 +493,12 @@
   (begin
     (asserts! (not (var-get initialized)) ERR-CONTRACT-ALREADY-INITIALIZED)
     (asserts! (is-eq contract-caller contract-deployer) ERR-NOT-CONTRACT-DEPLOYER)
-    (asserts! (contract-call? .pyth-lazer-oracle has-role (as-contract tx-sender) ROLE_GOVERNANCE) ERR-MISSING-ORACLE-ROLE)
-    (asserts! (contract-call? .pyth-lazer-oracle has-role (as-contract tx-sender) ROLE_PAUSE) ERR-MISSING-ORACLE-ROLE)
+    (asserts! (contract-call? 'SPMV5HDZ4EMB8XY7HAYT3XW0DF7DZ4E8XEG2J1T8.pyth-lazer-oracle has-role (as-contract tx-sender) ROLE_GOVERNANCE) ERR-MISSING-ORACLE-ROLE)
+    (asserts! (contract-call? 'SPMV5HDZ4EMB8XY7HAYT3XW0DF7DZ4E8XEG2J1T8.pyth-lazer-oracle has-role (as-contract tx-sender) ROLE_PAUSE) ERR-MISSING-ORACLE-ROLE)
     (asserts! (> (len (filter is-some-principal guardians-addrs)) u0) ERR-NO-GUARDIANS)
     (var-set initialized true)
     (try! (fold set-guardians guardians-addrs SUCCESS))
-    (print { action: "initialize", meta-governance: .meta-governance-v1, guardians: guardians-addrs })
+    (print { action: "initialize", meta-governance: 'SP3M2BYF7RGF8WKW5FVDNJ6WR8D7AR9BHDXAKPXZE.meta-governance-v1, guardians: guardians-addrs })
     SUCCESS
 ))
 
@@ -506,14 +506,14 @@
 (define-public (guardian-pause)
   (begin
     (try! (is-guardian contract-caller))
-    (try! (contract-call? .pyth-lazer-oracle pause))
+    (try! (contract-call? 'SPMV5HDZ4EMB8XY7HAYT3XW0DF7DZ4E8XEG2J1T8.pyth-lazer-oracle pause))
     SUCCESS
 ))
 
 (define-public (guardian-unpause)
   (begin
     (try! (is-guardian contract-caller))
-    (try! (contract-call? .pyth-lazer-oracle unpause))
+    (try! (contract-call? 'SPMV5HDZ4EMB8XY7HAYT3XW0DF7DZ4E8XEG2J1T8.pyth-lazer-oracle unpause))
     SUCCESS
 ))
 
