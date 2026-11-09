@@ -1,0 +1,29 @@
+---
+id: 0
+name: Pyth Lazer gov shim oracle role grants
+network: mainnet
+stacks-node: "https://api.hiro.so"
+bitcoin-node: "http://blockstack:blockstacksystem@bitcoin.blockstack.com:8332"
+plan:
+  batches:
+    - id: 0
+      transactions:
+        - contract-call:
+            contract-id: SPMV5HDZ4EMB8XY7HAYT3XW0DF7DZ4E8XEG2J1T8.pyth-lazer-oracle
+            expected-sender: SPMV5HDZ4EMB8XY7HAYT3XW0DF7DZ4E8XEG2J1T8
+            method: set-role
+            parameters:
+              - "'SPA105SQJJSN4YCZXR9F1C6GYQE8DRZ95WNY5HZF.pyth-lazer-gov"
+              - "0x00"
+              - "true"
+            cost: 100000
+        - contract-call:
+            contract-id: SPMV5HDZ4EMB8XY7HAYT3XW0DF7DZ4E8XEG2J1T8.pyth-lazer-oracle
+            expected-sender: SPMV5HDZ4EMB8XY7HAYT3XW0DF7DZ4E8XEG2J1T8
+            method: set-role
+            parameters:
+              - "'SPA105SQJJSN4YCZXR9F1C6GYQE8DRZ95WNY5HZF.pyth-lazer-gov"
+              - "0x01"
+              - "true"
+            cost: 100000
+      epoch: "3.4"

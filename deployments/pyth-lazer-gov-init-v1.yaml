@@ -1,0 +1,18 @@
+---
+id: 0
+name: Pyth Lazer gov shim initialize
+network: mainnet
+stacks-node: "https://api.hiro.so"
+bitcoin-node: "http://blockstack:blockstacksystem@bitcoin.blockstack.com:8332"
+plan:
+  batches:
+    - id: 0
+      transactions:
+        - contract-call:
+            contract-id: SPA105SQJJSN4YCZXR9F1C6GYQE8DRZ95WNY5HZF.pyth-lazer-gov
+            expected-sender: SPA105SQJJSN4YCZXR9F1C6GYQE8DRZ95WNY5HZF
+            method: initialize
+            parameters:
+              - "(list (some 'SP1ABZHX4VKG0BTQ8NTBJ591W7AK67C33KR76QD27) (some 'SPTXMEW26M54HX1ZXF6VN7QKK4XES1038ERD40T5) (some 'SP2G62YGCCMWS4PAN54ZYT2G9TCJRGBSKQ679M96Q) (some 'SP2EBZVFF99Q97GJXGTRT3Y0M7N6G7XJAKMNVGFK))"
+            cost: 100000
+      epoch: "3.4"
