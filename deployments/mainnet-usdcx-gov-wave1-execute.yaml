@@ -1,0 +1,46 @@
+---
+id: 0
+name: Production USDCx governance wave 1 execute (authorisations then handover)
+network: mainnet
+stacks-node: "https://api.hiro.so"
+bitcoin-node: "http://blockstack:blockstacksystem@bitcoin.blockstack.com:8332"
+plan:
+  batches:
+    - id: 0
+      transactions:
+        - contract-call:
+            contract-id: SPSX722NK9V3A8D3CVQT0CDY4EBQ3E9FSDDE61FT.governance-v1
+            expected-sender: SPTXMEW26M54HX1ZXF6VN7QKK4XES1038ERD40T5
+            method: execute
+            parameters:
+              - "0x25be8497dc4f54e24612031f7f440595d5fd303376dcbc5721f22b67ad34a576"
+            cost: 100000
+        - contract-call:
+            contract-id: SPSX722NK9V3A8D3CVQT0CDY4EBQ3E9FSDDE61FT.governance-v1
+            expected-sender: SPTXMEW26M54HX1ZXF6VN7QKK4XES1038ERD40T5
+            method: execute
+            parameters:
+              - "0x3aa9be946e35900957206e3c517ef45831bfa3f74dc3f33fcd386b5d8547187a"
+            cost: 100000
+        - contract-call:
+            contract-id: SPSX722NK9V3A8D3CVQT0CDY4EBQ3E9FSDDE61FT.governance-v1
+            expected-sender: SPTXMEW26M54HX1ZXF6VN7QKK4XES1038ERD40T5
+            method: execute
+            parameters:
+              - "0x0f7e061a3c9eeb47d761c1bf8d28beeb2f83afef73e4320faa2ad2ec8d68094a"
+            cost: 100000
+        - contract-call:
+            contract-id: SPSX722NK9V3A8D3CVQT0CDY4EBQ3E9FSDDE61FT.governance-v1
+            expected-sender: SPTXMEW26M54HX1ZXF6VN7QKK4XES1038ERD40T5
+            method: execute
+            parameters:
+              - "0x163494c5a1364baf52de6f7e6ef928bbb7d86b4ecd57279df5f0b577e626adc5"
+            cost: 100000
+        - contract-call:
+            contract-id: SPSX722NK9V3A8D3CVQT0CDY4EBQ3E9FSDDE61FT.governance-v1
+            expected-sender: SPTXMEW26M54HX1ZXF6VN7QKK4XES1038ERD40T5
+            method: execute
+            parameters:
+              - "0x17564325794321c289d8314fa5cc422396e5cae8e33b08d715a4b7371dcb1a4a"
+            cost: 100000
+      epoch: "4.0"
