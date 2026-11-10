@@ -1,0 +1,18 @@
+---
+id: 0
+name: Production USDCx step 9b execute (adapter time-delta to 120)
+network: mainnet
+stacks-node: "https://api.hiro.so"
+bitcoin-node: "http://blockstack:blockstacksystem@bitcoin.blockstack.com:8332"
+plan:
+  batches:
+    - id: 0
+      transactions:
+        - contract-call:
+            contract-id: SPZYYJNG83VASG6YXR15R8PK8C8KMQGSPF2HNPS0.governance-v1
+            expected-sender: SPTXMEW26M54HX1ZXF6VN7QKK4XES1038ERD40T5
+            method: execute
+            parameters:
+              - "0x81a746009c21c460ba0e8ab326adf53238e7717cf8b2939a348b06dd838bff67"
+            cost: 100000
+      epoch: "4.0"
