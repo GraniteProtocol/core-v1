@@ -1,0 +1,46 @@
+---
+id: 0
+name: Production USDCx wave 2 execute caps only (proving no-op)
+network: mainnet
+stacks-node: "https://api.hiro.so"
+bitcoin-node: "http://blockstack:blockstacksystem@bitcoin.blockstack.com:8332"
+plan:
+  batches:
+    - id: 0
+      transactions:
+        - contract-call:
+            contract-id: SPZYYJNG83VASG6YXR15R8PK8C8KMQGSPF2HNPS0.governance-v1
+            expected-sender: SPTXMEW26M54HX1ZXF6VN7QKK4XES1038ERD40T5
+            method: execute
+            parameters:
+              - "0x78aa416708e66b119db87ffb18e6e5f4df64961093b8e6215d35ded26b80f6ac"
+            cost: 100000
+        - contract-call:
+            contract-id: SPZYYJNG83VASG6YXR15R8PK8C8KMQGSPF2HNPS0.governance-v1
+            expected-sender: SPTXMEW26M54HX1ZXF6VN7QKK4XES1038ERD40T5
+            method: execute
+            parameters:
+              - "0xbb093dcd8f199fe59e7458bdca922ed8f3314a7fcb9e37632dea9b7337cc5fa3"
+            cost: 100000
+        - contract-call:
+            contract-id: SPZYYJNG83VASG6YXR15R8PK8C8KMQGSPF2HNPS0.governance-v1
+            expected-sender: SPTXMEW26M54HX1ZXF6VN7QKK4XES1038ERD40T5
+            method: execute
+            parameters:
+              - "0x1c554dbccc3c483e5ccfb71fafd9dc45b5ca9f310a994f7499591a139819623d"
+            cost: 100000
+        - contract-call:
+            contract-id: SPZYYJNG83VASG6YXR15R8PK8C8KMQGSPF2HNPS0.governance-v1
+            expected-sender: SPTXMEW26M54HX1ZXF6VN7QKK4XES1038ERD40T5
+            method: execute
+            parameters:
+              - "0x2eedba12ce9ac158b6bdbcd835f5d205c16ff795a3a529ad3ba708ccf8cb06dc"
+            cost: 100000
+        - contract-call:
+            contract-id: SPZYYJNG83VASG6YXR15R8PK8C8KMQGSPF2HNPS0.governance-v1
+            expected-sender: SPTXMEW26M54HX1ZXF6VN7QKK4XES1038ERD40T5
+            method: execute
+            parameters:
+              - "0x9d8fc23c5e50aaeaf21727bf021352b9dead2f41eb579c739395e8d9d3ffc642"
+            cost: 100000
+      epoch: "4.0"
