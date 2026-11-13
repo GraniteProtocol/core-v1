@@ -1,0 +1,20 @@
+---
+id: 0
+name: Production USDCx validation B (borrow 10 USDCx against sBTC)
+network: mainnet
+stacks-node: "https://api.hiro.so"
+bitcoin-node: "http://blockstack:blockstacksystem@bitcoin.blockstack.com:8332"
+plan:
+  batches:
+    - id: 0
+      transactions:
+        - contract-call:
+            contract-id: SPZYYJNG83VASG6YXR15R8PK8C8KMQGSPF2HNPS0.borrower-v1
+            expected-sender: SP2FER95BTPCAPNQ5507ETSCDRP8ZNS4BJPJFA9V2
+            method: borrow
+            parameters:
+              - "0x2a22999a273b29e4671d06c68629f2f6a5a6ff63e8d80ce8e1c61f42693be039f54f1c0c1e7b2f5ca51b7a13f3161da04ef01e12c20f92695749f3b5442235d64ddfbc1201003693c7d37500066020ee824a4004020000000103000000064701619ebe04fff803001c0000000703000000000005f5811704fff803000e"
+              - u10000000
+              - none
+            cost: 100000
+      epoch: "4.0"

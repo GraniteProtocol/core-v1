@@ -1,0 +1,19 @@
+---
+id: 0
+name: Production USDCx validation F (LP redeem all shares)
+network: mainnet
+stacks-node: "https://api.hiro.so"
+bitcoin-node: "http://blockstack:blockstacksystem@bitcoin.blockstack.com:8332"
+plan:
+  batches:
+    - id: 0
+      transactions:
+        - contract-call:
+            contract-id: SPZYYJNG83VASG6YXR15R8PK8C8KMQGSPF2HNPS0.liquidity-provider-v1
+            expected-sender: SP2FER95BTPCAPNQ5507ETSCDRP8ZNS4BJPJFA9V2
+            method: redeem
+            parameters:
+              - u997794
+              - "'SP2FER95BTPCAPNQ5507ETSCDRP8ZNS4BJPJFA9V2"
+            cost: 100000
+      epoch: "4.0"
