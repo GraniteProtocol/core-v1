@@ -19,11 +19,11 @@ plans should assume a fresh deployer from the start.
 
 ## A repoint pins the whole moving contract unit
 
-Any config whose contract references peers relatively (`.withdrawal-caps-v1`, `.staking-v1`) must
-positively pin every contract in that moving unit - the entry contract and each relative peer it
-names - per environment, against the expected set of principals, and the pin must be
-mutation-checked. Pinning only the entry contract leaves its relative peers free to point at a
-wrong-but-live contract, and that passes every test.
+Any config whose contract references peers relatively (`.withdrawal-caps-v1`, `.staking-v1`) must pin
+every contract in the moving unit - the entry contract and each relative peer it names - to its own
+expected principal, per environment, in one invariant per environment, mutation-checked: swapping two
+entries fails. Pinning only the entry contract leaves the config's entries for those peers free to
+name a wrong-but-live contract, and that passes every test.
 
 ## Mutation-verified claims name the evidence
 
