@@ -21,9 +21,10 @@ plans should assume a fresh deployer from the start.
 
 Any config whose contract references peers relatively (`.withdrawal-caps-v1`, `.staking-v1`) must pin
 every contract in the moving unit - the entry contract and each relative peer it names - to its own
-expected principal, per environment, in one invariant per environment, mutation-checked: swapping two
-entries fails. Pinning only the entry contract leaves the config's entries for those peers free to
-name a wrong-but-live contract, and that passes every test.
+expected principal for that environment. The pin is a single invariant covering every environment,
+failing when an environment has no pinned set, and mutation-checked: swapping two entries fails.
+Pinning only the entry contract leaves the config's entries for those peers free to name a
+wrong-but-live contract, and that passes every test.
 
 ## Mutation-verified claims name the evidence
 
