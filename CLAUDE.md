@@ -17,6 +17,14 @@ reference the still-live contracts from earlier deployments by fully-qualified a
 (`SP<old-deployer>.<contract>`) and reference their own peers relatively (`.<contract>`). Deployment
 plans should assume a fresh deployer from the start.
 
+## A repoint pins the whole moving contract unit
+
+Any config whose contract references peers relatively (`.withdrawal-caps-v1`, `.staking-v1`) must pin
+the whole moving contract unit - every deployed source against the local bake - in one invariant, and
+that invariant must be mutation-checked: point one entry at a wrong-but-live contract and confirm the
+check fails. Pinning only the entry contract leaves its relative peers unpinned, and a typo in one of
+them passes every test.
+
 ## settings/Mainnet.toml holds live mnemonics
 
 It is gitignored and contains real deployer seed phrases. Never commit it, never print or echo its
