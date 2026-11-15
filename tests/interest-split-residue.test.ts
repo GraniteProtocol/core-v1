@@ -113,8 +113,8 @@ const splitAt = (state: ReturnType<typeof readSplitState>, repayAmount: bigint) 
 const expectedSplit = (repayAmount: bigint) => splitAt(readSplitState(), repayAmount);
 
 // Mirrors liquidator-v1's socialize-bad-debt split: the interest part is the
-// remaining debt above the stored principal, divided by each bucket's
-// interest-without-principal.
+// remaining debt above the stored principal, apportioned in proportion to each
+// bucket's interest over the total interest without principal.
 const socializeSplitAt = (state: ReturnType<typeof readSplitState>, socialized: bigint) => {
   const b = state.buckets;
   const totalOpenInterest = b.lp + b.staked + b.protocol;
