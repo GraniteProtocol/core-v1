@@ -112,42 +112,10 @@ const splitAt = (state: ReturnType<typeof readSplitState>, repayAmount: bigint) 
 
 const expectedSplit = (repayAmount: bigint) => splitAt(readSplitState(), repayAmount);
 
-// Mirrors liquidator-v1's socialize-bad-debt split: the interest part is the
-// remaining debt above the stored principal, apportioned in proportion to each
-// bucket's interest over the total interest without principal.
-const socializeSplitAt = (state: ReturnType<typeof readSplitState>, socialized: bigint) => {
-  const b = state.buckets;
-  const totalOpenInterest = b.lp + b.staked + b.protocol;
-  const denominator =
-    totalOpenInterest > state.totalBorrowed ? totalOpenInterest - state.totalBorrowed : 0n;
-  const lpInterest = b.lp > state.totalBorrowed ? b.lp - state.totalBorrowed : 0n;
-  const interestPart =
-    socialized > state.borrowedAmount ? socialized - state.borrowedAmount : 0n;
-  const divide = (numerator: bigint) =>
-    denominator === 0n ? 0n : numerator / denominator;
-  const lpPart = divide(interestPart * lpInterest);
-  const stakedPart = divide(interestPart * b.staked);
-  const protocolPart = divide(interestPart * b.protocol);
-  return {
-    interestPart,
-    principalPart: socialized - interestPart,
-    lpInterest,
-    stakedInterest: b.staked,
-    protocolInterest: b.protocol,
-    lpPart,
-    stakedPart,
-    protocolPart,
-    remainder: interestPart - (lpPart + stakedPart + protocolPart),
-  };
-};
-
 // The conserve-interest-split assignment order. swap feeds the protocol room
 // value into the staked check and vice versa, which is the transposition the
 // test guards against.
-const conserveOrder = (
-  split: ReturnType<typeof socializeSplitAt>,
-  swap = false
-) => {
+const conserveOrder = (split: ReturnType<typeof splitAt>, swap = false) => {
   const { lpPart, stakedPart, protocolPart, remainder } = split;
   if (remainder === 0n) return { lpPart, stakedPart, protocolPart, target: "none" };
   if (split.lpInterest >= lpPart + remainder) {
@@ -853,7 +821,9 @@ describe("interest split residue", () => {
       debt: socializedAmount,
       totalBorrowed: snapshot.totalBorrowed - liquidateSplit.principalPart,
     };
-    const split = socializeSplitAt(afterLiquidation, socializedAmount);
+    // The socialize site splits the whole remaining debt, so the repay mirror
+    // applies with the socialized amount as both the debt and the split amount.
+    const split = splitAt(afterLiquidation, socializedAmount);
     expect(
       split.remainder,
       "the scenario must exercise a flooring remainder"
