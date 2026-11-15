@@ -25,6 +25,10 @@ names - per environment, against the expected set of principals, and the pin mus
 mutation-checked. Pinning only the entry contract leaves its relative peers free to point at a
 wrong-but-live contract, and that passes every test.
 
+## Mutation-verified claims name the evidence
+
+Every "mutation-verified" claim names the test file, the mutant applied and the observed failure.
+
 ## settings/Mainnet.toml holds live mnemonics
 
 It is gitignored and contains real deployer seed phrases. Never commit it, never print or echo its
