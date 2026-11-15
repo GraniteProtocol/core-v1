@@ -732,8 +732,9 @@ describe("interest split residue", () => {
 
   it("pins the staked-before-protocol room order on a socialized bad-debt split", async () => {
     // Two equal tiny borrowers keep the accrued interest in single digits, so
-    // every floor of the bad-debt split is visible. The liquidation then leaves
-    // a remainder that only the staked bucket has room for.
+    // every floor of the bad-debt split is visible. The liquidation leaves a
+    // remainder the staked bucket can absorb, and the protocol bucket would
+    // absorb it under the transposed room check.
     const COLLATERAL = 200_000_000n; // sats
     const RATE = 150_000_000;
     update_supported_collateral(
