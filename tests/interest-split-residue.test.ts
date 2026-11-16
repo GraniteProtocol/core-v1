@@ -112,6 +112,26 @@ const splitAt = (state: ReturnType<typeof readSplitState>, repayAmount: bigint) 
 
 const expectedSplit = (repayAmount: bigint) => splitAt(readSplitState(), repayAmount);
 
+// The conserve-interest-split assignment order. swap feeds the protocol room
+// value into the staked check and vice versa, which is the transposition the
+// test guards against.
+const conserveOrder = (split: ReturnType<typeof splitAt>, swap = false) => {
+  const { lpPart, stakedPart, protocolPart, remainder } = split;
+  if (remainder === 0n) return { lpPart, stakedPart, protocolPart, target: "none" };
+  if (split.lpInterest >= lpPart + remainder) {
+    return { lpPart: lpPart + remainder, stakedPart, protocolPart, target: "lp" };
+  }
+  const stakedRoom = swap ? split.protocolInterest : split.stakedInterest;
+  const protocolRoom = swap ? split.stakedInterest : split.protocolInterest;
+  if (stakedRoom >= stakedPart + remainder) {
+    return { lpPart, stakedPart: stakedPart + remainder, protocolPart, target: "staked" };
+  }
+  if (protocolRoom >= protocolPart + remainder) {
+    return { lpPart, stakedPart, protocolPart: protocolPart + remainder, target: "protocol" };
+  }
+  return { lpPart, stakedPart, protocolPart, target: "none" };
+};
+
 const ONE = 100_000_000n;
 const ceilDiv = (a: bigint, b: bigint) => (a + b - 1n) / b;
 
@@ -137,8 +157,12 @@ const LIQUIDATION_PREMIUM = 1n;
 
 // Mirrors liquidator-v1's repayment and collateral arithmetic, so a test can
 // choose the price that produces a chosen repay.
-const liquidationAt = (price: bigint, state: ReturnType<typeof readSplitState>) => {
-  const cv = (COLLATERAL_SATS * price) / ONE;
+const liquidationAt = (
+  price: bigint,
+  state: ReturnType<typeof readSplitState>,
+  collateralSats = COLLATERAL_SATS
+) => {
+  const cv = (collateralSats * price) / ONE;
   const liquidCollateral = (cv * LIQUIDATION_LTV) / ONE;
   const denominator = ONE - ((ONE + LIQUIDATION_PREMIUM) * LIQUIDATION_LTV) / ONE;
   if (state.debt <= liquidCollateral) return null;
@@ -153,14 +177,14 @@ const liquidationAt = (price: bigint, state: ReturnType<typeof readSplitState>) 
   ].reduce((a, b) => (a < b ? a : b));
   const badDebt = cv < state.debt + (cv * LIQUIDATION_PREMIUM) / ONE;
   const withDiscount = (repay * (ONE + LIQUIDATION_PREMIUM)) / ONE;
-  const collateralToGive = [(withDiscount * ONE) / price, COLLATERAL_SATS].reduce((a, b) =>
+  const collateralToGive = [(withDiscount * ONE) / price, collateralSats].reduce((a, b) =>
     a < b ? a : b
   );
-  const remaining = COLLATERAL_SATS - collateralToGive;
+  const remaining = collateralSats - collateralToGive;
   const liquidAfter = (((remaining * price) / ONE) * LIQUIDATION_LTV) / ONE;
   const debtAfter = state.debt - repay;
   const health = debtAfter > 0n ? (liquidAfter * ONE) / debtAfter : 10n ** 30n;
-  return { cv, repay, badDebt, health };
+  return { cv, repay, badDebt, health, remaining };
 };
 
 // Mining empty blocks does not run accrual; an empty batch liquidation accrues
@@ -672,6 +696,180 @@ describe("interest split residue", () => {
       after.lp >= totalBorrowedAmount(),
       "LP open interest must still cover total borrowed after both splits"
     ).toBe(true);
+  });
+
+  it("pins the staked-before-protocol room order on a socialized bad-debt split", async () => {
+    // Two equal tiny borrowers keep the accrued interest in single digits, so
+    // every floor of the bad-debt split is visible. The liquidation leaves a
+    // remainder the staked bucket can absorb, and the protocol bucket would
+    // absorb it under the transposed room check.
+    const COLLATERAL = 200_000_000n; // sats
+    const RATE = 150_000_000;
+    update_supported_collateral(
+      "mock-btc",
+      98_000_000,
+      Number(LIQUIDATION_LTV),
+      Number(LIQUIDATION_PREMIUM),
+      8,
+      deployer
+    );
+    handOverGovernance();
+    expect(
+      simnet.callPublicFn(
+        "state-v1",
+        "set-protocol-reserve-percentage",
+        [Cl.uint(30_000_000)],
+        governor
+      ).result
+    ).toBeOk(Cl.bool(true));
+    // Hold the rate at zero until the positions exist, so the only interest is
+    // the measured window below.
+    expect(
+      simnet.callPublicFn(
+        "linear-kinked-ir-v1",
+        "update-ir-params",
+        [Cl.uint(0), Cl.uint(0), Cl.uint(700_000_000_000), Cl.uint(0)],
+        governor
+      ).result
+    ).toBeOk(Cl.bool(true));
+
+    mint_token("mock-usdc", 100_000_000_000, depositor);
+    deposit(100_000_000_000, depositor);
+    initialize_staking(deployer);
+    expect(
+      simnet.callPublicFn("staking-v1", "stake", [Cl.uint(5_000_000_000)], depositor).result
+    ).toBeOk(Cl.bool(true));
+    for (const user of [borrower, borrower2]) {
+      mint_token("mock-btc", Number(COLLATERAL), user);
+      add_collateral("mock-btc", Number(COLLATERAL), deployer, user);
+    }
+    borrow(1_000_000, borrower);
+    borrow(1_000_000, borrower2);
+
+    // Stakers take 85% of the LP-side interest, so the staked bucket carries a
+    // few units while the LP interest floors to zero.
+    expect(
+      simnet.callPublicFn(
+        "staking-reward-v1",
+        "update-reward-params",
+        [Cl.int(0), Cl.int(-1), Cl.uint(99_000_000), Cl.uint(85_000_000)],
+        governor
+      ).result
+    ).toBeOk(Cl.bool(true));
+    expect(
+      simnet.callPublicFn(
+        "linear-kinked-ir-v1",
+        "update-ir-params",
+        [Cl.uint(0), Cl.uint(0), Cl.uint(700_000_000_000), Cl.uint(RATE)],
+        governor
+      ).result
+    ).toBeOk(Cl.bool(true));
+    simnet.mineEmptyBlocks(900);
+    accrueInterest();
+    freezeInterestAccrual();
+
+    const snapshot = readSplitState();
+    const price = 1n;
+    const outcome = liquidationAt(price, snapshot, COLLATERAL);
+    expect(outcome, "the price must admit a liquidation").not.toBeNull();
+    expect(outcome!.badDebt, "the position must reach bad debt").toBe(true);
+    expect(outcome!.remaining, "the liquidation must seize all collateral").toBe(0n);
+
+    await set_price_without_scaling("mock-btc", price, deployer);
+    mint_token("mock-usdc", 20_000_000_000, depositor);
+    simnet.mineEmptyBlocks(6);
+    const liquidation = simnet.callPublicFn(
+      "liquidator-v1",
+      "liquidate-collateral",
+      [
+        Cl.buffer(build_price_update()),
+        btc,
+        Cl.principal(borrower),
+        Cl.uint(Number(snapshot.debt)),
+        Cl.uint(0),
+      ],
+      depositor
+    );
+    expect(liquidation.result, "the liquidation must not revert").toBeOk(Cl.bool(true));
+    const events = liquidation.events.map((e: any) => e.data?.value?.value);
+    const liquidateEvent = events.find(
+      (e: any) => e?.["action"]?.value === "liquidate-collateral"
+    );
+    const socializedEvent = events.find(
+      (e: any) => e?.["action"]?.value === "socialized-bad-debt"
+    );
+    expect(liquidateEvent, "the liquidation print carries the repaid amount").toBeDefined();
+    expect(socializedEvent, "the position must be socialized").toBeDefined();
+    const repaidAmount = liquidateEvent["repaid-amount"].value as bigint;
+    const socializedAmount = socializedEvent["amount"].value as bigint;
+    expect(repaidAmount).toBe(outcome!.repay);
+
+    // Rebuild the state the bad-debt split reads after the liquidation.
+    const liquidateSplit = splitAt(snapshot, repaidAmount);
+    const liquidateParts = applyRemainder(liquidateSplit);
+    expect(
+      liquidateParts.lpPart,
+      "the liquidation's own remainder must go to the LP bucket, not the split under test"
+    ).toBe(liquidateSplit.lpPart + liquidateSplit.remainder);
+    const afterLiquidation = {
+      buckets: {
+        lp: snapshot.buckets.lp - (liquidateSplit.principalPart + liquidateParts.lpPart),
+        staked: snapshot.buckets.staked - liquidateParts.stakedPart,
+        protocol: snapshot.buckets.protocol - liquidateParts.protocolPart,
+      },
+      borrowedAmount: snapshot.borrowedAmount - liquidateSplit.principalPart,
+      debt: socializedAmount,
+      totalBorrowed: snapshot.totalBorrowed - liquidateSplit.principalPart,
+    };
+    // The socialize site splits the whole remaining debt, so the repay mirror
+    // applies with the socialized amount as both the debt and the split amount.
+    const split = splitAt(afterLiquidation, socializedAmount);
+    expect(
+      split.remainder,
+      "the scenario must exercise a flooring remainder"
+    ).toBeGreaterThan(0n);
+    expect(
+      split.lpInterest < split.lpPart + split.remainder,
+      "the LP bucket must have no room, or the room checks below never run"
+    ).toBe(true);
+    expect(
+      split.stakedInterest >= split.stakedPart + split.remainder,
+      "the staked bucket must have room for the remainder"
+    ).toBe(true);
+
+    const correct = conserveOrder(split, false);
+    const swapped = conserveOrder(split, true);
+    expect(correct.target, "the correct order must assign the remainder to staked").toBe(
+      "staked"
+    );
+    expect(
+      swapped.target,
+      "the swapped order must land on a different bucket, or the test proves nothing"
+    ).toBe("protocol");
+    expect(
+      swapped.protocolPart,
+      "the swapped order must stay inside the protocol bucket, or it reverts instead of splitting"
+    ).toBeLessThanOrEqual(split.protocolInterest);
+
+    expect(
+      socializedEvent["staked-part"].value,
+      "the staked bucket must absorb the split's remainder"
+    ).toBe(correct.stakedPart);
+    expect(
+      socializedEvent["protocol-part"].value,
+      "the protocol bucket must take no remainder"
+    ).toBe(split.protocolPart);
+    expect(
+      socializedEvent["lp-part"].value,
+      "lp-part must carry principal plus the LP interest part"
+    ).toBe(split.principalPart + split.lpPart);
+    const after = buckets();
+    expect(after.staked, "the staked bucket must fall by its part plus the remainder").toBe(
+      afterLiquidation.buckets.staked - correct.stakedPart
+    );
+    expect(after.protocol, "the protocol bucket must fall by its part only").toBe(
+      afterLiquidation.buckets.protocol - split.protocolPart
+    );
   });
 
   it("leaves no residue when the last position closes", async () => {
