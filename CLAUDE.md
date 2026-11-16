@@ -70,3 +70,16 @@ wide margin, which can drain or overrun a freshly funded deployer mid-deploy.
 Before redeploying a market, read the current values (oracle feed ids, withdrawal caps, time deltas,
 guardian sets) off the live contracts and carry them into the new deployment. The defaults in this
 repo are not what production is running, and a missed value has already cost a full redeploy.
+
+## Collateral pre-registration pins every parameter to its source
+
+A market endpoint is pinned to its on-chain state before it is used as a precedent.
+`api-usdcx.granite.world` is the USDCx market; `api.granite.world` is the wound-down aeUSDC market.
+Parameters read from the wrong host are the wrong parameters.
+
+Oracle feeds are asserted by numeric id and `asset_type`, never by ticker. Lazer feed 45 is
+`Crypto.STX/USD`; feed 1404 is `Equity.US.STX/USD` (Seagate Technology), a 1,933x price error the
+adapter cannot detect because it discards market session and per-feed timestamp.
+
+Staging parameter values never reach production. Staging `SP2N615` runs STX at 30/30.000001, which
+liquidates a max-LTV position on a 0.0000033% move.
