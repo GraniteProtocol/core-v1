@@ -225,9 +225,13 @@
       liquidation-premium
       collateral-price
       collateral-decimals
-    ))))
+    )))
+    (repay-amount-value (get repay-amount liquidation-info))
+    (repay-amount-raw (contract-call? .math-v1 divide-round-up (* repay-amount-value PRICE-SCALING-FACTOR) market-asset-price))
+    (repay-amount-tokens (if (< repay-amount-raw current-debt) repay-amount-raw current-debt))
+    )
     (ok {
-      liquidation-info: (merge liquidation-info {collateral-to-give: swept-collateral-to-give}),
+      liquidation-info: (merge liquidation-info {collateral-to-give: swept-collateral-to-give, repay-amount-tokens: repay-amount-tokens}),
       current-debt: current-debt,
       user-borrowed-amount: user-borrowed-amount,
       position-data: position-data,
@@ -262,9 +266,7 @@
         (open-interest (+ (get lp-open-interest open-interest-info) (get staked-open-interest open-interest-info) (get protocol-open-interest open-interest-info)))
         ;; get collateral to give to liquidator
         (collateral-to-give (get collateral-to-give liquidation-info))
-        (repay-amount-value (get repay-amount liquidation-info))
-        (repay-amount-raw (contract-call? .math-v1 divide-round-up (* repay-amount-value PRICE-SCALING-FACTOR) market-asset-price))
-        (repay-amount (if (< repay-amount-raw current-debt) repay-amount-raw current-debt))
+        (repay-amount (get repay-amount-tokens liquidation-info))
         ;; convert repay amount to debt shares
         (debt-params (contract-call? .state-v1 get-debt-params))
         (paid-shares (contract-call? .math-v1 convert-to-debt-shares debt-params repay-amount false))
