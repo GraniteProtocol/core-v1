@@ -36,14 +36,6 @@ It is gitignored and contains real deployer seed phrases. Never commit it, never
 contents, and never paste a value from it into a message, a log, or a script. Tooling that needs to
 sign (clarinet) reads it directly; you do not need to open it.
 
-## gh identity
-
-In a forge session, `gh api user --jq .login` should print the account with write access here. The
-token is injected into the forge session environment; do not add an `.envrc` back.
-
-If `gh` asks you to run `gh auth login`, the session token is missing. If it fails with "must be a
-collaborator", the token in effect belongs to an account without write access here.
-
 ## Epoch and Clarity version are fixed at publish
 
 A contract cannot reference a contract published under a newer epoch. Because the epoch is frozen at
