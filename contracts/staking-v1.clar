@@ -18,6 +18,8 @@
 (define-constant ERR-ALREADY-INITIALIZED (err u60011))
 (define-constant ERR-NOT-INITIALIZED (err u60012))
 (define-constant ERR-NOT-DEPLOYER (err u60013))
+(define-constant ERR-ZERO-STAKED-LP-TOKENS-MINTED (err u60014))
+(define-constant ERR-EXIT-EXCEEDS-MATERIALIZED (err u60015))
 
 ;; Constants
 (define-constant SUCCESS (ok true))
@@ -99,12 +101,26 @@
   (ok (map-get? user-withdrawal-index user))
 )
 
+;; Materialized backing plus accrued-but-unminted staker interest, in LP-token terms.
+(define-read-only (get-effective-lp-tokens-staked)
+  (if (var-get staking-wiped-out)
+    (var-get total-lp-tokens-staked)
+    (let (
+        (open-interest (contract-call? .state-v1 get-open-interest))
+        (lp-params (contract-call? .state-v1 get-lp-params))
+      )
+      (+ (var-get total-lp-tokens-staked)
+         (contract-call? .math-v1 convert-to-shares lp-params (get staked-open-interest open-interest) false))
+    )
+  )
+)
+
 ;; Read only functions
 ;; lp-tokens * total-staked-lp-tokens / total-lp-token
 (define-read-only (convert-to-staked-lp-tokens (lp-tokens uint) (round-up bool))
   (let (
       (total-staked-lp-tokens (ft-get-supply staked-lp-token))
-      (total-lp-tokens (var-get total-lp-tokens-staked))
+      (total-lp-tokens (get-effective-lp-tokens-staked))
     )
     (if (is-eq total-staked-lp-tokens u0)
       lp-tokens
@@ -116,11 +132,14 @@
 (define-read-only (convert-to-lp-tokens (staked-lp-tokens uint) (round-up bool))
   (let (
       (total-staked-lp-tokens (ft-get-supply staked-lp-token))
-      (total-lp-tokens (var-get total-lp-tokens-staked))
+      (total-lp-tokens (get-effective-lp-tokens-staked))
     )
-    (if (is-eq total-lp-tokens u0)
-      staked-lp-tokens
-      (contract-call? .math-v1 divide round-up (* staked-lp-tokens total-lp-tokens) total-staked-lp-tokens)
+    (if (is-eq total-staked-lp-tokens u0)
+      u0
+      (if (is-eq total-lp-tokens u0)
+        staked-lp-tokens
+        (contract-call? .math-v1 divide round-up (* staked-lp-tokens total-lp-tokens) total-staked-lp-tokens)
+      )
     )
 ))
 
@@ -204,20 +223,30 @@
     (try! (check-active-accounting))
     (try! (accrue-interest))
     (let (
-        (staked-lp-tokens-to-mint (convert-to-staked-lp-tokens lp-tokens false))
+        (effective-lp-tokens (get-effective-lp-tokens-staked))
       )
-      (asserts! (> lp-tokens u0) ERR-ZERO-LP-TOKEN-STAKE)
-      (asserts! (var-get initialized) ERR-NOT-INITIALIZED)
-      (try! (contract-call? .state-v1 transfer lp-tokens contract-caller (as-contract contract-caller) none))
-      (try! (ft-mint? staked-lp-token staked-lp-tokens-to-mint contract-caller))
-      (var-set total-lp-tokens-staked (+ (var-get total-lp-tokens-staked) lp-tokens))
-      (print {
-        sender: contract-caller,
-        lp-tokens: lp-tokens,
-        staked-lp-tokens: staked-lp-tokens-to-mint,
-        action: "lp-token-staked"
-      })
-      SUCCESS
+      ;; Zero supply with backing: the dead shares own the unowned backing at 1:1.
+      (try! (if (and (is-eq (ft-get-supply staked-lp-token) u0) (> effective-lp-tokens u0))
+        (ft-mint? staked-lp-token effective-lp-tokens NULL_ADDRESS)
+        (ok true)
+      ))
+      (let (
+          (staked-lp-tokens-to-mint (convert-to-staked-lp-tokens lp-tokens false))
+        )
+        (asserts! (> lp-tokens u0) ERR-ZERO-LP-TOKEN-STAKE)
+        (asserts! (var-get initialized) ERR-NOT-INITIALIZED)
+        (asserts! (> staked-lp-tokens-to-mint u0) ERR-ZERO-STAKED-LP-TOKENS-MINTED)
+        (try! (contract-call? .state-v1 transfer lp-tokens contract-caller (as-contract contract-caller) none))
+        (try! (ft-mint? staked-lp-token staked-lp-tokens-to-mint contract-caller))
+        (var-set total-lp-tokens-staked (+ (var-get total-lp-tokens-staked) lp-tokens))
+        (print {
+          sender: contract-caller,
+          lp-tokens: lp-tokens,
+          staked-lp-tokens: staked-lp-tokens-to-mint,
+          action: "lp-token-staked"
+        })
+        SUCCESS
+      )
     )
   )
 )
@@ -322,6 +351,8 @@
       )
       (asserts! (> staked-lp-tokens u0) ERR-ZERO-STAKED-LP-TOKEN-UNSTAKE)
       (asserts! (>= user-total-balance staked-lp-tokens) ERR-STAKED-LP-TOKEN-USER-NOT-ENOUGH-BALANCE)
+      (asserts! (>= (var-get total-lp-tokens-staked) lp-tokens-to-return)
+                ERR-EXIT-EXCEEDS-MATERIALIZED)
       (map-set user-withdrawal-index user (+ withdrawal-index u1))
       (try! (ft-burn? staked-lp-token staked-lp-tokens user))
       (map-set user-withdrawals {user: user, index: withdrawal-index} {withdrawal-shares: withdraw-shares, finalization-at: finalization-at})
@@ -396,8 +427,7 @@
 ))
 
 
-;; With active at zero, staking stays shut while staked tokens or a queue remain;
-;; a fresh module (no supply, no queue) still stakes 1:1.
+;; With active at zero, staking stays shut while staked tokens or a queue remain.
 (define-private (check-active-accounting)
   (if (and (is-eq (var-get total-lp-tokens-staked) u0)
            (or (> (ft-get-supply staked-lp-token) u0)
