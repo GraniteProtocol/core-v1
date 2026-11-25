@@ -17,7 +17,7 @@
 
 
 ;; CONSTANTS
-(define-constant one-8 (contract-call? .constants-v1 get-scaling-factor))
+(define-constant one-8 (contract-call? 'SP2N615VZET7VD3DK3SCGPRXFSA9XSJW89KRC2Y30.constants-v1 get-scaling-factor))
 ;; Keeps every product in the reward curve check ~16 orders below i128 max so it cannot trap.
 (define-constant MAX-REWARD-SLOPE 100000000000000)
 
@@ -41,7 +41,7 @@
       )
       (begin
         (asserts! (not (is-eq contract-caller contract-deployer)) ERR-CONTRACT-ALREADY-INITIATED)
-        (asserts! (is-eq contract-caller (contract-call? .state-v1 get-governance)) ERR-NOT-GOVERNANCE)
+        (asserts! (is-eq contract-caller (contract-call? 'SP2N615VZET7VD3DK3SCGPRXFSA9XSJW89KRC2Y30.state-v1 get-governance)) ERR-NOT-GOVERNANCE)
       )
     )
 
@@ -76,7 +76,7 @@
 
 ;; READ-ONLY FUNCTIONS
 (define-read-only (calculate-staking-reward-percentage (staked-lp-tokens uint))
-  (let ((total-lp-tokens (unwrap! (contract-call? .state-v1 get-total-supply) ERR-LP-TOKEN-SUPPLY)))
+  (let ((total-lp-tokens (unwrap! (contract-call? 'SP2N615VZET7VD3DK3SCGPRXFSA9XSJW89KRC2Y30.state-v1 get-total-supply) ERR-LP-TOKEN-SUPPLY)))
     (get-staking-reward-percentage staked-lp-tokens total-lp-tokens)
 ))
 
