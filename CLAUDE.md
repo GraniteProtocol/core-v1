@@ -36,19 +36,6 @@ It is gitignored and contains real deployer seed phrases. Never commit it, never
 contents, and never paste a value from it into a message, a log, or a script. Tooling that needs to
 sign (clarinet) reads it directly; you do not need to open it.
 
-## gh must run through direnv
-
-This repo's `.envrc` pins the `GH_TOKEN` for the account that has write access here. A bare `gh` in a
-fresh shell picks up whatever token is set globally instead, and fails with "must be a collaborator".
-Prefix authenticated calls:
-
-```bash
-eval "$(direnv export bash)" && gh <command>
-gh api user --jq .login    # confirm this matches the account .envrc configures
-```
-
-Commits and SSH pushes are unaffected; only `gh` / REST calls break.
-
 ## Epoch and Clarity version are fixed at publish
 
 A contract cannot reference a contract published under a newer epoch. Because the epoch is frozen at
