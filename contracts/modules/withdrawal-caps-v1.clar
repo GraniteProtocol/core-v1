@@ -219,11 +219,15 @@
 )
 
 (define-public (repay (amount uint))
-  (begin 
+  (begin
     (asserts! (or (is-eq contract-caller BORROWER-CONTRACT) (is-eq contract-caller LIQUIDATOR-CONTRACT)) ERR-RESTRICTED)
+    ;; Sync before state-v1 credits the repayment, so the ceilings use the pre-repay balance.
     (if (is-eq (var-get debt-cap-factor) u0)
+      true
+      (try! (sync-debt-bucket amount)))
+    (if (is-eq (var-get lp-cap-factor) u0)
       SUCCESS
-      (sync-debt-bucket amount)
+      (sync-lp-bucket u0)
     )
   )
 )
