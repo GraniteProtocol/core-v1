@@ -53,7 +53,7 @@ export type MarketProfile = {
 
 /** Live USDCx parameters. mock-btc is the local stand-in for sBTC, the live collateral. */
 export const USDCX: MarketProfile = {
-  name: "USDCx production (SPSX722NK9V3A8D3CVQT0CDY4EBQ3E9FSDDE61FT)",
+  name: "USDCx production (SPZYYJNG83VASG6YXR15R8PK8C8KMQGSPF2HNPS0)",
   protocolReservePercentage: 25_000_000n,
   ir: {
     slope1: 40_000_000_000n,

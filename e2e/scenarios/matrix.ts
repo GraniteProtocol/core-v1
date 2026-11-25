@@ -624,8 +624,8 @@ scenario("caps", async (ctx) => {
   );
 
   // Debt cap: a 10% factor makes the debt bucket finite; a borrow above it must be refused. The
-  // bucket carries history from the live factor seeded at setup, so let it decay to the new cap
-  // before sampling it.
+  // bucket is seeded by happy-path's first post-cap deposit at the live factor, so let it decay to
+  // the new cap before sampling it.
   await ctx.step("set the debt cap to 10%", () =>
     callAsDeployer(chain, actors.deployer, "withdrawal-caps-v1", "set-debt-cap", [Cl.uint(HUNDRED_PCT / 10n)]),
   );
