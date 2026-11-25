@@ -10,63 +10,63 @@ plan:
       transactions:
         - contract-publish:
             contract-name: staking-reward-v1
-            expected-sender: SPKZYQHSCQM014QFZBBSJG289SEKY0TZCPCW345
+            expected-sender: SPKZYQHSCQM014QFZBBSJG289SEKY0TZCPGCW345
             cost: 100000
             path: contracts/modules/staking-reward-v1.clar
             anchor-block-only: true
             clarity-version: 3
         - contract-publish:
             contract-name: staking-v1
-            expected-sender: SPKZYQHSCQM014QFZBBSJG289SEKY0TZCPCW345
+            expected-sender: SPKZYQHSCQM014QFZBBSJG289SEKY0TZCPGCW345
             cost: 100000
             path: contracts/staking-v1.clar
             anchor-block-only: true
             clarity-version: 3
         - contract-publish:
             contract-name: withdrawal-caps-v1
-            expected-sender: SPKZYQHSCQM014QFZBBSJG289SEKY0TZCPCW345
+            expected-sender: SPKZYQHSCQM014QFZBBSJG289SEKY0TZCPGCW345
             cost: 100000
             path: contracts/modules/withdrawal-caps-v1.clar
             anchor-block-only: true
             clarity-version: 3
         - contract-publish:
             contract-name: borrower-v1
-            expected-sender: SPKZYQHSCQM014QFZBBSJG289SEKY0TZCPCW345
+            expected-sender: SPKZYQHSCQM014QFZBBSJG289SEKY0TZCPGCW345
             cost: 100000
             path: contracts/borrower-v1.clar
             anchor-block-only: true
             clarity-version: 3
         - contract-publish:
             contract-name: liquidator-v1
-            expected-sender: SPKZYQHSCQM014QFZBBSJG289SEKY0TZCPCW345
+            expected-sender: SPKZYQHSCQM014QFZBBSJG289SEKY0TZCPGCW345
             cost: 100000
             path: contracts/liquidator-v1.clar
             anchor-block-only: true
             clarity-version: 3
         - contract-publish:
             contract-name: liquidity-provider-v1
-            expected-sender: SPKZYQHSCQM014QFZBBSJG289SEKY0TZCPCW345
+            expected-sender: SPKZYQHSCQM014QFZBBSJG289SEKY0TZCPGCW345
             cost: 100000
             path: contracts/liquidity-provider-v1.clar
             anchor-block-only: true
             clarity-version: 3
         - contract-publish:
             contract-name: meta-governance-v1
-            expected-sender: SPKZYQHSCQM014QFZBBSJG289SEKY0TZCPCW345
+            expected-sender: SPKZYQHSCQM014QFZBBSJG289SEKY0TZCPGCW345
             cost: 100000
             path: contracts/meta-governance-v1.clar
             anchor-block-only: true
             clarity-version: 3
         - contract-publish:
             contract-name: governance-v1
-            expected-sender: SPKZYQHSCQM014QFZBBSJG289SEKY0TZCPCW345
+            expected-sender: SPKZYQHSCQM014QFZBBSJG289SEKY0TZCPGCW345
             cost: 100000
             path: contracts/governance-v1.clar
             anchor-block-only: true
             clarity-version: 3
         - contract-publish:
             contract-name: utility
-            expected-sender: SPKZYQHSCQM014QFZBBSJG289SEKY0TZCPCW345
+            expected-sender: SPKZYQHSCQM014QFZBBSJG289SEKY0TZCPGCW345
             cost: 100000
             path: contracts/modules/utility.clar
             anchor-block-only: true
@@ -75,8 +75,8 @@ plan:
     - id: 1
       transactions:
         - contract-call:
-            contract-id: SPKZYQHSCQM014QFZBBSJG289SEKY0TZCPCW345.staking-reward-v1
-            expected-sender: SPKZYQHSCQM014QFZBBSJG289SEKY0TZCPCW345
+            contract-id: SPKZYQHSCQM014QFZBBSJG289SEKY0TZCPGCW345.staking-reward-v1
+            expected-sender: SPKZYQHSCQM014QFZBBSJG289SEKY0TZCPGCW345
             method: update-reward-params
             parameters:
               - "0"
@@ -85,21 +85,21 @@ plan:
               - "u0"
             cost: 50000
         - contract-call:
-            contract-id: SPKZYQHSCQM014QFZBBSJG289SEKY0TZCPCW345.liquidity-provider-v1
-            expected-sender: SPKZYQHSCQM014QFZBBSJG289SEKY0TZCPCW345
+            contract-id: SPKZYQHSCQM014QFZBBSJG289SEKY0TZCPGCW345.liquidity-provider-v1
+            expected-sender: SPKZYQHSCQM014QFZBBSJG289SEKY0TZCPGCW345
             method: initialize
             parameters: []
             cost: 50000
         - contract-call:
-            contract-id: SPKZYQHSCQM014QFZBBSJG289SEKY0TZCPCW345.meta-governance-v1
-            expected-sender: SPKZYQHSCQM014QFZBBSJG289SEKY0TZCPCW345
+            contract-id: SPKZYQHSCQM014QFZBBSJG289SEKY0TZCPGCW345.meta-governance-v1
+            expected-sender: SPKZYQHSCQM014QFZBBSJG289SEKY0TZCPGCW345
             method: initialize-governance
             parameters:
               - "(list (some 'SPTXMEW26M54HX1ZXF6VN7QKK4XES1038ERD40T5) (some 'SP3ZPYKVNAQK52YDSQKEHZ3MZQ5MFFZ52E0TH7TJ1) (some 'SP3XD84X3PE79SHJAZCDW1V5E9EA8JSKRBPEKAEK7))"
             cost: 50000
         - contract-call:
-            contract-id: SPKZYQHSCQM014QFZBBSJG289SEKY0TZCPCW345.governance-v1
-            expected-sender: SPKZYQHSCQM014QFZBBSJG289SEKY0TZCPCW345
+            contract-id: SPKZYQHSCQM014QFZBBSJG289SEKY0TZCPGCW345.governance-v1
+            expected-sender: SPKZYQHSCQM014QFZBBSJG289SEKY0TZCPGCW345
             method: initialize-governance
             parameters:
               - "(list (some 'SPTXMEW26M54HX1ZXF6VN7QKK4XES1038ERD40T5) (some 'SP3ZPYKVNAQK52YDSQKEHZ3MZQ5MFFZ52E0TH7TJ1) (some 'SP3XD84X3PE79SHJAZCDW1V5E9EA8JSKRBPEKAEK7))"
