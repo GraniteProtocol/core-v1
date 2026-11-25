@@ -82,7 +82,7 @@ plan:
               - "0"
               - "-1"
               - "u99999999"
-              - "0"
+              - "u0"
             cost: 50000
         - contract-call:
             contract-id: SPKZYQHSCQM014QFZBBSJG289SEKY0TZCPCW345.liquidity-provider-v1
