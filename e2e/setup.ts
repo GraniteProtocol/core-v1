@@ -208,17 +208,10 @@ export async function setup(chain: Chain, actors: Actors): Promise<Snapshot> {
     ]);
   }
 
-  // 5. Withdrawal caps and their timing windows, at the live factors.
-  const caps = expectedCaps();
-  await call("withdrawal-caps-v1", "set-lp-cap", [Cl.uint(caps.lp)]);
-  await call("withdrawal-caps-v1", "set-debt-cap", [Cl.uint(caps.debt)]);
-  for (const [token, factor] of Object.entries(caps.collateral)) {
-    await call("withdrawal-caps-v1", "set-collateral-cap", [cp(token), Cl.uint(factor)]);
-  }
-  await call("withdrawal-caps-v1", "set-refill-time-window", [Cl.uint(caps.refill)]);
-  await call("withdrawal-caps-v1", "set-decay-time-window", [Cl.uint(caps.decay)]);
-
-  // 6. Fund the actors from the mock tokens (the market token and both mock collaterals use 8 decimals).
+  // 5. Fund the actors from the mock tokens (the market token and both mock collaterals use 8 decimals).
+  // The deposits land before the caps are enabled. lp-deposit still sizes the ceiling from the
+  // pre-deposit balance, but by the first post-cap deposit the pool already holds 1,510,000, so the
+  // ceiling is 302,000 instead of 200 raw and the bucket refills to it (last-debt-bucket-update is 0).
   const usdc = 100_000_000n;
   await mint(chain, actors.deployer, MARKET, 4_000_000n * usdc, actors.lp.address);
   await mint(chain, actors.deployer, MARKET, 2_000_000n * usdc, actors.staker.address);
@@ -230,8 +223,8 @@ export async function setup(chain: Chain, actors: Actors): Promise<Snapshot> {
     await mint(chain, actors.deployer, BTC, 100n * 100_000_000n, borrower.address);
     await mint(chain, actors.deployer, ETH, 1000n * 100_000_000n, borrower.address);
   }
-  // The live cap factors are enabled, so the pool needs enough depth that a 20% debt bucket does
-  // not throttle the matrix's borrows.
+  // The live cap factors are set after these deposits, so the pool needs enough depth that a 20%
+  // debt bucket does not throttle the matrix's borrows.
   await chain.call(actors.lp, "liquidity-provider-v1", "deposit", [
     Cl.uint(1_500_000n * usdc),
     Cl.principal(actors.lp.address),
@@ -241,6 +234,16 @@ export async function setup(chain: Chain, actors: Actors): Promise<Snapshot> {
     Cl.uint(10_000n * usdc),
     Cl.principal(actors.staker.address),
   ]);
+
+  // 6. Withdrawal caps and their timing windows, at the live factors.
+  const caps = expectedCaps();
+  await call("withdrawal-caps-v1", "set-lp-cap", [Cl.uint(caps.lp)]);
+  await call("withdrawal-caps-v1", "set-debt-cap", [Cl.uint(caps.debt)]);
+  for (const [token, factor] of Object.entries(caps.collateral)) {
+    await call("withdrawal-caps-v1", "set-collateral-cap", [cp(token), Cl.uint(factor)]);
+  }
+  await call("withdrawal-caps-v1", "set-refill-time-window", [Cl.uint(caps.refill)]);
+  await call("withdrawal-caps-v1", "set-decay-time-window", [Cl.uint(caps.decay)]);
 
   // 7. Prices and the Lazer oracle the adapter verifies against.
   setPrice(MARKET, 1n);
@@ -266,6 +269,14 @@ export async function setup(chain: Chain, actors: Actors): Promise<Snapshot> {
     ]);
   }
   await chain.call(actors.deployer, "pyth-adapter-v1", "update-time-delta", [Cl.uint(300)]);
+
+  // The setup must not sync the debt bucket: the first post-cap deposit sizes the ceiling from the
+  // funded pool and refills to it.
+  const lastDebtBucketUpdate = asUint(await chain.read("withdrawal-caps-v1", "get-last-debt-bucket-update"));
+  if (lastDebtBucketUpdate !== 0n)
+    throw new Error(
+      `setup synced the debt bucket before the caps applied (last-debt-bucket-update=${lastDebtBucketUpdate})`,
+    );
 
   // 8. Baseline snapshot.
   return snapshot(chain, actors);
