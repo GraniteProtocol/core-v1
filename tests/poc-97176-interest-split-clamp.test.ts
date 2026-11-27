@@ -13,6 +13,7 @@ import {
   initialize_staking,
   initialize_staking_reward,
   mint_token,
+  minedResult,
   set_allowed_contracts,
   set_asset_cap,
   update_supported_collateral,
@@ -65,7 +66,7 @@ const squeezeDenominator = () => {
     ),
     ...dustRepayments(12),
   ]);
-  for (const res of block) expect(res.result).toBeOk(Cl.bool(true));
+  for (const res of block) expect(minedResult(res)).toBeOk(Cl.bool(true));
 };
 
 describe("Immunefi 97176: interest split is clamped to its buckets", () => {

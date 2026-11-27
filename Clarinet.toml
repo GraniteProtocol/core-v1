@@ -179,12 +179,3 @@ epoch = 3.0
 path = 'contracts/modules/linear-kinked-ir-utility.clar'
 clarity_version = 3
 epoch = 3.0
-
-[repl.analysis]
-passes = []
-
-[repl.analysis.check_checker]
-strict = false
-trusted_sender = false
-trusted_caller = false
-callee_filter = false

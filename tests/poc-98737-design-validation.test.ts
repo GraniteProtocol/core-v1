@@ -14,6 +14,8 @@ import {
   initialize_staking,
   initialize_staking_reward,
   mint_token,
+  minedExecution,
+  minedResult,
   set_allowed_contracts,
   set_asset_cap,
   transfer_token,
@@ -49,6 +51,7 @@ const FULL_REPAY = 10_000n * USDC;
 const TOL = 10n;
 
 const ok = (r: any) => expect(r.result).toBeOk(Cl.bool(true));
+const okMined = (r: any) => expect(minedResult(r)).toBeOk(Cl.bool(true));
 const call = (
   contract: string,
   fn: string,
@@ -84,7 +87,7 @@ const pendingLpFor = (
 ) => (p.assets === 0n ? pending : (pending * p.shares) / p.assets);
 const pendingLp = (pending: bigint) => pendingLpFor(pending, lpParams());
 const eventAmount = (res: any, action: string) =>
-  res.events.find(
+  minedExecution(res).events.find(
     (e: any) => e.data?.value?.value?.["action"]?.value === action
   ).data.value.value["amount"].value as bigint;
 const within = (actual: bigint, expected: bigint, tol = TOL) =>
@@ -171,8 +174,8 @@ describe("staking JIT design validation", () => {
       tx.callPublicFn("staking-v1", "stake", [Cl.uint(JIT_STAKE)], jit),
       tx.callPublicFn("borrower-v1", "repay", [Cl.uint(FULL_REPAY), Cl.none()], borrower),
     ]);
-    ok(block[0]);
-    ok(block[1]);
+    okMined(block[0]);
+    okMined(block[1]);
 
     const jitShares = stakedBalance(Cl.principal(jit));
     const deltaB = eventAmount(block[1], "increase-lp-staked-balance");
@@ -215,7 +218,7 @@ describe("staking JIT design validation", () => {
     const block = simnet.mineBlock([
       tx.callPublicFn("borrower-v1", "repay", [Cl.uint(FULL_REPAY), Cl.none()], borrower),
     ]);
-    ok(block[0]);
+    okMined(block[0]);
     const deltaB = eventAmount(block[0], "increase-lp-staked-balance");
     // Interest that accrued after the stake: the most the JIT can fairly earn.
     const earnedWhileStaked =
@@ -270,7 +273,7 @@ describe("staking JIT design validation", () => {
     const block = simnet.mineBlock([
       tx.callPublicFn("borrower-v1", "repay", [Cl.uint(FULL_REPAY), Cl.none()], borrower),
     ]);
-    ok(block[0]);
+    okMined(block[0]);
     const deltaB = eventAmount(block[0], "increase-lp-staked-balance");
 
     simnet.mineEmptyBlocks(101);
@@ -309,8 +312,8 @@ describe("staking JIT design validation", () => {
       tx.callPublicFn("staking-v1", "stake", [Cl.uint(BORROWER_DEPOSIT)], borrower),
       tx.callPublicFn("borrower-v1", "repay", [Cl.uint(FULL_REPAY), Cl.none()], borrower),
     ]);
-    ok(block[0]);
-    ok(block[1]);
+    okMined(block[0]);
+    okMined(block[1]);
 
     const borrowerShares = stakedBalance(Cl.principal(borrower));
     const deltaB = eventAmount(block[1], "increase-lp-staked-balance");
@@ -516,8 +519,8 @@ describe("staking JIT design validation", () => {
       tx.callPublicFn("staking-v1", "stake", [Cl.uint(HONEST_STAKE)], honest),
       tx.callPublicFn("staking-v1", "stake", [Cl.uint(JIT_STAKE)], jit),
     ]);
-    ok(block[0]);
-    ok(block[1]);
+    okMined(block[0]);
+    okMined(block[1]);
     const aShares = stakedBalance(Cl.principal(honest));
     const bShares = stakedBalance(Cl.principal(jit));
     expect(aShares).toBe(HONEST_STAKE);
@@ -600,8 +603,8 @@ describe("staking JIT design validation", () => {
       tx.callPublicFn("staking-v1", "reconcile-lp-token-balance", [], deployer),
       tx.callPublicFn("borrower-v1", "repay", [Cl.uint(FULL_REPAY), Cl.none()], borrower),
     ]);
-    ok(block[0]);
-    ok(block[1]);
+    okMined(block[0]);
+    okMined(block[1]);
     const deltaB = eventAmount(block[1], "increase-lp-staked-balance");
     const effectiveAfter = activeBacking();
 

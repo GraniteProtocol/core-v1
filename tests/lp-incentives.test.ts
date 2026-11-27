@@ -45,10 +45,8 @@ function check_closed_epoch() {
 }
 
 const getUserStxBalance = (user: string) => {
-  const result = Cl.deserialize(
-    simnet.runSnippet(`(stx-get-balance '${user})`)
-  );
-  return result.value;
+  const result = simnet.execute(`(stx-get-balance '${user})`);
+  return BigInt((result.result as UIntCV).value);
 };
 
 const getUnclaimedUserCount = () => {
@@ -71,10 +69,10 @@ const expectUserStxBalance = (user: string, amount: bigint) => {
 };
 
 function getTimeForBlock(block: `u${number}`): bigint {
-  const clTime: SomeCV<UIntCV> = Cl.deserialize(
-    simnet.runSnippet(`(get-stacks-block-info? time ${block})`)
-  );
-  return clTime.value.value;
+  const clTime = simnet.execute(
+    `(get-stacks-block-info? time ${block})`
+  ).result as SomeCV<UIntCV>;
+  return BigInt(clTime.value.value);
 }
 
 type UserAndShares = [string, number];

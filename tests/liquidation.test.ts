@@ -17,6 +17,7 @@ import {
   mint_token_to_contract,
   expectUserBTCBalance,
   state_set_governance_contract,
+  minedResult,
 } from "./utils";
 import { tx } from "@stacks/clarinet-sdk";
 import {
@@ -559,9 +560,9 @@ describe("liquidation tests", () => {
     let length = block.length;
     block.forEach((txn, index) => {
       if (index == length - 1) {
-        expect(txn.result).toBeErr(Cl.uint(30011)); // ERR-LIQUIDATION-TIME-LOCK
+        expect(minedResult(txn)).toBeErr(Cl.uint(30011)); // ERR-LIQUIDATION-TIME-LOCK
       } else {
-        expect(txn.result).toBeOk(Cl.bool(true));
+        expect(minedResult(txn)).toBeOk(Cl.bool(true));
       }
     });
   });

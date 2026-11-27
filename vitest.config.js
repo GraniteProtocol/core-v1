@@ -25,7 +25,6 @@ export default defineConfig({
   test: {
     include: ["./tests/**/*.test.ts"],
     environment: "clarinet", // use vitest-environment-clarinet
-    singleThread: true,
     setupFiles: [
       vitestSetupFilePath,
       // custom setup files can be added here

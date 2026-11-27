@@ -14,6 +14,8 @@ import {
   initialize_staking,
   initialize_staking_reward,
   mint_token,
+  minedExecution,
+  minedResult,
   set_allowed_contracts,
   set_asset_cap,
   update_supported_collateral,
@@ -46,6 +48,7 @@ const FULL_REPAY = 10_000n * USDC;
 const TOL = 10n;
 
 const ok = (r: any) => expect(r.result).toBeOk(Cl.bool(true));
+const okMined = (r: any) => expect(minedResult(r)).toBeOk(Cl.bool(true));
 const call = (
   contract: string,
   fn: string,
@@ -73,7 +76,7 @@ const claimOf = (stakedTokens: bigint) =>
     ).result as any
   ).value as bigint;
 const increaseLpStakedEvent = (res: any) =>
-  res.events.find(
+  minedExecution(res).events.find(
     (e: any) => e.data?.value?.value?.["action"]?.value === "increase-lp-staked-balance"
   ) as any;
 const within = (actual: bigint, expected: bigint) =>
@@ -159,7 +162,7 @@ describe("staking prices yield accrued before a stake", () => {
         borrower
       ),
     ]);
-    ok(block[0]);
+    okMined(block[0]);
 
     const deltaB = increaseLpStakedEvent(block[0]).data.value.value["amount"].value as bigint;
     expect(activeBacking()).toBe(backingBefore + deltaB);
@@ -211,8 +214,8 @@ describe("staking prices yield accrued before a stake", () => {
         borrower
       ),
     ]);
-    ok(block[0]);
-    ok(block[1]);
+    okMined(block[0]);
+    okMined(block[1]);
 
     // The JIT is priced on the effective backing, so it mints fewer shares than
     // its deposit and owns none of the yield accrued before its stake.

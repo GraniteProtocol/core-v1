@@ -16,6 +16,7 @@ import {
   initialize_lp,
   initialize_staking_reward,
   mint_token,
+  minedResult,
   set_allowed_contracts,
   set_asset_cap,
   state_set_governance_contract,
@@ -858,10 +859,10 @@ describe("withdrawal caps: lp-deposit syncs the debt bucket", () => {
       ),
     ]);
 
-    expect(block[0].result).toBeOk(Cl.bool(true));
+    expect(minedResult(block[0])).toBeOk(Cl.bool(true));
     // The deposit pinned the ceiling to the balance it saw, not the post-deposit one.
     expect(ro("get-debt-bucket")).toBe(preDepositCap);
-    expect(block[1].result).toBeErr(Cl.uint(120003)); // ERR-WITHDRAWAL-DEBT-CAP-EXCEEDED
-    expect(block[2].result).toBeOk(Cl.bool(true));
+    expect(minedResult(block[1])).toBeErr(Cl.uint(120003)); // ERR-WITHDRAWAL-DEBT-CAP-EXCEEDED
+    expect(minedResult(block[2])).toBeOk(Cl.bool(true));
   });
 });

@@ -4,6 +4,18 @@ import { build_price_update } from "./pyth";
 
 export const scalingFactor = 100000000n;
 
+// Only abort_by_response carries the contract's committed `(err ...)`; the other included kinds
+// rolled back or produced no value, so their error string is the only truth.
+export const minedExecution = (txn: ReturnType<typeof simnet.mineBlock>[number]) => {
+  if (txn.status === "rejected") throw new Error(`transaction rejected: ${txn.error}`);
+  if (txn.status === "included_failure" && txn.kind !== "abort_by_response")
+    throw new Error(`transaction ${txn.kind}: ${txn.error}`);
+  return txn.execution;
+};
+
+export const minedResult = (txn: ReturnType<typeof simnet.mineBlock>[number]) =>
+  minedExecution(txn).result;
+
 export const update_supported_collateral = (
   collateral: string,
   max_ltv: number,
