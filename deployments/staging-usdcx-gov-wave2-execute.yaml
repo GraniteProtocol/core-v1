@@ -1,0 +1,74 @@
+---
+id: 0
+name: Staging USDCx wave 2 execute (caps reset then old-mutator retirements)
+network: mainnet
+stacks-node: "https://api.hiro.so"
+bitcoin-node: "http://blockstack:blockstacksystem@bitcoin.blockstack.com:8332"
+plan:
+  batches:
+    - id: 0
+      transactions:
+        - contract-call:
+            contract-id: SPKZYQHSCQM014QFZBBSJG289SEKY0TZCPGCW345.governance-v1
+            expected-sender: SPTXMEW26M54HX1ZXF6VN7QKK4XES1038ERD40T5
+            method: execute
+            parameters:
+              - "0x384072970e1ac1b8220253471a8e5bae20f1fcaa52b98a5f2acfdd0809802565"
+            cost: 100000
+        - contract-call:
+            contract-id: SPKZYQHSCQM014QFZBBSJG289SEKY0TZCPGCW345.governance-v1
+            expected-sender: SPTXMEW26M54HX1ZXF6VN7QKK4XES1038ERD40T5
+            method: execute
+            parameters:
+              - "0xc4a7682ff0f643456811ebbb36a00a9c38cb4ff1191a77966770f07ff9c14135"
+            cost: 100000
+        - contract-call:
+            contract-id: SPKZYQHSCQM014QFZBBSJG289SEKY0TZCPGCW345.governance-v1
+            expected-sender: SPTXMEW26M54HX1ZXF6VN7QKK4XES1038ERD40T5
+            method: execute
+            parameters:
+              - "0x96fe1c33d5113ef1ec3f99934ab466ce223fade27511206ebe025214a325e034"
+            cost: 100000
+        - contract-call:
+            contract-id: SPKZYQHSCQM014QFZBBSJG289SEKY0TZCPGCW345.governance-v1
+            expected-sender: SPTXMEW26M54HX1ZXF6VN7QKK4XES1038ERD40T5
+            method: execute
+            parameters:
+              - "0x90d2d96d2cc1b1bc04b32caaaae7066a5a1863051d0b8edaa69dd922b8fcdde1"
+            cost: 100000
+        - contract-call:
+            contract-id: SPKZYQHSCQM014QFZBBSJG289SEKY0TZCPGCW345.governance-v1
+            expected-sender: SPTXMEW26M54HX1ZXF6VN7QKK4XES1038ERD40T5
+            method: execute
+            parameters:
+              - "0xe5cb5bf31291929e80c4be0c4ccb0c1b48012aed3e2ddc1e585b6ec4ef44e3d8"
+            cost: 100000
+        - contract-call:
+            contract-id: SPKZYQHSCQM014QFZBBSJG289SEKY0TZCPGCW345.governance-v1
+            expected-sender: SPTXMEW26M54HX1ZXF6VN7QKK4XES1038ERD40T5
+            method: execute
+            parameters:
+              - "0x9b999ecf60d6a954f75c456d86a3d811a9c87d4eac3138dfbd4400f0d715bd08"
+            cost: 100000
+        - contract-call:
+            contract-id: SPKZYQHSCQM014QFZBBSJG289SEKY0TZCPGCW345.governance-v1
+            expected-sender: SPTXMEW26M54HX1ZXF6VN7QKK4XES1038ERD40T5
+            method: execute
+            parameters:
+              - "0x071222e91f2286852325e1f932d437ec2bf6f2da153b5a921bdd06fcdbd0cfa9"
+            cost: 100000
+        - contract-call:
+            contract-id: SPKZYQHSCQM014QFZBBSJG289SEKY0TZCPGCW345.governance-v1
+            expected-sender: SPTXMEW26M54HX1ZXF6VN7QKK4XES1038ERD40T5
+            method: execute
+            parameters:
+              - "0xf995cb7f277727139cd76cad91dfb02fb6d0cffa4128180fa148fa6ded945f39"
+            cost: 100000
+        - contract-call:
+            contract-id: SPKZYQHSCQM014QFZBBSJG289SEKY0TZCPGCW345.governance-v1
+            expected-sender: SPTXMEW26M54HX1ZXF6VN7QKK4XES1038ERD40T5
+            method: execute
+            parameters:
+              - "0xebd0ec0c2c9e6b23004ea1d029e60054734e2ef5d7f4ed711cc9af6aa72f700d"
+            cost: 100000
+      epoch: "4.0"

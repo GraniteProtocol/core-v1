@@ -1,0 +1,46 @@
+---
+id: 0
+name: Staging USDCx wave 1 execute (authorise the fresh mutators then hand over governance)
+network: mainnet
+stacks-node: "https://api.hiro.so"
+bitcoin-node: "http://blockstack:blockstacksystem@bitcoin.blockstack.com:8332"
+plan:
+  batches:
+    - id: 0
+      transactions:
+        - contract-call:
+            contract-id: SP2E4S1CVTQG3CMGRJW1B9ECNBZKJEVF424JKDTVJ.governance-v1
+            expected-sender: SPTXMEW26M54HX1ZXF6VN7QKK4XES1038ERD40T5
+            method: execute
+            parameters:
+              - "0x5e3c3b06f9ccb2adb148b0128f39c8b1078eab9a86bb4d8d96cdb9781c99c795"
+            cost: 100000
+        - contract-call:
+            contract-id: SP2E4S1CVTQG3CMGRJW1B9ECNBZKJEVF424JKDTVJ.governance-v1
+            expected-sender: SPTXMEW26M54HX1ZXF6VN7QKK4XES1038ERD40T5
+            method: execute
+            parameters:
+              - "0x34555b0cc26aa9e17e9e00a26d024f93901a6399e90580ceaa6281d6090c4416"
+            cost: 100000
+        - contract-call:
+            contract-id: SP2E4S1CVTQG3CMGRJW1B9ECNBZKJEVF424JKDTVJ.governance-v1
+            expected-sender: SPTXMEW26M54HX1ZXF6VN7QKK4XES1038ERD40T5
+            method: execute
+            parameters:
+              - "0x5fb64e494977cdbed068043cd38fb3edf3d9626f478456ec982b5b69effe4264"
+            cost: 100000
+        - contract-call:
+            contract-id: SP2E4S1CVTQG3CMGRJW1B9ECNBZKJEVF424JKDTVJ.governance-v1
+            expected-sender: SPTXMEW26M54HX1ZXF6VN7QKK4XES1038ERD40T5
+            method: execute
+            parameters:
+              - "0x84fcd3db8e58513072e32b418e44192e04bd609751e5acfc21dcb4ff2ea3c99b"
+            cost: 100000
+        - contract-call:
+            contract-id: SP2E4S1CVTQG3CMGRJW1B9ECNBZKJEVF424JKDTVJ.governance-v1
+            expected-sender: SPTXMEW26M54HX1ZXF6VN7QKK4XES1038ERD40T5
+            method: execute
+            parameters:
+              - "0x0ae35fcdef9b8c5861bdb362b87e287a4d0a352ad1cca5195f5efda75bef8f56"
+            cost: 100000
+      epoch: "4.0"

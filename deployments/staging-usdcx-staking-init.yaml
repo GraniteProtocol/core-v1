@@ -1,0 +1,26 @@
+---
+id: 0
+name: Staging USDCx staking initialize (LP deposit then init)
+network: mainnet
+stacks-node: "https://api.hiro.so"
+bitcoin-node: "http://blockstack:blockstacksystem@bitcoin.blockstack.com:8332"
+plan:
+  batches:
+    - id: 0
+      transactions:
+        - contract-call:
+            contract-id: SPKZYQHSCQM014QFZBBSJG289SEKY0TZCPGCW345.liquidity-provider-v1
+            expected-sender: SPKZYQHSCQM014QFZBBSJG289SEKY0TZCPGCW345
+            method: deposit
+            parameters:
+              - "u1000000"
+              - "'SPKZYQHSCQM014QFZBBSJG289SEKY0TZCPGCW345"
+            cost: 50000
+        - contract-call:
+            contract-id: SPKZYQHSCQM014QFZBBSJG289SEKY0TZCPGCW345.staking-v1
+            expected-sender: SPKZYQHSCQM014QFZBBSJG289SEKY0TZCPGCW345
+            method: initialize
+            parameters:
+              - "none"
+            cost: 50000
+      epoch: "4.0"
